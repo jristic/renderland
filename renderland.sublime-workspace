@@ -1,0 +1,1113 @@
+{
+	"auto_complete":
+	{
+		"selected_items":
+		[
+			[
+				"Hy",
+				"HybridGameState"
+			],
+			[
+				"ClientGam",
+				"ClientGameState"
+			],
+			[
+				"Client",
+				"ClientGameState"
+			],
+			[
+				"Serve",
+				"ServerGameState"
+			],
+			[
+				"adf",
+				"adf_list"
+			],
+			[
+				"rem",
+				"remove_redundant"
+			],
+			[
+				"s-exp",
+				"s-expression"
+			],
+			[
+				"linecou",
+				"line_count"
+			],
+			[
+				"gDire",
+				"gDirectionalLightCount"
+			],
+			[
+				"gPoi",
+				"gPointLightCount"
+			],
+			[
+				"gDi",
+				"gDirectionalLightCount"
+			],
+			[
+				"fil",
+				"file"
+			],
+			[
+				"comma",
+				"comma_split"
+			],
+			[
+				"con",
+				"contents"
+			],
+			[
+				"table",
+				"table.concat	table.concat"
+			],
+			[
+				"fu",
+				"func_def"
+			],
+			[
+				"def",
+				"def_string"
+			],
+			[
+				"cl",
+				"class_def"
+			],
+			[
+				"func",
+				"functions"
+			],
+			[
+				"Even",
+				"EventDispatcher"
+			],
+			[
+				"fun",
+				"function	function"
+			],
+			[
+				"sour",
+				"source_date"
+			],
+			[
+				"else",
+				"elseif"
+			],
+			[
+				"file",
+				"filepath"
+			],
+			[
+				"buil",
+				"build_success"
+			],
+			[
+				"sha",
+				"shader_file"
+			],
+			[
+				"shade",
+				"shader_files"
+			],
+			[
+				"sear",
+				"searching_for"
+			],
+			[
+				"b",
+				"binary_search"
+			],
+			[
+				"index",
+				"index_found_at"
+			],
+			[
+				"arra",
+				"array_size"
+			],
+			[
+				"arr",
+				"array_size"
+			],
+			[
+				"ar",
+				"array"
+			],
+			[
+				"a",
+				"array"
+			],
+			[
+				"light",
+				"light_dir"
+			],
+			[
+				"ligh",
+				"light_dir"
+			],
+			[
+				"norm",
+				"normalize"
+			],
+			[
+				"get",
+				"get_triangles"
+			]
+		]
+	},
+	"buffers":
+	[
+	],
+	"build_system": "Packages/Makefile/Make.sublime-build",
+	"command_palette":
+	{
+		"height": 127.0,
+		"selected_items":
+		[
+			[
+				"close ",
+				"Project: Close"
+			],
+			[
+				"rename",
+				"File: Rename"
+			],
+			[
+				"install ",
+				"Package Control: Install Package"
+			],
+			[
+				"install",
+				"Package Control: Install Package"
+			],
+			[
+				"lower",
+				"Convert Case: Lower Case"
+			],
+			[
+				"remove",
+				"Package Control: Remove Package"
+			],
+			[
+				"settings us",
+				"Preferences: Settings - User"
+			],
+			[
+				"disable",
+				"Package Control: Disable Package"
+			],
+			[
+				"disabl",
+				"Package Control: Disable Package"
+			],
+			[
+				"ena",
+				"Package Control: Enable Package"
+			],
+			[
+				"settings user",
+				"Preferences: Settings - User"
+			],
+			[
+				"block",
+				"Toggle Block Comment"
+			],
+			[
+				"comment ",
+				"Toggle Block Comment"
+			],
+			[
+				"comment",
+				"Toggle Comment"
+			],
+			[
+				"setting",
+				"Preferences: Settings - User"
+			],
+			[
+				"instal",
+				"Package Control: Install Package"
+			],
+			[
+				"set syntax bash",
+				"Set Syntax: Shell Script (Bash)"
+			],
+			[
+				"settings",
+				"Preferences: Settings - Default"
+			],
+			[
+				"set syntax rack",
+				"Set Syntax: Racket"
+			],
+			[
+				"upgra",
+				"Package Control: Upgrade/Overwrite All Packages"
+			],
+			[
+				"conver",
+				"Indentation: Convert to Tabs"
+			],
+			[
+				"remo",
+				"Package Control: Remove Package"
+			],
+			[
+				"todo",
+				"Show TODOs: Project and open files"
+			],
+			[
+				"disab",
+				"Package Control: Disable Package"
+			],
+			[
+				"disco",
+				"Package Control: Discover Packages"
+			],
+			[
+				"convert to ta",
+				"Indentation: Convert to Tabs"
+			],
+			[
+				"toggle tab",
+				"View: Toggle Tabs"
+			],
+			[
+				"tab",
+				"View: Toggle Tabs"
+			],
+			[
+				"commen",
+				"Toggle Comment"
+			],
+			[
+				"enable",
+				"Package Control: Enable Package"
+			],
+			[
+				"disa",
+				"Package Control: Disable Package"
+			],
+			[
+				"add",
+				"Project: Add Folder"
+			],
+			[
+				"enab",
+				"Package Control: Enable Package"
+			],
+			[
+				"insta",
+				"Package Control: Install Package"
+			],
+			[
+				"prefs",
+				"Preferences: Settings - Default"
+			],
+			[
+				"user",
+				"Preferences: Settings - User"
+			],
+			[
+				":s",
+				":w - Save"
+			],
+			[
+				":e",
+				":e - Revert"
+			],
+			[
+				"discv",
+				"Package Control: Discover Packages"
+			],
+			[
+				"discov",
+				"Package Control: Discover Packages"
+			],
+			[
+				"upgrad",
+				"Package Control: Upgrade/Overwrite All Packages"
+			],
+			[
+				"tabs",
+				"Indentation: Convert to Tabs"
+			],
+			[
+				"convert",
+				"Indentation: Convert to Tabs"
+			],
+			[
+				"default",
+				"Preferences: Settings - Default"
+			]
+		],
+		"width": 514.0
+	},
+	"console":
+	{
+		"height": 125.0
+	},
+	"distraction_free":
+	{
+		"menu_visible": true,
+		"show_minimap": false,
+		"show_open_files": false,
+		"show_tabs": false,
+		"side_bar_visible": false,
+		"status_bar_visible": false
+	},
+	"file_history":
+	[
+		"/F/Downloads/pixelvision___skin_for_steam_by_pulseh-d3hvlgp/README.txt",
+		"/F/dev/renderer/tools/skybox.py",
+		"/F/doc/Dragon Age Inquisition Soundtrack/Dragon Age Inquisition soundtrack.txt",
+		"/F/Documents/Lords of the Fallen/bindings2.ini",
+		"/C/Program Files (x86)/Games/Steam/steamapps/common/Lords Of The Fallen/bindings.ini",
+		"/C/Users/jovan/AppData/Local/Temp/Temp1_da_i_pc_dlc__ww_final_beta_6__soundtrack.zip/__Installer/DLC/DeluxeSoundtrack/Support/mnfst.txt",
+		"/C/Program Files (x86)/Games/Steam/steamapps/common/Lords Of The Fallen/settings.ini",
+		"/F/Documents/Lords of the Fallen/settings.ini",
+		"/F/Documents/Lords of the Fallen/bindings0.ini",
+		"/C/Program Files (x86)/DualMonitorTools/README.txt",
+		"/C/Program Files (x86)/Games/Steam/steamapps/common/Lords Of The Fallen/bindings - Custom.ini",
+		"/F/Downloads/Disk Recovery Instructions.txt",
+		"/C/Users/jovan/Git/cmd/curl.cmd",
+		"/F/Downloads/GetGnuWin32/Readme.txt",
+		"/C/Users/jovan/AppData/Local/Temp/Temp1_pixelvision___skin_for_steam_by_pulseh-d3hvlgp.zip/Updated Files Only/README_UPDATE.txt",
+		"/F/Documents/Rainmeter/Skins/illustro/Disk/2 Disks.ini",
+		"/F/dev/renderer/build/postbuildstep.bat",
+		"/F/doc/Visual Studio Ultimate 2013 32-bit (English)/serial.txt",
+		"/F/dev/workspace/minijava/run",
+		"/F/dev/joust/ClientGame.lua",
+		"/F/dev/joust/World.lua",
+		"/C/Users/jovan/AppData/Local/Temp/Temp1_Gtuner217.zip/readme.txt",
+		"/F/dev/workspace/minijava/sample/functions3.exp",
+		"/F/dev/workspace/minijava/sample/factorial.exp",
+		"/F/dev/workspace/minijava/sample/functions2.exp",
+		"/F/dev/workspace/minijava/sample/less.exp",
+		"/F/dev/workspace/minijava/sample/functions3.out",
+		"/F/dev/workspace/minijava/sample/functions2.out",
+		"/F/dev/workspace/minijava/sample/function.out",
+		"/F/dev/workspace/minijava/sample/function.exp",
+		"/F/dev/workspace/minijava/sample/fib.exp",
+		"/F/dev/workspace/minijava/sample/cond.exp",
+		"/F/dev/workspace/minijava/sample/bigcond.exp",
+		"/F/dev/workspace/minijava/sample/aaa.exp",
+		"/F/Downloads/a2/gosoln-linux",
+		"/F/dev/joust/Vector.lua",
+		"/F/dev/joust/Game.lua",
+		"/F/dev/joust/ServerGameState.lua",
+		"/F/dev/joust/AttractState.lua",
+		"/F/dev/workspace/minijava_other/.project",
+		"/F/dev/www.rastertek.com/a_mirror_command.txt",
+		"/F/Downloads/ast.tar/ArrayLength.java",
+		"/F/dev/joust/ClientGameState.lua",
+		"/C/Users/jovan/AppData/Local/Temp/Temp1_Palindrome-check_testcases.zip/output001.txt",
+		"/C/Users/jovan/AppData/Local/Temp/Temp1_Palindrome-check_testcases.zip/input001.txt",
+		"/F/dev/joust/main.lua",
+		"/F/dev/joust/Keys.lua",
+		"/F/dev/joust/notes",
+		"/F/dev/joust/HybridGameState.lua",
+		"/F/Downloads/gpupeteogl209/pete_ogl2_version_2_09.txt",
+		"/F/doc/DS4Tool 1.2/Readme.txt",
+		"/F/dev/joust/NetworkManager.lua",
+		"/F/dev/joust/server",
+		"/F/dev/joust/client",
+		"/F/Downloads/pixelvision___skin_for_steam_by_pulseh-d3hvlgp/Full Installation/README.txt",
+		"/C/Program Files (x86)/Games/Steam/skins/skins_readme.txt",
+		"/C/Users/jovan/Downloads/serial.txt",
+		"/F/dev/joust/StateManager.lua",
+		"/F/dev/joust/ServerGame.lua",
+		"/F/Qt/README.txt",
+		"/F/dev/joust/conf.lua",
+		"/F/dev/joust/ClientConnectState.lua",
+		"/F/Downloads/debug.lua",
+		"/F/dev/joust/joust.sublime-workspace",
+		"/F/Downloads/D2MultiRes-v102/D2MultiRes.txt",
+		"/C/Program Files (x86)/Games/Steam/steamapps/common/Risk of Rain/Prefs.ini",
+		"/F/Downloads/mapreduce.erl",
+		"/F/Downloads/Computer_Animation_Third_Edition_Algorithms_and_Techniques/readme.txt",
+		"/F/Downloads/DS4Tool_1.1_Beta_3/Readme.txt",
+		"/F/Downloads/2013W1-lecture27.org",
+		"/F/dev/joust/run",
+		"/F/dev/school/cs418/hw4/hw4.erl",
+		"/C/Users/jovan/AppData/Local/Temp/srcFCA6.txt",
+		"/F/Downloads/smartgithg-win32-setup-jre-5_0_2/changelog.txt",
+		"/F/dev/school/cs418/hw4/wtree.erl",
+		"/C/Program Files (x86)/Games/Steam/steamapps/common/CastlevaniaLoS/bin/x360ce.ini",
+		"/C/Users/jovan/AppData/Roaming/Sublime Text 2/Packages/User/Preferences.sublime-settings",
+		"/F/Downloads/pa5-commit.txt",
+		"/F/eula.1028.txt",
+		"/F/Downloads/index.php",
+		"/F/dev/glrend/Makefile",
+		"/F/dev/glcubes/Makefile",
+		"/F/dev/school/cs418/mini4/c3s.c",
+		"/F/dev/school/cs418/mini4/Makefile",
+		"/F/dev/school/cs418/mini4/mini.txt",
+		"/F/dev/school/cs418/hw3/hw3.erl",
+		"/F/dev/school/cs418/hw3/merge_sort.c",
+		"/F/dev/school/cs418/hw3/merge_sort.s",
+		"/F/dev/school/cs418/hw3/matrix_mult.s",
+		"/C/ProgramData/NetSarang/Xmanager Enterprise/3/Xconfig/Default Profile.xcf",
+		"/C/Program Files (x86)/Bochs-2.6.2/bochsrc-sample.txt",
+		"/F/dev/school/cs415/u0f7_a1/Makefile",
+		"/F/dev/school/cs415/u0f7_a1/compile/Makefile",
+		"/F/dev/school/cs418/hw2/hw2test.erl",
+		"/F/dev/school/cs418/hw2/hw1.erl",
+		"/F/dev/school/cs418/hw2/timing.erl",
+		"/F/dev/school/cs418/hw2/hw2.txt",
+		"/F/dev/school/cs418/hw2/hw2.erl",
+		"/F/dev/school/cs418/hw2/time_it.erl",
+		"/F/dev/utils/README.txt",
+		"/F/dev/utils/python/purchases.txt",
+		"/F/home/jovan/.bashrc",
+		"/F/home/jovan/.bash_profile",
+		"/F/home/jovan/.bash_",
+		"/F/dev/school/cs418/hw2/wtree.erl",
+		"/F/dev/school/cs418/hw2/hw2.tx",
+		"/F/home/jovan/.gitconfig",
+		"/F/dev/school/cs418/hw2/wtree2.erl",
+		"/F/dev/school/cs418/mini3/mini.txt",
+		"/F/dev/school/cs418/mini3/main.c",
+		"/F/dev/school/cs418/mini3/init.c",
+		"/F/dev/school/cs418/mini3/Makefile",
+		"/F/doc/androidbackup/DoggCatcher/Export/databases/rss",
+		"/C/Users/jovan/AppData/Local/Temp/WPDNSE/{00000242-0001-0001-0000-000000000000}/done.txt",
+		"/F/dev/school/cs418/hw1/hw1.erl",
+		"/F/dev/school/cs418/hw1/hw1.txt",
+		"/F/dev/school/cs418/hw1/hw1.t",
+		"/F/dev/school/cs418/hw1/hw1Test.erl",
+		"/F/dev/school/cs418/hw1/workers.erl",
+		"/F/dev/school/cs418/hw1/wtree.erl",
+		"/F/dev/school/cs418/hw1/misc.erl",
+		"/F/dev/school/cs418/hw1/demo.erl",
+		"/F/dev/school/cs418/hw1/run",
+		"/F/dev/school/cs418/hw1/hwTest.erl",
+		"/F/dev/school/cs418/mini-09-10/mini.erl",
+		"/F/dev/school/cs418/mini-09-12/mini.erl",
+		"/F/dev/school/cs418/mini-09-12/miniTest.erl",
+		"/F/dev/school/cs311/pa1/plai-typed-practice.rkt"
+	],
+	"find":
+	{
+		"height": 34.0
+	},
+	"find_in_files":
+	{
+		"height": 0.0,
+		"where_history":
+		[
+			"F:\\dev\\joust",
+			"F:\\dev\\school\\cs314a3",
+			"./",
+			".",
+			""
+		]
+	},
+	"find_state":
+	{
+		"case_sensitive": false,
+		"find_history":
+		[
+			"apex",
+			"ECLIPSE",
+			"factorial",
+			"this",
+			"getplayer",
+			"todo",
+			"arg",
+			"todo",
+			"getClientContact",
+			"h",
+			"H",
+			"h",
+			"H",
+			"h",
+			"ServerGame:handle",
+			"()",
+			"ServerGame",
+			"ClientGame",
+			"ClientGameState",
+			"print",
+			"handler.handler(handler.context, ip_or_msg, port, args)",
+			"assert(handler, \"No registered handler for: \" .. msg)",
+			"local handler = self.handlers[msg]",
+			"local msg, args = data:match(\"(%a+) (.*)\")",
+			"			local msg, args = data:match(\"(%a+) (.*)\")\n			print(data, msg, args)\n			local handler = self.handlers[msg]\n			assert(handler, \"No registered handler for: \" .. msg)\n			-- Call the handler",
+			"SYNC_INTERVAL",
+			"Vector.new",
+			"print",
+			"GAME_PORT",
+			"waiting",
+			"scale",
+			"scan",
+			"MULTIPLE_COUNTS",
+			"endif",
+			"else",
+			"count",
+			"ld",
+			"foldr",
+			"if",
+			"seconds",
+			"time_it",
+			"t(",
+			"test",
+			"update",
+			"reduce",
+			"M",
+			"children",
+			"reduce",
+			"key",
+			"cut",
+			"split",
+			"todo",
+			"seq",
+			"reduce_work",
+			"Leaf",
+			"reduce",
+			"remove_redundant",
+			"PrevElement",
+			"head,",
+			"sum_help",
+			" [{mean, Mean}, {std, _Std}] = time_it:t(fun()",
+			"time_it",
+			"full_sc",
+			"line",
+			"lines",
+			"todo",
+			"ok",
+			"error",
+			"[",
+			"s-expression",
+			"false",
+			"todo",
+			"youNeedToWriteThis",
+			"12010",
+			"38481//38481",
+			"4/20/11",
+			"15/1/1",
+			"results",
+			"image.open",
+			"math",
+			"csv",
+			"linecou",
+			"-",
+			"<A HREF=",
+			"exp",
+			".exp",
+			"LJCOMPILE",
+			"UpdateDispatcher",
+			"static",
+			"include",
+			"matrix",
+			"inverse",
+			"inv",
+			"output_file",
+			"TargetDir",
+			"SolutionDir",
+			"key",
+			"build_success",
+			"	\n\n	\n	",
+			" v",
+			"v ",
+			"exePath",
+			"debug",
+			"values",
+			"unsigned int",
+			"2",
+			"to",
+			"trim",
+			"goto",
+			"see",
+			"HandleKeyDown",
+			"Import ",
+			"build",
+			"import ",
+			"ShowConsole",
+			"color",
+			"sidebar",
+			"color",
+			".inl",
+			"include",
+			"double",
+			"build",
+			"event",
+			"odin",
+			"space",
+			"odin",
+			"fa",
+			"fa;dsfj"
+		],
+		"highlight": true,
+		"in_selection": false,
+		"preserve_case": false,
+		"regex": false,
+		"replace_history":
+		[
+			"Vector",
+			"SERVER_PORT",
+			"EventDispatcher",
+			"uint"
+		],
+		"reverse": false,
+		"show_context": true,
+		"use_buffer2": true,
+		"whole_word": false,
+		"wrap": true
+	},
+	"groups":
+	[
+		{
+			"sheets":
+			[
+			]
+		}
+	],
+	"incremental_find":
+	{
+		"height": 0.0
+	},
+	"input":
+	{
+		"height": 29.0
+	},
+	"layout":
+	{
+		"cells":
+		[
+			[
+				0,
+				0,
+				1,
+				1
+			]
+		],
+		"cols":
+		[
+			0.0,
+			1.0
+		],
+		"rows":
+		[
+			0.0,
+			1.0
+		]
+	},
+	"menu_visible": true,
+	"output.exec":
+	{
+		"height": 347.0
+	},
+	"output.find_results":
+	{
+		"height": 88.0
+	},
+	"replace":
+	{
+		"height": 62.0
+	},
+	"save_all_on_build": true,
+	"select_file":
+	{
+		"height": 0.0,
+		"selected_items":
+		[
+			[
+				"vecto",
+				"Vector.lua"
+			],
+			[
+				"vec",
+				"Vector.lua"
+			],
+			[
+				"main",
+				"main.lua"
+			],
+			[
+				"key",
+				"Keys.lua"
+			],
+			[
+				"world",
+				"World.lua"
+			],
+			[
+				"ser",
+				"ServerGameState.lua"
+			],
+			[
+				"attra",
+				"AttractState.lua"
+			],
+			[
+				"clientgame",
+				"ClientGameState.lua"
+			],
+			[
+				"servergam",
+				"ServerGameState.lua"
+			],
+			[
+				"client",
+				"ClientGameState.lua"
+			],
+			[
+				"networkma",
+				"NetworkManager.lua"
+			],
+			[
+				"keys",
+				"Keys.lua"
+			],
+			[
+				"vect",
+				"Vector.lua"
+			],
+			[
+				".lua",
+				"ServerGameState.lua"
+			],
+			[
+				"",
+				"StateManager.lua"
+			],
+			[
+				"state",
+				"StateManager.lua"
+			],
+			[
+				"conf",
+				"conf.lua"
+			],
+			[
+				"clientco",
+				"ClientConnectState.lua"
+			],
+			[
+				"statema",
+				"StateManager.lua"
+			],
+			[
+				"clientgam",
+				"ClientGame.lua"
+			],
+			[
+				"clientga",
+				"ClientGameState.lua"
+			],
+			[
+				"server",
+				"ServerGame.lua"
+			],
+			[
+				"run",
+				"run"
+			],
+			[
+				"gam",
+				"Game.lua"
+			],
+			[
+				"post",
+				"msvc/postbuildstep.bat"
+			],
+			[
+				"main.lua",
+				"script/Main.lua"
+			],
+			[
+				"skybo",
+				"tools/skybox.py"
+			],
+			[
+				"until",
+				"/F/dev/renderer/assets/untitled.obj"
+			],
+			[
+				"keyco",
+				"script/Keycodes.lua"
+			],
+			[
+				"linecountlua",
+				"tools/linecount.lua"
+			],
+			[
+				"linecou",
+				"tools/linecount.bat"
+			],
+			[
+				"specular.ps",
+				"shader/specular.ps"
+			],
+			[
+				"svp",
+				"shader/svp4p4t2n3.vs"
+			],
+			[
+				"diffuse",
+				"shader/diffuse.ps"
+			],
+			[
+				"bindi",
+				"script/Bindings.lua"
+			],
+			[
+				"bind",
+				"script/Bindings.lua"
+			],
+			[
+				"mainlua",
+				"script/Main.lua"
+			],
+			[
+				"specul",
+				"shader/specular.ps"
+			],
+			[
+				"shader",
+				"build/shaderbuild.bat"
+			],
+			[
+				"shaderbu",
+				"build/shaderbuild.lua"
+			],
+			[
+				"renderer.vc",
+				"build/renderer.vcxproj"
+			],
+			[
+				"ream",
+				"README.md"
+			],
+			[
+				"eve",
+				"script/Events.lua"
+			],
+			[
+				"events",
+				"script/EventDispatcher.lua"
+			],
+			[
+				"event",
+				"script/EventDispatcher.lua"
+			],
+			[
+				"main.l",
+				"script/Main.lua"
+			],
+			[
+				"sta",
+				"script/Startup.lua"
+			],
+			[
+				"updatedisp",
+				"script/UpdateDispatcher.lua"
+			],
+			[
+				"update",
+				"source/updatemanager.cpp"
+			],
+			[
+				"postbu",
+				"build/postbuildstep.bat"
+			],
+			[
+				"shaderbuil",
+				"build/shaderbuild.bat"
+			],
+			[
+				"input.h",
+				"source/input.h"
+			],
+			[
+				"inpu",
+				"source/input.cpp"
+			],
+			[
+				"diffp",
+				"shader/diffuse.ps"
+			],
+			[
+				"diff",
+				"shader/diffuse.vs"
+			],
+			[
+				"pointli",
+				"shader/debug/pointlight.ps"
+			],
+			[
+				"diffuvs",
+				"shader/diffuse.vs"
+			],
+			[
+				".git",
+				"build/.gitignore"
+			],
+			[
+				"unt",
+				"untitled"
+			],
+			[
+				"light",
+				"shader/light.vs"
+			],
+			[
+				"array",
+				"array2.h"
+			],
+			[
+				"read",
+				"read_obj.h"
+			],
+			[
+				"game",
+				"game.cpp"
+			],
+			[
+				"image",
+				"image.cpp"
+			],
+			[
+				"texu",
+				"Common/texture.cpp"
+			],
+			[
+				"texture",
+				"shader/texture.vs"
+			],
+			[
+				"texture.ps",
+				"shader/texture.ps"
+			],
+			[
+				"texture.vs",
+				"shader/texture.vs"
+			],
+			[
+				"color",
+				"shader/color.vs"
+			],
+			[
+				"sys",
+				"Common/system.cpp"
+			],
+			[
+				"bindin",
+				"script/Bindings.lua"
+			],
+			[
+				"star",
+				"script/Startup.lua"
+			],
+			[
+				"con",
+				"tools/console/console.bat"
+			],
+			[
+				"cons",
+				"tools/console/Console.lua"
+			],
+			[
+				"console",
+				"tools/console/Console.lua"
+			],
+			[
+				"custombui",
+				"build/Targets/CustomBuildActions.targets"
+			],
+			[
+				"survi",
+				"build/survivor.vcxproj"
+			],
+			[
+				"compone",
+				"source/component/component.cpp"
+			],
+			[
+				"vcxp",
+				"build/survivor.vcxproj"
+			],
+			[
+				"vcxproj",
+				"build/survivor.vcxproj.filters"
+			],
+			[
+				".sln",
+				"build/survivor.sln"
+			],
+			[
+				"sera",
+				"/F/Downloads/Windows 7 Professional (x64) - DVD (English)/serial.txt"
+			],
+			[
+				".cpp",
+				"source/timer.cpp"
+			],
+			[
+				"line",
+				"util/linecount.py"
+			],
+			[
+				"subli",
+				"survivor.sublime-project"
+			],
+			[
+				"vcxpr",
+				"build/survivor.vcxproj"
+			],
+			[
+				"core",
+				"source/core.cpp"
+			],
+			[
+				"bound",
+				"bounding_box.h"
+			],
+			[
+				"rencpp",
+				"render.cpp"
+			],
+			[
+				"render",
+				"/F/dev/cs314a3/render.h"
+			]
+		],
+		"width": 0.0
+	},
+	"select_project":
+	{
+		"height": 500.0,
+		"selected_items":
+		[
+			[
+				"roam",
+				"/F/dev/roaming/roaming.sublime-project"
+			],
+			[
+				"",
+				"/F/dev/cs314a4/cs314a4.sublime-project"
+			],
+			[
+				"cs314",
+				"/F/dev/cs314a4/cs314a4.sublime-project"
+			],
+			[
+				"3144",
+				"/F/dev/cs314a4/cs314a4.sublime-project"
+			],
+			[
+				"cs314a",
+				"/F/dev/cs314a4/cs314a4.sublime-project"
+			]
+		],
+		"width": 380.0
+	},
+	"show_minimap": true,
+	"show_open_files": false,
+	"show_tabs": true,
+	"side_bar_visible": false,
+	"side_bar_width": 227.0,
+	"status_bar_visible": true
+}
