@@ -164,37 +164,36 @@
 	"buffers":
 	[
 		{
-			"file": "build.bat",
-			"settings":
-			{
-				"buffer_size": 325,
-				"line_ending": "Unix"
-			}
-		},
-		{
-			"file": "run.bat",
-			"settings":
-			{
-				"buffer_size": 58,
-				"line_ending": "Windows",
-				"name": "pushd build"
-			}
-		},
-		{
 			"file": "source/main.cpp",
 			"settings":
 			{
-				"buffer_size": 1214,
+				"buffer_size": 3035,
 				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "buildandrun.bat",
+			"settings":
+			{
+				"buffer_size": 37,
+				"line_ending": "Windows"
 			}
 		}
 	],
-	"build_system": "Packages/Makefile/Make.sublime-build",
+	"build_system": "Packages/User/buildbat.sublime-build",
 	"command_palette":
 	{
-		"height": 127.0,
+		"height": 104.0,
 		"selected_items":
 		[
+			[
+				"INSTALL",
+				"Package Control: Install Package"
+			],
+			[
+				"remove",
+				"Package Control: Remove Package"
+			],
 			[
 				"close ",
 				"Project: Close"
@@ -214,10 +213,6 @@
 			[
 				"lower",
 				"Convert Case: Lower Case"
-			],
-			[
-				"remove",
-				"Package Control: Remove Package"
 			],
 			[
 				"settings us",
@@ -372,7 +367,7 @@
 				"Preferences: Settings - Default"
 			]
 		],
-		"width": 514.0
+		"width": 520.0
 	},
 	"console":
 	{
@@ -389,6 +384,12 @@
 	},
 	"file_history":
 	[
+		"/F/dev/renderland/run.bat",
+		"/F/dev/renderland/build.bat",
+		"/F/dev/renderland/buildandrun.bat",
+		"/F/dev/renderland/renderland.sublime-project",
+		"/C/Users/jovan/AppData/Roaming/Sublime Text 2/Packages/User/buildbat.sublime-build",
+		"/F/dev/www.rastertek.com/a_mirror_command.txt",
 		"/F/dev/renderland/shell.bat",
 		"/F/dev/handmade/code/build.bat",
 		"/F/dev/handmade/misc/shell.bat",
@@ -435,7 +436,6 @@
 		"/F/dev/joust/ServerGameState.lua",
 		"/F/dev/joust/AttractState.lua",
 		"/F/dev/workspace/minijava_other/.project",
-		"/F/dev/www.rastertek.com/a_mirror_command.txt",
 		"/F/Downloads/ast.tar/ArrayLength.java",
 		"/F/dev/joust/ClientGameState.lua",
 		"/C/Users/jovan/AppData/Local/Temp/Temp1_Palindrome-check_testcases.zip/output001.txt",
@@ -511,12 +511,7 @@
 		"/C/Users/jovan/AppData/Local/Temp/WPDNSE/{00000242-0001-0001-0000-000000000000}/done.txt",
 		"/F/dev/school/cs418/hw1/hw1.erl",
 		"/F/dev/school/cs418/hw1/hw1.txt",
-		"/F/dev/school/cs418/hw1/hw1.t",
-		"/F/dev/school/cs418/hw1/hw1Test.erl",
-		"/F/dev/school/cs418/hw1/workers.erl",
-		"/F/dev/school/cs418/hw1/wtree.erl",
-		"/F/dev/school/cs418/hw1/misc.erl",
-		"/F/dev/school/cs418/hw1/demo.erl"
+		"/F/dev/school/cs418/hw1/hw1.t"
 	],
 	"find":
 	{
@@ -539,6 +534,11 @@
 		"case_sensitive": false,
 		"find_history":
 		[
+			"PrevInstance",
+			"Instance",
+			"\n	",
+			"pos",
+			"m_hinstance",
 			"CommonLinkerFlags",
 			"apex",
 			"ECLIPSE",
@@ -661,12 +661,7 @@
 			".inl",
 			"include",
 			"double",
-			"build",
-			"event",
-			"odin",
-			"space",
-			"odin",
-			"fa"
+			"build"
 		],
 		"highlight": true,
 		"in_selection": false,
@@ -688,28 +683,30 @@
 	"groups":
 	[
 		{
-			"selected": 2,
+			"selected": 0,
 			"sheets":
 			[
 				{
 					"buffer": 0,
-					"file": "build.bat",
+					"file": "source/main.cpp",
 					"settings":
 					{
-						"buffer_size": 325,
+						"buffer_size": 3035,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								176,
-								176
+								1911,
+								1911
 							]
 						],
 						"settings":
 						{
-							"syntax": "Packages/Batch File/Batch File.tmLanguage"
+							"easy_motion_mode": false,
+							"syntax": "Packages/C++/C++.tmLanguage",
+							"translate_tabs_to_spaces": false
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
@@ -719,51 +716,23 @@
 				},
 				{
 					"buffer": 1,
-					"file": "run.bat",
+					"file": "buildandrun.bat",
 					"settings":
 					{
-						"buffer_size": 58,
+						"buffer_size": 37,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								9,
-								9
+								37,
+								37
 							]
 						],
 						"settings":
 						{
-							"auto_name": "pushd build",
 							"syntax": "Packages/Batch File/Batch File.tmLanguage"
-						},
-						"translation.x": 0.0,
-						"translation.y": 0.0,
-						"zoom_level": 1.0
-					},
-					"type": "text"
-				},
-				{
-					"buffer": 2,
-					"file": "source/main.cpp",
-					"settings":
-					{
-						"buffer_size": 1214,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								716,
-								716
-							]
-						],
-						"settings":
-						{
-							"syntax": "Packages/C++/C++.tmLanguage",
-							"translate_tabs_to_spaces": false
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
@@ -824,12 +793,20 @@
 		"selected_items":
 		[
 			[
-				"main",
-				"source/main.cpp"
+				"bui",
+				"build.bat"
+			],
+			[
+				"run",
+				"run.bat"
 			],
 			[
 				"buil",
-				"build"
+				"buildandrun.bat"
+			],
+			[
+				"main",
+				"source/main.cpp"
 			],
 			[
 				"vecto",
@@ -914,10 +891,6 @@
 			[
 				"server",
 				"ServerGame.lua"
-			],
-			[
-				"run",
-				"run"
 			],
 			[
 				"gam",
