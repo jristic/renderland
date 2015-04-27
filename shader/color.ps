@@ -1,0 +1,10 @@
+#version 450
+
+layout(location = 0) in vec3 gInputColor;
+
+out vec4 gOutputColor;
+
+void main()
+{
+	gOutputColor = vec4(gInputColor, 0);
+}

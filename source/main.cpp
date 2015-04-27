@@ -7,6 +7,8 @@
 #include "glext.h"
 #include "wglext.h"
 
+#include "file.h"
+
 void Print(const char *str, ...)
 {
 	char buf[2048];
@@ -33,8 +35,10 @@ void Printnln(const char *str, ...)
 }
 
 #define null nullptr
+typedef unsigned int uint;
 #define assert(expression, message, ...) 				\
 	do { 												\
+		__pragma(warning(suppress:4127))				\
 		if (!(expression)) {							\
 			Print("/* ---- ASSERT ---- */");			\
 			Print("LOCATION:  %s@%d",					\
@@ -42,7 +46,14 @@ void Printnln(const char *str, ...)
 			Print("CONDITION:  %s", #expression);		\
 			Printnln("MESSAGE:    ");					\
 			Print(message, ##__VA_ARGS__);				\
-			DebugBreak();								\
+			if (IsDebuggerPresent())					\
+			{											\
+				DebugBreak();							\
+			}											\
+			else										\
+			{											\
+				exit(-1);								\
+			}											\
 		}												\
 	__pragma(warning(suppress:4127))					\
 	} while (0);										\
@@ -251,7 +262,7 @@ int WINAPI WinMain(
 		GLAttributeList[0] = WGL_CONTEXT_MAJOR_VERSION_ARB;
 		GLAttributeList[1] = 4;
 		GLAttributeList[2] = WGL_CONTEXT_MINOR_VERSION_ARB;
-		GLAttributeList[3] = 4;
+		GLAttributeList[3] = 5;
 		// Null terminate the attribute list.
 		GLAttributeList[4] = 0;
 		
@@ -264,15 +275,102 @@ int WINAPI WinMain(
 		Result = wglMakeCurrent(DeviceContext, RenderContext);
 		assert(Result == 1, "failed wglmakeCurrent");
 		
-		Print("%s-%s\n",
+		Print("GPU Info: %s-%s",
 			(char*)glGetString(GL_VENDOR),
 			(char*)glGetString(GL_RENDERER));
+		Print("OpenGL version: %s",
+			(char*)glGetString(GL_VERSION));
 		
 		// @@@vsync
 		Result = wglSwapIntervalEXT(1);
-		assert(Result ==1, "failed wglSwapIntervalEXT");
+		assert(Result == 1, "failed wglSwapIntervalEXT");
 	}
 	/* ------------------------------- */
+	
+	/* ----- Create temp shader ----- */
+	const int MaxFileLen = 2048;
+	int VertexShaderLen, PixelShaderLen;
+	char VertexShaderBuffer[MaxFileLen];
+	char PixelShaderBuffer[MaxFileLen];
+	File::ReadFile("shader/color.vs", VertexShaderBuffer, &VertexShaderLen, MaxFileLen);
+	File::ReadFile("shader/color.ps", PixelShaderBuffer, &PixelShaderLen, MaxFileLen);
+	GLenum ColorVertexShader = glCreateShader(GL_VERTEX_SHADER);
+	GLenum ColorPixelShader = glCreateShader(GL_FRAGMENT_SHADER);
+	char* VSPtr = VertexShaderBuffer;
+	char* PSPtr = PixelShaderBuffer;
+	glShaderSource(ColorVertexShader, 1, &VSPtr, null);
+	glShaderSource(ColorPixelShader, 1, &PSPtr, null);
+	glCompileShader(ColorVertexShader);
+	int Status;
+	glGetShaderiv(ColorVertexShader, GL_COMPILE_STATUS, &Status);
+	if (Status != GL_TRUE)
+	{
+		char buf[1024];
+		glGetShaderInfoLog(ColorVertexShader, 1024, null, buf);
+		assert(false, "Failed to compile shader: color.vs \n%s", buf);
+	}
+	glCompileShader(ColorPixelShader);
+	glGetShaderiv(ColorPixelShader, GL_COMPILE_STATUS, &Status);
+	if (Status != GL_TRUE)
+	{
+		char buf[1024];
+		glGetShaderInfoLog(ColorPixelShader, 1024, null, buf);
+		assert(false, "Failed to compile shader: color.ps \n%s", buf);
+	}
+	GLenum ColorShaderProgram = glCreateProgram();
+	glAttachShader(ColorShaderProgram, ColorVertexShader);
+	glAttachShader(ColorShaderProgram, ColorPixelShader);
+	glBindAttribLocation(ColorShaderProgram, 0, "gInputPosition");
+	glBindAttribLocation(ColorShaderProgram, 1, "gInputColor");
+	glLinkProgram(ColorShaderProgram);
+	glGetProgramiv(ColorShaderProgram, GL_LINK_STATUS, &Status);
+	if (Status != 1)
+	{
+		char buf[1024];
+		glGetProgramInfoLog(ColorShaderProgram, 1024, null, buf);
+		assert(false, "Failed to link shader program: \n%s", buf);
+	}
+	/* ------------------------------ */
+	
+	/* ---- Set shader constants ---- */
+	{
+		float Matrix[16] = {
+			1.f, 0.f, 0.f, 0.f,
+			0.f, 1.f, 0.f, 0.f,
+			0.f, 0.f, 1.f, 0.f,
+			0.f, 0.f, 0.f, 1.f
+		};
+		glUseProgram(ColorShaderProgram);
+		int location = glGetUniformLocation(ColorShaderProgram, "gProjViewWorldMatrix");
+		glUniformMatrix4fv(location, 1, false, Matrix);
+	}
+	/* ------------------------------ */
+	
+	/* ----- Create temp buffers ---- */
+	float Vertices[18] = {
+		-1, -1, 0,	// Position 0
+		1, 0, 0,	// Color 0
+		0, 1, 0,	// Position 1
+		0, 1, 0,	// Color 1
+		1, -1, 0,	// Position 2
+		0, 0, 1		// Color 2
+	};
+	GLenum VertexArray, VertexBuffer;
+	glGenVertexArrays(1, &VertexArray);
+	glBindVertexArray(VertexArray);
+	glGenBuffers(1, &VertexBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, VertexBuffer);
+	glBufferData(GL_ARRAY_BUFFER, 18 * sizeof(float), Vertices, GL_STATIC_DRAW);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, false, 6 * sizeof(float), 0);
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 3, GL_FLOAT, false, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+	uint Indices[3] = { 0, 1, 2 };
+	GLenum IndexBuffer;
+	glGenBuffers(1, &IndexBuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IndexBuffer);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3 * sizeof(uint), Indices, GL_STATIC_DRAW);
+	/* ------------------------------ */
 	
 	ShowWindow(Hwnd, SW_SHOW);
 	
@@ -297,7 +395,30 @@ int WINAPI WinMain(
 		{
 			Done = true;
 		}
+		
+		glClearColor(0.2f, 0.2f, 0.2f, 1.f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		// glBindVertexArray(VertexArray);
+		glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, 0);
+		SwapBuffers(DeviceContext);
 	}
+	
+	/* ----- Clean up temps ----- */
+	glDetachShader(ColorShaderProgram, ColorVertexShader);
+	glDetachShader(ColorShaderProgram, ColorPixelShader);
+	glDeleteShader(ColorVertexShader);
+	glDeleteShader(ColorPixelShader);
+	glDeleteProgram(ColorShaderProgram);
+	
+	glDisableVertexAttribArray(0);
+	glDisableVertexAttribArray(1);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glDeleteBuffers(1, &VertexBuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	glDeleteBuffers(1, &IndexBuffer);
+	glBindVertexArray(0);
+	glDeleteVertexArrays(1, &VertexArray);
+	/* ----- Clean up temps ----- */
 	
 	wglMakeCurrent(null, null);
 	wglDeleteContext(RenderContext);
@@ -306,3 +427,6 @@ int WINAPI WinMain(
 	DestroyWindow(Hwnd);
 	UnregisterClass(WindowClass.lpszClassName, Instance);
 }
+
+
+#include "file.cpp"
