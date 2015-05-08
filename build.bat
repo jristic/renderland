@@ -7,7 +7,7 @@ set CommonLinkerFlags=/incremental:no /opt:ref user32.lib gdi32.lib winmm.lib op
 
 pushd build
 
-cl.exe %CommonCompilerFlags% ../source/main.cpp /Ferenderland.exe /link %CommonLinkerFlags%
+cl.exe %CommonCompilerFlags% ../source/win32_main.cpp /Ferenderland.exe /link %CommonLinkerFlags%
 
 IF NOT EXIST shader mkdir shader
 robocopy /MIR /NFL /NDL /NJH /NJS ../shader/ shader/
