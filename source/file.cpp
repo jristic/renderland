@@ -9,10 +9,10 @@ void ReadFile(
 	int max_len)
 {
 	FILE* file = fopen(filename, "r");
-	assert(file, "couldn't open file: %s", filename);
+	Assert(file, "couldn't open file: %s", filename);
 
 	size_t bytes_read = fread(out_buffer, 1, max_len, file);
-	assert(
+	Assert(
 		feof(file),
 		"file %s is too large, max is %d bytes",
 		filename, max_len);

@@ -7,7 +7,12 @@
 #include "glext.h"
 #include "wglext.h"
 
+// Library headers
+#include "imgui.h"
+
+// Local headers
 #include "file.h"
+#include "win32_imgui.h"
 
 void Print(const char *str, ...)
 {
@@ -36,11 +41,11 @@ void Printnln(const char *str, ...)
 
 #define null nullptr
 typedef unsigned int uint;
-#define assert(expression, message, ...) 				\
+#define Assert(expression, message, ...) 				\
 	do { 												\
 		__pragma(warning(suppress:4127))				\
 		if (!(expression)) {							\
-			Print("/* ---- ASSERT ---- */");			\
+			Print("/* ---- Assert ---- */");			\
 			Print("LOCATION:  %s@%d",					\
 				__FILE__, __LINE__);			 		\
 			Print("CONDITION:  %s", #expression);		\
@@ -96,6 +101,9 @@ GL_PROC_ENTRY( PFNGLGENERATEMIPMAPPROC, glGenerateMipmap) \
 GL_PROC_ENTRY( PFNGLDISABLEVERTEXATTRIBARRAYPROC, glDisableVertexAttribArray) \
 GL_PROC_ENTRY( PFNGLUNIFORM3FVPROC, glUniform3fv) \
 GL_PROC_ENTRY( PFNGLUNIFORM4FVPROC, glUniform4fv) \
+GL_PROC_ENTRY( PFNGLBLENDEQUATIONPROC, glBlendEquation) \
+GL_PROC_ENTRY( PFNGLMAPBUFFERPROC, glMapBuffer) \
+GL_PROC_ENTRY( PFNGLUNMAPBUFFERPROC, glUnmapBuffer) \
 
 #define GL_PROC_ENTRY(type, name) type name;
 GL_PROC_TUPLE
@@ -111,11 +119,30 @@ LRESULT CALLBACK WndProc(HWND Hwnd, UINT Msg, WPARAM Wparam, LPARAM Lparam)
 			PostQuitMessage(0);		
 			return 0;
 		}
+		case WM_LBUTTONDOWN:
+			ImGui_MouseButtonCallback(VK_LBUTTON, true);
+			return 0;
+		case WM_RBUTTONDOWN:
+			ImGui_MouseButtonCallback(VK_RBUTTON, true);
+			return 0;
+		case WM_MBUTTONDOWN:
+			ImGui_MouseButtonCallback(VK_MBUTTON, true);
+			return 0;
+		case WM_KEYDOWN:
+			ImGui_KeyCallback((int)Wparam, true);
+			return 0;
+		case WM_KEYUP:
+			ImGui_KeyCallback((int)Wparam, false);
+			return 0;
+		case WM_CHAR:
+	        ImGui_CharCallback((char)Wparam);
+			return 0;
+		case WM_MOUSEWHEEL:
+	        ImGui_ScrollCallback(0, GET_WHEEL_DELTA_WPARAM(Wparam));
+	        return 0;
 		// Any other messages send to the default message handler as our application won't make use of them.
 		default:
-		{
 			return DefWindowProc(Hwnd, Msg, Wparam, Lparam);
-		}
 	}
 }
 
@@ -159,23 +186,23 @@ int WINAPI WinMain(
 		null,
 		Instance,
 		null);
-	assert(Hwnd, "failed to create ogl init window");
+	Assert(Hwnd, "failed to create ogl init window");
 	
 	ShowWindow(Hwnd, SW_HIDE);
 	
 	/* ---- Load extension list ---- */
 	{
 		HDC DeviceContext = GetDC(Hwnd);
-		assert(DeviceContext, "no dc");
+		Assert(DeviceContext, "no dc");
 		PIXELFORMATDESCRIPTOR PixelFormat;
 		int Error = SetPixelFormat(DeviceContext, 1, &PixelFormat);
-		assert(Error == 1, "error on SetPixelFormat");
+		Assert(Error == 1, "error on SetPixelFormat");
 		HGLRC RenderContext = wglCreateContext(DeviceContext);
-		assert(RenderContext, "no rdc");
+		Assert(RenderContext, "no rdc");
 		Error = wglMakeCurrent(DeviceContext, RenderContext);
 		
 #define GL_PROC_ENTRY(type, name) name = (type)wglGetProcAddress(#name); \
-								  assert(name, "failed to get %s", #name);
+								  Assert(name, "failed to get %s", #name);
 		GL_PROC_TUPLE
 #undef GL_PROC_ENTRY
 		
@@ -187,27 +214,30 @@ int WINAPI WinMain(
 	
 	DestroyWindow(Hwnd);
 	
+	const int WindowWidth = 800;
+	const int WindowHeight = 600;
+	
 	Hwnd = CreateWindowEx(
 		WS_EX_OVERLAPPEDWINDOW,
 		WindowClass.lpszClassName,
 		WindowClass.lpszClassName,
-		WS_OVERLAPPEDWINDOW,
+		WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME,
 		CW_USEDEFAULT,
 		CW_USEDEFAULT,
-		800,
-		600,
+		WindowWidth,
+		WindowHeight,
 		null,
 		null,
 		Instance,
 		null);
-	assert(Hwnd, "failed to create program window");
+	Assert(Hwnd, "failed to create program window");
 	
 	/* ---- OpenGL Initialization ---- */
 	HDC DeviceContext;
 	HGLRC RenderContext;
 	{
 		DeviceContext = GetDC(Hwnd);
-		assert(DeviceContext, "no dc");
+		Assert(DeviceContext, "no dc");
 		
 		int AttributeList[19];
 		// Support for OpenGL rendering.
@@ -249,14 +279,14 @@ int WINAPI WinMain(
 			1,
 			&PixelFormat,
 			&FormatCount);
-		assert(Result == 1, "failed wglChoosePixelFormatARB");
+		Assert(Result == 1, "failed wglChoosePixelFormatARB");
 		
 		PIXELFORMATDESCRIPTOR PixelFormatDescriptor;
 		Result = SetPixelFormat(
 			DeviceContext,
 			PixelFormat,
 			&PixelFormatDescriptor);
-		assert(Result == 1, "failed SetPixelFormat");
+		Assert(Result == 1, "failed SetPixelFormat");
 		
 		int GLAttributeList[5];
 		GLAttributeList[0] = WGL_CONTEXT_MAJOR_VERSION_ARB;
@@ -270,10 +300,10 @@ int WINAPI WinMain(
 			DeviceContext,
 			0,
 			GLAttributeList);
-		assert(RenderContext, "no rdc");
+		Assert(RenderContext, "no rdc");
 		
 		Result = wglMakeCurrent(DeviceContext, RenderContext);
-		assert(Result == 1, "failed wglmakeCurrent");
+		Assert(Result == 1, "failed wglmakeCurrent");
 		
 		Print("GPU Info: %s-%s",
 			(char*)glGetString(GL_VENDOR),
@@ -283,7 +313,7 @@ int WINAPI WinMain(
 		
 		// @@@vsync
 		Result = wglSwapIntervalEXT(1);
-		assert(Result == 1, "failed wglSwapIntervalEXT");
+		Assert(Result == 1, "failed wglSwapIntervalEXT");
 	}
 	/* ------------------------------- */
 	
@@ -307,7 +337,7 @@ int WINAPI WinMain(
 	{
 		char buf[1024];
 		glGetShaderInfoLog(ColorVertexShader, 1024, null, buf);
-		assert(false, "Failed to compile shader: color.vs \n%s", buf);
+		Assert(false, "Failed to compile shader: color.vs \n%s", buf);
 	}
 	glCompileShader(ColorPixelShader);
 	glGetShaderiv(ColorPixelShader, GL_COMPILE_STATUS, &Status);
@@ -315,7 +345,7 @@ int WINAPI WinMain(
 	{
 		char buf[1024];
 		glGetShaderInfoLog(ColorPixelShader, 1024, null, buf);
-		assert(false, "Failed to compile shader: color.ps \n%s", buf);
+		Assert(false, "Failed to compile shader: color.ps \n%s", buf);
 	}
 	GLenum ColorShaderProgram = glCreateProgram();
 	glAttachShader(ColorShaderProgram, ColorVertexShader);
@@ -328,7 +358,7 @@ int WINAPI WinMain(
 	{
 		char buf[1024];
 		glGetProgramInfoLog(ColorShaderProgram, 1024, null, buf);
-		assert(false, "Failed to link shader program: \n%s", buf);
+		Assert(false, "Failed to link shader program: \n%s", buf);
 	}
 	/* ------------------------------ */
 	
@@ -372,10 +402,21 @@ int WINAPI WinMain(
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3 * sizeof(uint), Indices, GL_STATIC_DRAW);
 	/* ------------------------------ */
 	
+	RECT client;
+	GetClientRect(Hwnd, &client);
+	const int FramebufferWidth = client.right - client.left;
+	const int FramebufferHeight = client.bottom - client.top;
+	
+	Assert(FramebufferWidth > 0, "");
+	Assert(FramebufferHeight > 0, "");
+	
+	ImGui_Init(Hwnd);
+	
 	ShowWindow(Hwnd, SW_SHOW);
 	
 	MSG Msg;
 	bool Done = false;
+	float clear_color[4] = {0.2f, 0.2f, 0.2f};
 
 	// Initialize the message structure.
 	ZeroMemory(&Msg, sizeof(MSG));
@@ -396,12 +437,38 @@ int WINAPI WinMain(
 			Done = true;
 		}
 		
-		glClearColor(0.2f, 0.2f, 0.2f, 1.f);
+		ImGui_NewFrame(FramebufferWidth, FramebufferHeight);
+		
+        ImGui::ColorEdit3("clear color", (float*)clear_color);
+        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
+			1000.0f / ImGui::GetIO().Framerate,
+			ImGui::GetIO().Framerate);
+
+        POINT Point;
+    	GetCursorPos(&Point);
+        ScreenToClient(Hwnd, &Point);
+        // Mouse position, in pixels (set to -1,-1 if no mouse / on another screen, etc.)
+    	ImGui::LabelText("things", "%d %d", Point.x, Point.y);
+		
+		glClearColor(clear_color[0], clear_color[1], clear_color[2], 1.f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		// glBindVertexArray(VertexArray);
+
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBuffer);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IndexBuffer);
+		glBindVertexArray(VertexArray);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, false, 6 * sizeof(float), 0);
+		glEnableVertexAttribArray(1);
+		glVertexAttribPointer(1, 3, GL_FLOAT, false, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+		glUseProgram(ColorShaderProgram);
 		glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, 0);
+		
+		ImGui::Render();
+
 		SwapBuffers(DeviceContext);
 	}
+	
+	ImGui_Shutdown();
 	
 	/* ----- Clean up temps ----- */
 	glDetachShader(ColorShaderProgram, ColorVertexShader);
@@ -429,4 +496,9 @@ int WINAPI WinMain(
 }
 
 
+// Library source
+#include "imgui.cpp"
+
+// Local source
 #include "file.cpp"
+#include "win32_imgui.cpp"
