@@ -109,6 +109,11 @@ GL_PROC_ENTRY( PFNGLUNMAPBUFFERPROC, glUnmapBuffer) \
 GL_PROC_TUPLE
 #undef GL_PROC_ENTRY
 
+
+static int FramebufferWidth;
+static int FramebufferHeight;
+
+
 LRESULT CALLBACK WndProc(HWND Hwnd, UINT Msg, WPARAM Wparam, LPARAM Lparam)
 {
 	switch(Msg)
@@ -140,6 +145,14 @@ LRESULT CALLBACK WndProc(HWND Hwnd, UINT Msg, WPARAM Wparam, LPARAM Lparam)
 		case WM_MOUSEWHEEL:
 	        ImGui_ScrollCallback(0, GET_WHEEL_DELTA_WPARAM(Wparam));
 	        return 0;
+	    case WM_SIZE:
+	    {
+    		RECT Client;
+			GetClientRect(Hwnd, &Client);
+			FramebufferWidth = Client.right - Client.left;
+			FramebufferHeight = Client.bottom - Client.top;
+			return 0;
+		}
 		// Any other messages send to the default message handler as our application won't make use of them.
 		default:
 			return DefWindowProc(Hwnd, Msg, Wparam, Lparam);
@@ -221,7 +234,7 @@ int WINAPI WinMain(
 		WS_EX_OVERLAPPEDWINDOW,
 		WindowClass.lpszClassName,
 		WindowClass.lpszClassName,
-		WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME,
+		WS_OVERLAPPED | WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX,
 		CW_USEDEFAULT,
 		CW_USEDEFAULT,
 		WindowWidth,
@@ -402,10 +415,10 @@ int WINAPI WinMain(
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3 * sizeof(uint), Indices, GL_STATIC_DRAW);
 	/* ------------------------------ */
 	
-	RECT client;
-	GetClientRect(Hwnd, &client);
-	const int FramebufferWidth = client.right - client.left;
-	const int FramebufferHeight = client.bottom - client.top;
+	RECT Client;
+	GetClientRect(Hwnd, &Client);
+	FramebufferWidth = Client.right - Client.left;
+	FramebufferHeight = Client.bottom - Client.top;
 	
 	Assert(FramebufferWidth > 0, "");
 	Assert(FramebufferHeight > 0, "");
@@ -416,7 +429,7 @@ int WINAPI WinMain(
 	
 	MSG Msg;
 	bool Done = false;
-	float clear_color[4] = {0.2f, 0.2f, 0.2f};
+	float ClearColor[4] = {0.2f, 0.2f, 0.2f};
 
 	// Initialize the message structure.
 	ZeroMemory(&Msg, sizeof(MSG));
@@ -439,7 +452,7 @@ int WINAPI WinMain(
 		
 		ImGui_NewFrame(FramebufferWidth, FramebufferHeight);
 		
-        ImGui::ColorEdit3("clear color", (float*)clear_color);
+        ImGui::ColorEdit3("clear color", (float*)ClearColor);
         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
 			1000.0f / ImGui::GetIO().Framerate,
 			ImGui::GetIO().Framerate);
@@ -450,7 +463,8 @@ int WINAPI WinMain(
         // Mouse position, in pixels (set to -1,-1 if no mouse / on another screen, etc.)
     	ImGui::LabelText("things", "%d %d", Point.x, Point.y);
 		
-		glClearColor(clear_color[0], clear_color[1], clear_color[2], 1.f);
+		glViewport(0, 0, FramebufferWidth, FramebufferHeight);
+		glClearColor(ClearColor[0], ClearColor[1], ClearColor[2], 1.f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		glBindBuffer(GL_ARRAY_BUFFER, VertexBuffer);
