@@ -166,6 +166,8 @@ static void ShowExampleAppCustomNodeGraph(bool* opened)
 	static int node_selected = -1;
 	static bool HasCopyNode = false;
 	static Node CopyNode;
+	static bool RenameFirstRun = false;
+	static int RenameNodeID = -1;
 	if (!inited)
 	{
 		nodes.push_back(Node(0, "MainTex", ImVec2(40,50), 0.5f, ImColor(255,100,100), 1, 1));
@@ -261,7 +263,20 @@ static void ShowExampleAppCustomNodeGraph(bool* opened)
 		bool old_any_active = ImGui::IsAnyItemActive();
 		ImGui::SetCursorScreenPos(node_rect_min + NODE_WINDOW_PADDING);
 		ImGui::BeginGroup(); // Lock horizontal position
-		ImGui::Text("%s", node->Name);
+		if (RenameNodeID == node->ID) {
+			if (RenameFirstRun) {
+				ImGui::SetKeyboardFocusHere();
+				RenameFirstRun = false;
+			}
+			if (ImGui::InputText("##name", node->Name, 32, 
+				ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue)) 
+			{
+				RenameNodeID = -1;
+			}
+		}
+		else {
+			ImGui::Text("%s", node->Name);
+		}
 		ImGui::SliderFloat("##value", &node->Value, 0.0f, 1.0f, "Alpha %.2f");
 		ImGui::ColorEdit3("##color", &node->Color.x);
 		ImGui::EndGroup();
@@ -312,9 +327,7 @@ static void ShowExampleAppCustomNodeGraph(bool* opened)
 		if (node_hovered_in_scene != -1)
 			node_selected = node_hovered_in_scene;
 	}
-
-	static char* RenameBuf;
-	bool ShowRenamePopup = false;
+	
 	// Draw context menu
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8,8));
 	if (ImGui::BeginPopup("context_menu"))
@@ -326,8 +339,8 @@ static void ShowExampleAppCustomNodeGraph(bool* opened)
 			ImGui::Text("Node '%s'", node->Name);
 			ImGui::Separator();
 			if (ImGui::MenuItem("Rename..", NULL, false, true)) {
-				RenameBuf = node->Name;
-				ShowRenamePopup = true;
+				RenameNodeID = node->ID;
+				RenameFirstRun = true;
 			}
 			if (ImGui::MenuItem("Delete", NULL, false, true)) {
 				node->Enabled = false;
@@ -363,20 +376,6 @@ static void ShowExampleAppCustomNodeGraph(bool* opened)
 	}
 	ImGui::PopStyleVar();
 	
-	if (ShowRenamePopup) {
-		ImGui::OpenPopup("rename_popup");
-	}
-	
-	if (ImGui::BeginPopup("rename_popup"))
-	{
-		ImGui::SetKeyboardFocusHere();
-		if (ImGui::InputText("New name", RenameBuf, 32, 
-			ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue)) {
-			ImGui::CloseCurrentPopup();
-		}
-		ImGui::EndPopup();
-	}
-
 	// Scrolling
 	if (ImGui::IsWindowHovered() && !ImGui::IsAnyItemActive() && ImGui::IsMouseDragging(IMGUI_MBUTTON, 0.0f))
 		scrolling = scrolling - ImGui::GetIO().MouseDelta;
