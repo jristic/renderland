@@ -386,11 +386,7 @@ void ImGui_NewFrame(int FramebufferWidth, int FramebufferHeight)
 
     for (int i = 0; i < 3; i++)
     {
-        const int buttons[3] = {
-            VK_LBUTTON,
-            VK_RBUTTON,
-            VK_MBUTTON
-        };
+        const int buttons[3] = { VK_LBUTTON, VK_RBUTTON, VK_MBUTTON };
         // If a mouse press event came, always pass it as "mouse held this frame", so we don't 
         //  miss click-release events that are shorter than 1 frame.
         io.MouseDown[i] = g_MousePressed[i] || ((GetKeyState(buttons[i]) & 0x100) != 0);    
