@@ -417,6 +417,9 @@ LRESULT CALLBACK WndProc(HWND Hwnd, UINT Msg, WPARAM Wparam, LPARAM Lparam)
 			ImGui_MouseButtonCallback(IMGUI_MBUTTON, down);
 			return 0;
 		case WM_KEYDOWN:
+			if ((int)Wparam == VK_ESCAPE) {
+				PostQuitMessage(0);
+			}
 			ImGui_KeyCallback((int)Wparam, true);
 			return 0;
 		case WM_KEYUP:
@@ -518,8 +521,8 @@ int WINAPI WinMain(
 		WindowClass.lpszClassName,
 		WindowClass.lpszClassName,
 		WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX,
-		CW_USEDEFAULT,
-		CW_USEDEFAULT,
+		100,
+		100,
 		WindowWidth,
 		WindowHeight,
 		null,
