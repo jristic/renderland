@@ -48,9 +48,6 @@ void SPrint(char* buf, int buf_size, const char *str, ...)
 }
 
 #define null nullptr
-#define PREPROCESSOR_STR_(x) #x
-#define PREPROCESSOR_STR(x) PREPROCESSOR_STR_(x)
-#define S__LINE__ PREPROCESSOR_STR(__LINE__)
 typedef unsigned int uint;
 
 #define Assert(expression, message, ...) 				\
@@ -75,7 +72,7 @@ typedef unsigned int uint;
 			{											\
 				MessageBoxA(NULL, 						\
 					buf,								\
-					"AssertFailed", 					\
+					"Assert Failed", 					\
 					MB_ICONERROR | MB_OK);				\
 				exit(-1);								\
 			}											\
