@@ -1,6 +1,3 @@
 [submodule "imgui"]
 	path = imgui
 	url = ../../ocornut/imgui.git
-[submodule "stb"]
-	path = stb
-	url = ../../nothings/stb.git

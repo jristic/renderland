@@ -743,12 +743,6 @@ int WINAPI WinMain(
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
 			1000.0f / ImGui::GetIO().Framerate,
 			ImGui::GetIO().Framerate);
-
-		POINT Point;
-		GetCursorPos(&Point);
-		ScreenToClient(Hwnd, &Point);
-		// Mouse position, in pixels (set to -1,-1 if no mouse / on another screen, etc.)
-		ImGui::LabelText("things", "%d %d", Point.x, Point.y);
 		
 		ShowExampleAppCustomNodeGraph(&ShowWindow);
 		
