@@ -630,6 +630,12 @@ int WINAPI WinMain(
 		// @@@vsync
 		Result = wglSwapIntervalEXT(1);
 		Assert(Result == 1, "failed wglSwapIntervalEXT");
+		
+		// Reload reload GL extensions because we have a new context
+		#define GL_PROC_ENTRY(type, name) name = (type)wglGetProcAddress(#name); \
+								  Assert(name, "failed to get %s", #name);
+		GL_PROC_TUPLE
+		#undef GL_PROC_ENTRY
 	}
 	/* ------------------------------- */
 	
