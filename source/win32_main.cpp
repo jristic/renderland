@@ -39,24 +39,44 @@ void Printnln(const char *str, ...)
 	OutputDebugString(buf);
 }
 
+void SPrint(char* buf, int buf_size, const char *str, ...)
+{
+	va_list ptr;
+	va_start(ptr,str);
+	vsprintf_s(buf,buf_size,str,ptr);
+	va_end(ptr);
+}
+
 #define null nullptr
+#define PREPROCESSOR_STR_(x) #x
+#define PREPROCESSOR_STR(x) PREPROCESSOR_STR_(x)
+#define S__LINE__ PREPROCESSOR_STR(__LINE__)
 typedef unsigned int uint;
+
 #define Assert(expression, message, ...) 				\
 	do { 												\
 		__pragma(warning(suppress:4127))				\
 		if (!(expression)) {							\
-			Print("/* ---- Assert ---- */");			\
-			Print("LOCATION:  %s@%d",					\
-				__FILE__, __LINE__);			 		\
-			Print("CONDITION:  %s", #expression);		\
-			Printnln("MESSAGE:    ");					\
-			Print(message, ##__VA_ARGS__);				\
+			char buf[512];								\
+			SPrint(buf, 512,							\
+				"/* ---- Assert ---- */ \n"				\
+				"LOCATION:  %s@%d		\n"				\
+				"CONDITION:  %s			\n"				\
+				"MESSAGE: " message "	\n",			\
+				__FILE__, __LINE__, 					\
+				#expression,							\
+				##__VA_ARGS__);							\
 			if (IsDebuggerPresent())					\
 			{											\
+				OutputDebugString(buf);					\
 				DebugBreak();							\
 			}											\
 			else										\
 			{											\
+				MessageBoxA(NULL, 						\
+					buf,								\
+					"AssertFailed", 					\
+					MB_ICONERROR | MB_OK);				\
 				exit(-1);								\
 			}											\
 		}												\
