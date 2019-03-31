@@ -54,8 +54,8 @@ typedef unsigned int uint;
 	do { 												\
 		__pragma(warning(suppress:4127))				\
 		if (!(expression)) {							\
-			char buf[512];								\
-			SPrint(buf, 512,							\
+			char __buf[512];							\
+			SPrint(__buf, 512,							\
 				"/* ---- Assert ---- */ \n"				\
 				"LOCATION:  %s@%d		\n"				\
 				"CONDITION:  %s			\n"				\
@@ -65,13 +65,13 @@ typedef unsigned int uint;
 				##__VA_ARGS__);							\
 			if (IsDebuggerPresent())					\
 			{											\
-				OutputDebugString(buf);					\
+				OutputDebugString(__buf);				\
 				DebugBreak();							\
 			}											\
 			else										\
 			{											\
 				MessageBoxA(NULL, 						\
-					buf,								\
+					__buf,								\
 					"Assert Failed", 					\
 					MB_ICONERROR | MB_OK);				\
 				exit(-1);								\

@@ -1,3 +1,5 @@
 @echo off
 
-renderland.exe
+call project.bat
+
+%ProjectExe%

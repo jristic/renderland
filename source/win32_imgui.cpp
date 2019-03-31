@@ -338,7 +338,7 @@ void ImGui_Shutdown()
     ImGui::Shutdown();
 }
 
-void ImGui_NewFrame(int FramebufferWidth, int FramebufferHeight)
+void ImGui_NewFrame(int FbWidth, int FbHeight)
 {
     if (!g_FontTexture)
         ImGui_CreateDeviceObjects();
@@ -346,7 +346,7 @@ void ImGui_NewFrame(int FramebufferWidth, int FramebufferHeight)
     ImGuiIO& io = ImGui::GetIO();
 
     // Setup display size (every frame to accommodate for window resizing)
-    io.DisplaySize = ImVec2((float)FramebufferWidth, (float)FramebufferHeight);
+    io.DisplaySize = ImVec2((float)FbWidth, (float)FbHeight);
 
     // Setup time step
     static bool first = true;
