@@ -2,4 +2,4 @@
 
 call project.bat
 
-%ProjectExe%
+built\%ProjectExe%
