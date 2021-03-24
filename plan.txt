@@ -1,0 +1,6 @@
+* Handle shader compile fails gracefully and show error. 
+* User specifiable shader location which is remembered between runs.
+* Process window remembers size and position between runs. 
+* Expand input to be an initial format (RLF?) which allows specifying shader and parameters to be passed to the shader. 
+	* surface the parameters used up to the imgui display?
+* Integrate RenderDoc capture. 

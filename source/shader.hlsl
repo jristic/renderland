@@ -17,6 +17,6 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 	float2 delta = DTid.xy - TextureSize/2;
 	float2 deltaSqr = delta*delta;
 	float dist = sqrt(deltaSqr.x + deltaSqr.y);
-	float intensity = (sin(dist/10 - Time*10) + 1) /2;
+	float intensity = (sin(dist/30 - Time*10) + 1) /2;
 	OutTexture[DTid.xy] = float4(intensity, intensity, intensity, 1);
 }

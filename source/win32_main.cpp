@@ -93,6 +93,7 @@ static ID3D11Device*            g_pd3dDevice = NULL;
 static ID3D11DeviceContext*     g_pd3dDeviceContext = NULL;
 static IDXGISwapChain*          g_pSwapChain = NULL;
 static ID3D11RenderTargetView*  g_mainRenderTargetView = NULL;
+static ID3D11ComputeShader*     g_computeShader = nullptr;
 static ID3D11UnorderedAccessView*  g_mainRenderTargetUav = NULL;
 static ID3D11Buffer*            g_pConstantBuffer = nullptr;
 
@@ -101,6 +102,8 @@ bool CreateDeviceD3D(HWND hWnd);
 void CleanupDeviceD3D();
 void CreateRenderTarget();
 void CleanupRenderTarget();
+void CreateShader();
+void CleanupShader();
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 // Main code
@@ -146,27 +149,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 	CreateRenderTarget();
 
-	// Create shader
-	ID3D11ComputeShader* computeShader = nullptr;
-	{
-		int shaderSize;
-		char* shader = ReadWholeFile("E:\\dev\\renderland\\source\\shader.hlsl", &shaderSize);
-		// Assert(false, "%s", shader);
-
-		ID3DBlob* shaderBlob;
-		ID3DBlob* errorBlob;
-		hr = D3DCompile(shader, shaderSize, "shader.hlsl", NULL, NULL, "CSMain", "cs_5_0",
-			0, 0, &shaderBlob, &errorBlob);
-		Assert(hr == S_OK, "failed to compile shader hr=%x, error:\n%s", 
-			hr, errorBlob->GetBufferPointer());
-		hr = g_pd3dDevice->CreateComputeShader(shaderBlob->GetBufferPointer(), 
-			shaderBlob->GetBufferSize(), NULL, &computeShader);
-		Assert(hr == S_OK, "Failed to create shader hr=%x", hr);
-
-		shaderBlob->Release();
-		if (errorBlob) errorBlob->Release();
-		free(shader);
-	}
+	CreateShader();
 
 	struct ConstantBuffer
 	{
@@ -207,10 +190,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
 	// Our state
-	bool show_demo_window = false;
-	bool show_another_window = false;
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-
 	float time = 0;
 
 	// Main loop
@@ -231,37 +211,23 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		ImGui_ImplWin32_NewFrame();
 		ImGui::NewFrame();
 
-		if (show_demo_window)
-			ImGui::ShowDemoWindow(&show_demo_window);
-
 		{
 			static float f = 0.0f;
 			static int counter = 0;
 
-			ImGui::Begin("Hello, world!");
-			ImGui::Text("This is some useful text.");
-			ImGui::Checkbox("Demo Window", &show_demo_window);
-			ImGui::Checkbox("Another Window", &show_another_window);
+			ImGui::Begin("Shader");
 
-			ImGui::SliderFloat("float", &f, 0.0f, 1.0f);
-			ImGui::ColorEdit3("clear color", (float*)&clear_color);
-			if (ImGui::Button("Button"))
-				counter++;
-			ImGui::SameLine();
-			ImGui::Text("counter = %d", counter);
+			ImGui::ColorEdit3("Clear color", (float*)&clear_color);
+			ImGui::Text("DisplaySize = %u / %u", (u32)io.DisplaySize.x, (u32)io.DisplaySize.y);
+			ImGui::Text("Time = %f", time);
+			if (ImGui::Button("Reload shader"))
+			{
+				CleanupShader();
+				CreateShader();
+			}
 
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
 				1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-			ImGui::End();
-		}
-
-		// 3. Show another simple window.
-		if (show_another_window)
-		{
-			ImGui::Begin("Another Window", &show_another_window);
-			ImGui::Text("Hello from another window!");
-			if (ImGui::Button("Close Me"))
-				show_another_window = false;
 			ImGui::End();
 		}
 
@@ -296,7 +262,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		}
 
 		// Dispatch our shader
-		g_pd3dDeviceContext->CSSetShader(computeShader, nullptr, 0);
+		g_pd3dDeviceContext->CSSetShader(g_computeShader, nullptr, 0);
 		g_pd3dDeviceContext->CSSetConstantBuffers(0, 1, &g_pConstantBuffer);
 		UINT initialCount = (UINT)-1;
 		g_pd3dDeviceContext->CSSetUnorderedAccessViews(0, 1, &g_mainRenderTargetUav, &initialCount);
@@ -323,6 +289,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
 
+	CleanupShader();
 	CleanupRenderTarget();
 	if (g_pSwapChain) { g_pSwapChain->Release(); g_pSwapChain = NULL; }
 	if (g_pd3dDeviceContext) { g_pd3dDeviceContext->Release(); g_pd3dDeviceContext = NULL; }
@@ -356,6 +323,36 @@ void CleanupRenderTarget()
 	{
 		g_mainRenderTargetUav->Release();
 		g_mainRenderTargetUav = NULL;
+	}
+}
+
+void CreateShader()
+{
+	int shaderSize;
+	char* shader = ReadWholeFile("E:\\dev\\renderland\\source\\shader.hlsl", &shaderSize);
+	// Assert(false, "%s", shader);
+
+	ID3DBlob* shaderBlob;
+	ID3DBlob* errorBlob;
+	HRESULT hr = D3DCompile(shader, shaderSize, "shader.hlsl", NULL, NULL, "CSMain", "cs_5_0",
+		0, 0, &shaderBlob, &errorBlob);
+	Assert(hr == S_OK, "failed to compile shader hr=%x, error:\n%s", 
+		hr, errorBlob->GetBufferPointer());
+	hr = g_pd3dDevice->CreateComputeShader(shaderBlob->GetBufferPointer(), 
+		shaderBlob->GetBufferSize(), NULL, &g_computeShader);
+	Assert(hr == S_OK, "Failed to create shader hr=%x", hr);
+
+	shaderBlob->Release();
+	if (errorBlob) errorBlob->Release();
+	free(shader);
+}
+
+void CleanupShader()
+{
+	if (g_computeShader)
+	{
+		g_computeShader->Release();
+		g_computeShader = nullptr;
 	}
 }
 
@@ -398,6 +395,6 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 // External source
 #include "imgui/imgui.cpp"
 #include "imgui/imgui_draw.cpp"
-#include "imgui/imgui_demo.cpp"
+// #include "imgui/imgui_demo.cpp"
 #include "imgui/imgui_tables.cpp"
 #include "imgui/imgui_widgets.cpp"
