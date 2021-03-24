@@ -16,6 +16,9 @@
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx11.h"
 
+typedef unsigned long int u32;
+static_assert(sizeof(u32) == 4, "Didn't get expected size.");
+
 void SPrint(char* buf, int buf_size, const char *str, ...)
 {
 	va_list ptr;
@@ -78,6 +81,8 @@ char* ReadWholeFile(char* filename, int* outSize)
 	Assert(success, "Failed to read file, error=%d", GetLastError());
 	Assert(bytesRead == fileSize, "Didn't read full file, error=%d",
 		GetLastError());
+
+	CloseHandle(file);
 	
 	*outSize = fileSize;
 	return buffer;
@@ -89,6 +94,7 @@ static ID3D11DeviceContext*     g_pd3dDeviceContext = NULL;
 static IDXGISwapChain*          g_pSwapChain = NULL;
 static ID3D11RenderTargetView*  g_mainRenderTargetView = NULL;
 static ID3D11UnorderedAccessView*  g_mainRenderTargetUav = NULL;
+static ID3D11Buffer*            g_pConstantBuffer = nullptr;
 
 // Forward declarations of helper functions
 bool CreateDeviceD3D(HWND hWnd);
@@ -162,6 +168,25 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		free(shader);
 	}
 
+	struct ConstantBuffer
+	{
+		float DisplaySizeX, DisplaySizeY;
+		float Time;
+		float Padding;
+	};
+
+	// Create constant buffer
+	{
+		D3D11_BUFFER_DESC desc;
+		desc.ByteWidth = sizeof(ConstantBuffer);
+		desc.Usage = D3D11_USAGE_DYNAMIC;
+		desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+		desc.MiscFlags = 0;
+		hr = g_pd3dDevice->CreateBuffer(&desc, NULL, &g_pConstantBuffer);
+		Assert(hr == S_OK, "Failed to create CB hr=%x", hr);
+	}
+
 	// Show the window
 	::ShowWindow(hwnd, SW_SHOWDEFAULT);
 	::UpdateWindow(hwnd);
@@ -182,9 +207,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
 	// Our state
-	bool show_demo_window = true;
+	bool show_demo_window = false;
 	bool show_another_window = false;
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+
+	float time = 0;
 
 	// Main loop
 	MSG msg;
@@ -255,11 +282,27 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		ID3D11RenderTargetView* emptyRT = nullptr;
 		g_pd3dDeviceContext->OMSetRenderTargets(1, &emptyRT, nullptr);
 
+		// Update constant buffer
+		{
+			D3D11_MAPPED_SUBRESOURCE mapped_resource;
+			hr = g_pd3dDeviceContext->Map(g_pConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, 
+				&mapped_resource);
+			Assert(hr == S_OK, "failed to map CB hr=%x", hr);
+			ConstantBuffer* cb = (ConstantBuffer*)mapped_resource.pData;
+			cb->DisplaySizeX = io.DisplaySize.x;
+			cb->DisplaySizeY = io.DisplaySize.y;
+			cb->Time = time;
+			g_pd3dDeviceContext->Unmap(g_pConstantBuffer, 0);
+		}
+
 		// Dispatch our shader
 		g_pd3dDeviceContext->CSSetShader(computeShader, nullptr, 0);
+		g_pd3dDeviceContext->CSSetConstantBuffers(0, 1, &g_pConstantBuffer);
 		UINT initialCount = (UINT)-1;
 		g_pd3dDeviceContext->CSSetUnorderedAccessViews(0, 1, &g_mainRenderTargetUav, &initialCount);
-		g_pd3dDeviceContext->Dispatch(10,10,1);
+		u32 groupWidth = (u32)((io.DisplaySize.x - 1) / 8) + 1;
+		u32 groupHeight = (u32)((io.DisplaySize.y - 1) / 8) + 1;
+		g_pd3dDeviceContext->Dispatch(groupWidth,groupHeight,1);
 
 		// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously
 		//	Swap back to RT for drawing. 
@@ -271,6 +314,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 		g_pSwapChain->Present(1, 0); // Present with vsync
 		//g_pSwapChain->Present(0, 0); // Present without vsync
+
+		time += io.DeltaTime;
 	}
 
 	// Cleanup
