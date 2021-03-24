@@ -88,6 +88,7 @@ static ID3D11Device*            g_pd3dDevice = NULL;
 static ID3D11DeviceContext*     g_pd3dDeviceContext = NULL;
 static IDXGISwapChain*          g_pSwapChain = NULL;
 static ID3D11RenderTargetView*  g_mainRenderTargetView = NULL;
+static ID3D11UnorderedAccessView*  g_mainRenderTargetUav = NULL;
 
 // Forward declarations of helper functions
 bool CreateDeviceD3D(HWND hWnd);
@@ -121,7 +122,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	sd.BufferDesc.RefreshRate.Numerator = 60;
 	sd.BufferDesc.RefreshRate.Denominator = 1;
 	sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_UNORDERED_ACCESS;
 	sd.OutputWindow = hwnd;
 	sd.SampleDesc.Count = 1;
 	sd.SampleDesc.Quality = 0;
@@ -129,7 +130,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 
 	UINT createDeviceFlags = 0;
-	//createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+	createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 	D3D_FEATURE_LEVEL featureLevel;
 	const D3D_FEATURE_LEVEL featureLevelArray[1] = { D3D_FEATURE_LEVEL_11_0 };
 	HRESULT hr = D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 
@@ -140,12 +141,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	CreateRenderTarget();
 
 	// Create shader
+	ID3D11ComputeShader* computeShader = nullptr;
 	{
 		int shaderSize;
 		char* shader = ReadWholeFile("E:\\dev\\renderland\\source\\shader.hlsl", &shaderSize);
 		// Assert(false, "%s", shader);
 
-		ID3D11ComputeShader* computeShader = NULL;
 		ID3DBlob* shaderBlob;
 		ID3DBlob* errorBlob;
 		hr = D3DCompile(shader, shaderSize, "shader.hlsl", NULL, NULL, "CSMain", "cs_5_0",
@@ -246,8 +247,26 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			clear_color.z * clear_color.w, 
 			clear_color.w
 		};
-		g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, NULL);
+		g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
 		g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, clear_color_with_alpha);
+
+		// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously.
+		//	Swap to UAV for compute shader. 
+		ID3D11RenderTargetView* emptyRT = nullptr;
+		g_pd3dDeviceContext->OMSetRenderTargets(1, &emptyRT, nullptr);
+
+		// Dispatch our shader
+		g_pd3dDeviceContext->CSSetShader(computeShader, nullptr, 0);
+		UINT initialCount = (UINT)-1;
+		g_pd3dDeviceContext->CSSetUnorderedAccessViews(0, 1, &g_mainRenderTargetUav, &initialCount);
+		g_pd3dDeviceContext->Dispatch(10,10,1);
+
+		// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously
+		//	Swap back to RT for drawing. 
+		ID3D11UnorderedAccessView* emptyUAV = nullptr;
+		g_pd3dDeviceContext->CSSetUnorderedAccessViews(0, 1, &emptyUAV, &initialCount);
+		g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
+
 		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
 		g_pSwapChain->Present(1, 0); // Present with vsync
@@ -277,6 +296,7 @@ void CreateRenderTarget()
 	ID3D11Texture2D* pBackBuffer;
 	g_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&pBackBuffer));
 	g_pd3dDevice->CreateRenderTargetView(pBackBuffer, NULL, &g_mainRenderTargetView);
+	g_pd3dDevice->CreateUnorderedAccessView(pBackBuffer, NULL, &g_mainRenderTargetUav);
 	pBackBuffer->Release();
 }
 
@@ -286,6 +306,11 @@ void CleanupRenderTarget()
 	{
 		g_mainRenderTargetView->Release();
 		g_mainRenderTargetView = NULL;
+	}
+	if (g_mainRenderTargetUav)
+	{
+		g_mainRenderTargetUav->Release();
+		g_mainRenderTargetUav = NULL;
 	}
 }
 
