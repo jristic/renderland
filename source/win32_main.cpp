@@ -5,7 +5,9 @@
 // System headers
 #include <windows.h>
 #include <d3d11.h>
+#include <d3dcompiler.h>
 #include <dwmapi.h>
+#include <stdio.h>
 
 // External headers
 #include "imgui/imgui.h"
@@ -13,6 +15,73 @@
 // Project headers
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx11.h"
+
+void SPrint(char* buf, int buf_size, const char *str, ...)
+{
+	va_list ptr;
+	va_start(ptr,str);
+	vsprintf_s(buf,buf_size,str,ptr);
+	va_end(ptr);
+}
+
+#define Assert(expression, message, ...) 				\
+	do { 												\
+		__pragma(warning(suppress:4127))				\
+		if (!(expression)) {							\
+			char __buf[512];							\
+			SPrint(__buf, 512,							\
+				"/* ---- Assert ---- */ \n"				\
+				"LOCATION:  %s@%d		\n"				\
+				"CONDITION:  %s			\n"				\
+				"MESSAGE: " message "	\n",			\
+				__FILE__, __LINE__, 					\
+				#expression,							\
+				##__VA_ARGS__);							\
+			printf("%s\n",__buf);						\
+			if (IsDebuggerPresent())					\
+			{											\
+				OutputDebugString(__buf);				\
+				OutputDebugString("\n");				\
+				DebugBreak();							\
+			}											\
+			else										\
+			{											\
+				MessageBoxA(NULL, 						\
+					__buf,								\
+					"Assert Failed", 					\
+					MB_ICONERROR | MB_OK);				\
+				exit(-1);								\
+			}											\
+		}												\
+		__pragma(warning(default:4127))					\
+	} while (0);										\
+
+char* ReadWholeFile(char* filename, int* outSize)
+{
+	HANDLE file = CreateFile(filename, GENERIC_READ, 0, nullptr, 
+		OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+	Assert(file != INVALID_HANDLE_VALUE, "Failed to open existing file %s, error=%d",
+		filename, GetLastError());
+
+	LARGE_INTEGER large;
+	BOOL success = GetFileSizeEx(file, &large);
+	Assert(success, "Failed to get file size, error=%d", GetLastError());
+	Assert(large.QuadPart < UINT_MAX, "File is too large, not supported");
+	DWORD fileSize = large.LowPart;
+
+	char* buffer = (char*)malloc(fileSize);	
+	Assert(buffer != nullptr, "failed to alloc");
+
+	DWORD bytesRead;
+	success = ReadFile(file, buffer, fileSize, &bytesRead,
+		nullptr);
+	Assert(success, "Failed to read file, error=%d", GetLastError());
+	Assert(bytesRead == fileSize, "Didn't read full file, error=%d",
+		GetLastError());
+	
+	*outSize = fileSize;
+	return buffer;
+}
 
 // Data
 static ID3D11Device*            g_pd3dDevice = NULL;
@@ -37,17 +106,59 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	// Create application window
 	//ImGui_ImplWin32_EnableDpiAwareness();
 	WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, hInstance, 
-		NULL, NULL, NULL, NULL, "ImGui Example", NULL };
+		NULL, NULL, NULL, NULL, "renderland", NULL };
 	::RegisterClassEx(&wc);
-	HWND hwnd = ::CreateWindow(wc.lpszClassName, "Dear ImGui DirectX11 Example",
+	HWND hwnd = ::CreateWindow(wc.lpszClassName, "Renderland",
 		WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, NULL, NULL, wc.hInstance, NULL);
 
 	// Initialize Direct3D
-	if (!CreateDeviceD3D(hwnd))
+	DXGI_SWAP_CHAIN_DESC sd;
+	ZeroMemory(&sd, sizeof(sd));
+	sd.BufferCount = 2;
+	sd.BufferDesc.Width = 0;
+	sd.BufferDesc.Height = 0;
+	sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	sd.BufferDesc.RefreshRate.Numerator = 60;
+	sd.BufferDesc.RefreshRate.Denominator = 1;
+	sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+	sd.OutputWindow = hwnd;
+	sd.SampleDesc.Count = 1;
+	sd.SampleDesc.Quality = 0;
+	sd.Windowed = TRUE;
+	sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+
+	UINT createDeviceFlags = 0;
+	//createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+	D3D_FEATURE_LEVEL featureLevel;
+	const D3D_FEATURE_LEVEL featureLevelArray[1] = { D3D_FEATURE_LEVEL_11_0 };
+	HRESULT hr = D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 
+		createDeviceFlags, featureLevelArray, 1, D3D11_SDK_VERSION, &sd, &g_pSwapChain, 
+		&g_pd3dDevice, &featureLevel, &g_pd3dDeviceContext);
+	Assert(hr == S_OK, "failed to create device %x", hr);
+
+	CreateRenderTarget();
+
+	// Create shader
 	{
-		CleanupDeviceD3D();
-		::UnregisterClass(wc.lpszClassName, wc.hInstance);
-		return 1;
+		int shaderSize;
+		char* shader = ReadWholeFile("E:\\dev\\renderland\\source\\shader.hlsl", &shaderSize);
+		// Assert(false, "%s", shader);
+
+		ID3D11ComputeShader* computeShader = NULL;
+		ID3DBlob* shaderBlob;
+		ID3DBlob* errorBlob;
+		hr = D3DCompile(shader, shaderSize, "shader.hlsl", NULL, NULL, "CSMain", "cs_5_0",
+			0, 0, &shaderBlob, &errorBlob);
+		Assert(hr == S_OK, "failed to compile shader hr=%x, error:\n%s", 
+			hr, errorBlob->GetBufferPointer());
+		hr = g_pd3dDevice->CreateComputeShader(shaderBlob->GetBufferPointer(), 
+			shaderBlob->GetBufferSize(), NULL, &computeShader);
+		Assert(hr == S_OK, "Failed to create shader hr=%x", hr);
+
+		shaderBlob->Release();
+		if (errorBlob) errorBlob->Release();
+		free(shader);
 	}
 
 	// Show the window
@@ -111,14 +222,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			ImGui::SameLine();
 			ImGui::Text("counter = %d", counter);
 
-			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
+				1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 			ImGui::End();
 		}
 
 		// 3. Show another simple window.
 		if (show_another_window)
 		{
-			ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+			ImGui::Begin("Another Window", &show_another_window);
 			ImGui::Text("Hello from another window!");
 			if (ImGui::Button("Close Me"))
 				show_another_window = false;
@@ -127,7 +239,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 		// Rendering
 		ImGui::Render();
-		const float clear_color_with_alpha[4] = { clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w };
+		const float clear_color_with_alpha[4] =
+		{
+			clear_color.x * clear_color.w,
+			clear_color.y * clear_color.w, 
+			clear_color.z * clear_color.w, 
+			clear_color.w
+		};
 		g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, NULL);
 		g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, clear_color_with_alpha);
 		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -141,7 +259,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
 
-	CleanupDeviceD3D();
+	CleanupRenderTarget();
+	if (g_pSwapChain) { g_pSwapChain->Release(); g_pSwapChain = NULL; }
+	if (g_pd3dDeviceContext) { g_pd3dDeviceContext->Release(); g_pd3dDeviceContext = NULL; }
+	if (g_pd3dDevice) { g_pd3dDevice->Release(); g_pd3dDevice = NULL; }
+
 	::DestroyWindow(hwnd);
 	::UnregisterClass(wc.lpszClassName, wc.hInstance);
 
@@ -149,44 +271,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 }
 
 // Helper functions
-
-bool CreateDeviceD3D(HWND hWnd)
-{
-	// Setup swap chain
-	DXGI_SWAP_CHAIN_DESC sd;
-	ZeroMemory(&sd, sizeof(sd));
-	sd.BufferCount = 2;
-	sd.BufferDesc.Width = 0;
-	sd.BufferDesc.Height = 0;
-	sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	sd.BufferDesc.RefreshRate.Numerator = 60;
-	sd.BufferDesc.RefreshRate.Denominator = 1;
-	sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	sd.OutputWindow = hWnd;
-	sd.SampleDesc.Count = 1;
-	sd.SampleDesc.Quality = 0;
-	sd.Windowed = TRUE;
-	sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-
-	UINT createDeviceFlags = 0;
-	//createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
-	D3D_FEATURE_LEVEL featureLevel;
-	const D3D_FEATURE_LEVEL featureLevelArray[2] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0, };
-	if (D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, createDeviceFlags, featureLevelArray, 2, D3D11_SDK_VERSION, &sd, &g_pSwapChain, &g_pd3dDevice, &featureLevel, &g_pd3dDeviceContext) != S_OK)
-		return false;
-
-	CreateRenderTarget();
-	return true;
-}
-
-void CleanupDeviceD3D()
-{
-	CleanupRenderTarget();
-	if (g_pSwapChain) { g_pSwapChain->Release(); g_pSwapChain = NULL; }
-	if (g_pd3dDeviceContext) { g_pd3dDeviceContext->Release(); g_pd3dDeviceContext = NULL; }
-	if (g_pd3dDevice) { g_pd3dDevice->Release(); g_pd3dDevice = NULL; }
-}
 
 void CreateRenderTarget()
 {
