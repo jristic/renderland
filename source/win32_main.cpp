@@ -12,81 +12,14 @@
 // External headers
 #include "imgui/imgui.h"
 
-// Project headers
+// Imgui example backend
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx11.h"
 
-typedef unsigned long int u32;
-static_assert(sizeof(u32) == 4, "Didn't get expected size.");
-
-void SPrint(char* buf, int buf_size, const char *str, ...)
-{
-	va_list ptr;
-	va_start(ptr,str);
-	vsprintf_s(buf,buf_size,str,ptr);
-	va_end(ptr);
-}
-
-#define Assert(expression, message, ...) 				\
-	do { 												\
-		__pragma(warning(suppress:4127))				\
-		if (!(expression)) {							\
-			char __buf[512];							\
-			SPrint(__buf, 512,							\
-				"/* ---- Assert ---- */ \n"				\
-				"LOCATION:  %s@%d		\n"				\
-				"CONDITION:  %s			\n"				\
-				"MESSAGE: " message "	\n",			\
-				__FILE__, __LINE__, 					\
-				#expression,							\
-				##__VA_ARGS__);							\
-			printf("%s\n",__buf);						\
-			if (IsDebuggerPresent())					\
-			{											\
-				OutputDebugString(__buf);				\
-				OutputDebugString("\n");				\
-				DebugBreak();							\
-			}											\
-			else										\
-			{											\
-				MessageBoxA(NULL, 						\
-					__buf,								\
-					"Assert Failed", 					\
-					MB_ICONERROR | MB_OK);				\
-				exit(-1);								\
-			}											\
-		}												\
-		__pragma(warning(default:4127))					\
-	} while (0);										\
-
-char* ReadWholeFile(char* filename, int* outSize)
-{
-	HANDLE file = CreateFile(filename, GENERIC_READ, 0, nullptr, 
-		OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-	Assert(file != INVALID_HANDLE_VALUE, "Failed to open existing file %s, error=%d",
-		filename, GetLastError());
-
-	LARGE_INTEGER large;
-	BOOL success = GetFileSizeEx(file, &large);
-	Assert(success, "Failed to get file size, error=%d", GetLastError());
-	Assert(large.QuadPart < UINT_MAX, "File is too large, not supported");
-	DWORD fileSize = large.LowPart;
-
-	char* buffer = (char*)malloc(fileSize);	
-	Assert(buffer != nullptr, "failed to alloc");
-
-	DWORD bytesRead;
-	success = ReadFile(file, buffer, fileSize, &bytesRead,
-		nullptr);
-	Assert(success, "Failed to read file, error=%d", GetLastError());
-	Assert(bytesRead == fileSize, "Didn't read full file, error=%d",
-		GetLastError());
-
-	CloseHandle(file);
-	
-	*outSize = fileSize;
-	return buffer;
-}
+// Project headers
+#include "types.h"
+#include "assert.h"
+#include "fileio.h"
 
 // Data
 static ID3D11Device*            g_pd3dDevice = NULL;
@@ -349,11 +282,19 @@ void CleanupRenderTarget()
 void CreateShader()
 {
 	char* filename = "E:\\dev\\renderland\\source\\shader.hlsl";
-	int shaderSize;
-	char* shader = ReadWholeFile(filename, &shaderSize);
 
+	HANDLE file = fileio::OpenFileAlways(filename, GENERIC_READ);
+	u32 shaderSize = fileio::GetFileSize(file);
+
+	char* buffer = (char*)malloc(shaderSize);	
+	Assert(buffer != nullptr, "failed to alloc");
+
+	fileio::ReadFile(file, buffer, shaderSize);
+
+	CloseHandle(file);
+	
 	ID3DBlob* shaderBlob;
-	HRESULT hr = D3DCompile(shader, shaderSize, filename, NULL, NULL, "CSMain", "cs_5_0",
+	HRESULT hr = D3DCompile(buffer, shaderSize, filename, NULL, NULL, "CSMain", "cs_5_0",
 		0, 0, &shaderBlob, &g_errorBlob);
 	Assert(hr == S_OK || hr == E_FAIL, "failed to compile shader hr=%x", hr);
 
@@ -372,7 +313,7 @@ void CreateShader()
 		Assert(g_errorBlob != nullptr, "no error info given");
 	}
 
-	free(shader);
+	free(buffer);
 }
 
 void CleanupShader()
@@ -422,13 +363,16 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
-// Project source
-#include "imgui_impl_win32.cpp"
-#include "imgui_impl_dx11.cpp"
-
 // External source
 #include "imgui/imgui.cpp"
 #include "imgui/imgui_draw.cpp"
 // #include "imgui/imgui_demo.cpp"
 #include "imgui/imgui_tables.cpp"
 #include "imgui/imgui_widgets.cpp"
+
+// Imgui example backend
+#include "imgui_impl_win32.cpp"
+#include "imgui_impl_dx11.cpp"
+
+// Project source
+#include "fileio.cpp"

@@ -1,4 +1,5 @@
 * User specifiable shader location which is remembered between runs.
+* F5 keyboard shortcut to reload shader.
 * Process window remembers size and position between runs. 
 * Make shader reloading optionally automatic any time the file is updated
 * Expand input to be an initial format (RLF?) which allows specifying shader and parameters to be passed to the shader. 
