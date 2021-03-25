@@ -96,6 +96,9 @@ static ID3D11RenderTargetView*  g_mainRenderTargetView = NULL;
 static ID3D11ComputeShader*     g_computeShader = nullptr;
 static ID3D11UnorderedAccessView*  g_mainRenderTargetUav = NULL;
 static ID3D11Buffer*            g_pConstantBuffer = nullptr;
+static ID3DBlob* 				g_errorBlob = nullptr;
+
+static bool ShaderCompileSuccess = false;
 
 // Forward declarations of helper functions
 bool CreateDeviceD3D(HWND hWnd);
@@ -136,7 +139,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	sd.SampleDesc.Count = 1;
 	sd.SampleDesc.Quality = 0;
 	sd.Windowed = TRUE;
-	sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+	sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 
 	UINT createDeviceFlags = 0;
 	createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
@@ -225,11 +228,25 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 				CleanupShader();
 				CreateShader();
 			}
+			if (!ShaderCompileSuccess)
+			{
+				ImVec4 color = ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
+				ImGui::PushStyleColor(ImGuiCol_Text, color);
+		        ImGui::PushTextWrapPos(0.f);
+
+				char* errorText = (char*)g_errorBlob->GetBufferPointer();
+				ImGui::TextUnformatted(errorText);
+
+				ImGui::PopTextWrapPos();
+				ImGui::PopStyleColor();
+			}
 
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
 				1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 			ImGui::End();
 		}
+
+		// ImGui::ShowDemoWindow(nullptr);
 
 		// Rendering
 		ImGui::Render();
@@ -243,38 +260,41 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
 		g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, clear_color_with_alpha);
 
-		// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously.
-		//	Swap to UAV for compute shader. 
-		ID3D11RenderTargetView* emptyRT = nullptr;
-		g_pd3dDeviceContext->OMSetRenderTargets(1, &emptyRT, nullptr);
-
-		// Update constant buffer
-		{
-			D3D11_MAPPED_SUBRESOURCE mapped_resource;
-			hr = g_pd3dDeviceContext->Map(g_pConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, 
-				&mapped_resource);
-			Assert(hr == S_OK, "failed to map CB hr=%x", hr);
-			ConstantBuffer* cb = (ConstantBuffer*)mapped_resource.pData;
-			cb->DisplaySizeX = io.DisplaySize.x;
-			cb->DisplaySizeY = io.DisplaySize.y;
-			cb->Time = time;
-			g_pd3dDeviceContext->Unmap(g_pConstantBuffer, 0);
-		}
-
 		// Dispatch our shader
-		g_pd3dDeviceContext->CSSetShader(g_computeShader, nullptr, 0);
-		g_pd3dDeviceContext->CSSetConstantBuffers(0, 1, &g_pConstantBuffer);
-		UINT initialCount = (UINT)-1;
-		g_pd3dDeviceContext->CSSetUnorderedAccessViews(0, 1, &g_mainRenderTargetUav, &initialCount);
-		u32 groupWidth = (u32)((io.DisplaySize.x - 1) / 8) + 1;
-		u32 groupHeight = (u32)((io.DisplaySize.y - 1) / 8) + 1;
-		g_pd3dDeviceContext->Dispatch(groupWidth,groupHeight,1);
+		if (ShaderCompileSuccess)
+		{
+			// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously.
+			//	Swap to UAV for compute shader. 
+			ID3D11RenderTargetView* emptyRT = nullptr;
+			g_pd3dDeviceContext->OMSetRenderTargets(1, &emptyRT, nullptr);
 
-		// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously
-		//	Swap back to RT for drawing. 
-		ID3D11UnorderedAccessView* emptyUAV = nullptr;
-		g_pd3dDeviceContext->CSSetUnorderedAccessViews(0, 1, &emptyUAV, &initialCount);
-		g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
+			// Update constant buffer
+			{
+				D3D11_MAPPED_SUBRESOURCE mapped_resource;
+				hr = g_pd3dDeviceContext->Map(g_pConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, 
+					&mapped_resource);
+				Assert(hr == S_OK, "failed to map CB hr=%x", hr);
+				ConstantBuffer* cb = (ConstantBuffer*)mapped_resource.pData;
+				cb->DisplaySizeX = io.DisplaySize.x;
+				cb->DisplaySizeY = io.DisplaySize.y;
+				cb->Time = time;
+				g_pd3dDeviceContext->Unmap(g_pConstantBuffer, 0);
+			}
+
+			g_pd3dDeviceContext->CSSetShader(g_computeShader, nullptr, 0);
+			g_pd3dDeviceContext->CSSetConstantBuffers(0, 1, &g_pConstantBuffer);
+			UINT initialCount = (UINT)-1;
+			g_pd3dDeviceContext->CSSetUnorderedAccessViews(0, 1, &g_mainRenderTargetUav, &initialCount);
+			u32 groupWidth = (u32)((io.DisplaySize.x - 1) / 8) + 1;
+			u32 groupHeight = (u32)((io.DisplaySize.y - 1) / 8) + 1;
+			g_pd3dDeviceContext->Dispatch(groupWidth,groupHeight,1);
+
+			// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously
+			//	Swap back to RT for drawing. 
+			ID3D11UnorderedAccessView* emptyUAV = nullptr;
+			g_pd3dDeviceContext->CSSetUnorderedAccessViews(0, 1, &emptyUAV, &initialCount);
+			g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
+		}
 
 		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
@@ -328,27 +348,41 @@ void CleanupRenderTarget()
 
 void CreateShader()
 {
+	char* filename = "E:\\dev\\renderland\\source\\shader.hlsl";
 	int shaderSize;
-	char* shader = ReadWholeFile("E:\\dev\\renderland\\source\\shader.hlsl", &shaderSize);
-	// Assert(false, "%s", shader);
+	char* shader = ReadWholeFile(filename, &shaderSize);
 
 	ID3DBlob* shaderBlob;
-	ID3DBlob* errorBlob;
-	HRESULT hr = D3DCompile(shader, shaderSize, "shader.hlsl", NULL, NULL, "CSMain", "cs_5_0",
-		0, 0, &shaderBlob, &errorBlob);
-	Assert(hr == S_OK, "failed to compile shader hr=%x, error:\n%s", 
-		hr, errorBlob->GetBufferPointer());
-	hr = g_pd3dDevice->CreateComputeShader(shaderBlob->GetBufferPointer(), 
-		shaderBlob->GetBufferSize(), NULL, &g_computeShader);
-	Assert(hr == S_OK, "Failed to create shader hr=%x", hr);
+	HRESULT hr = D3DCompile(shader, shaderSize, filename, NULL, NULL, "CSMain", "cs_5_0",
+		0, 0, &shaderBlob, &g_errorBlob);
+	Assert(hr == S_OK || hr == E_FAIL, "failed to compile shader hr=%x", hr);
 
-	shaderBlob->Release();
-	if (errorBlob) errorBlob->Release();
+	ShaderCompileSuccess = (hr == S_OK);
+
+	if (ShaderCompileSuccess)
+	{
+		hr = g_pd3dDevice->CreateComputeShader(shaderBlob->GetBufferPointer(), 
+			shaderBlob->GetBufferSize(), NULL, &g_computeShader);
+		Assert(hr == S_OK, "Failed to create shader hr=%x", hr);
+
+		shaderBlob->Release();
+	}
+	else
+	{
+		Assert(g_errorBlob != nullptr, "no error info given");
+	}
+
 	free(shader);
 }
 
 void CleanupShader()
 {
+	if (g_errorBlob)
+	{
+		g_errorBlob->Release();	
+		g_errorBlob = nullptr;
+	}
+
 	if (g_computeShader)
 	{
 		g_computeShader->Release();

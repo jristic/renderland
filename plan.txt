@@ -1,6 +1,7 @@
-* Handle shader compile fails gracefully and show error. 
 * User specifiable shader location which is remembered between runs.
 * Process window remembers size and position between runs. 
+* Make shader reloading optionally automatic any time the file is updated
 * Expand input to be an initial format (RLF?) which allows specifying shader and parameters to be passed to the shader. 
-	* surface the parameters used up to the imgui display?
+	* allow tuning of shader parameters via the imgui display
+* Allow specifying textures to be sampled by the shader.
 * Integrate RenderDoc capture. 
