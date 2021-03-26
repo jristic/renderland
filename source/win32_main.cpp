@@ -1,6 +1,3 @@
-// Dear ImGui: standalone example application for DirectX 11
-// If you are new to Dear ImGui, read documentation from the docs/ folder + read the top of imgui.cpp.
-// Read online: https://github.com/ocornut/imgui/tree/master/docs
 
 // System headers
 #include <windows.h>
@@ -8,6 +5,7 @@
 #include <d3dcompiler.h>
 #include <dwmapi.h>
 #include <stdio.h>
+#include <string>
 
 // External headers
 #include "imgui/imgui.h"
@@ -21,7 +19,8 @@
 #include "assert.h"
 #include "fileio.h"
 
-// Data
+#define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
+
 static ID3D11Device*            g_pd3dDevice = NULL;
 static ID3D11DeviceContext*     g_pd3dDeviceContext = NULL;
 static IDXGISwapChain*          g_pSwapChain = NULL;
@@ -29,9 +28,9 @@ static ID3D11RenderTargetView*  g_mainRenderTargetView = NULL;
 static ID3D11ComputeShader*     g_computeShader = nullptr;
 static ID3D11UnorderedAccessView*  g_mainRenderTargetUav = NULL;
 static ID3D11Buffer*            g_pConstantBuffer = nullptr;
-static ID3DBlob* 				g_errorBlob = nullptr;
 
-static bool ShaderCompileSuccess = false;
+bool ShaderCompileSuccess = false;
+std::string ShaderCompileErrorMessage;
 
 // Forward declarations of helper functions
 bool CreateDeviceD3D(HWND hWnd);
@@ -167,8 +166,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 				ImGui::PushStyleColor(ImGuiCol_Text, color);
 		        ImGui::PushTextWrapPos(0.f);
 
-				char* errorText = (char*)g_errorBlob->GetBufferPointer();
-				ImGui::TextUnformatted(errorText);
+				ImGui::TextUnformatted(ShaderCompileErrorMessage.c_str());
 
 				ImGui::PopTextWrapPos();
 				ImGui::PopStyleColor();
@@ -191,7 +189,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			clear_color.w
 		};
 		g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
-		g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, clear_color_with_alpha);
+		g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, 
+			clear_color_with_alpha);
 
 		// Dispatch our shader
 		if (ShaderCompileSuccess)
@@ -204,8 +203,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			// Update constant buffer
 			{
 				D3D11_MAPPED_SUBRESOURCE mapped_resource;
-				hr = g_pd3dDeviceContext->Map(g_pConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, 
-					&mapped_resource);
+				hr = g_pd3dDeviceContext->Map(g_pConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 
+					0, &mapped_resource);
 				Assert(hr == S_OK, "failed to map CB hr=%x", hr);
 				ConstantBuffer* cb = (ConstantBuffer*)mapped_resource.pData;
 				cb->DisplaySizeX = io.DisplaySize.x;
@@ -217,12 +216,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			g_pd3dDeviceContext->CSSetShader(g_computeShader, nullptr, 0);
 			g_pd3dDeviceContext->CSSetConstantBuffers(0, 1, &g_pConstantBuffer);
 			UINT initialCount = (UINT)-1;
-			g_pd3dDeviceContext->CSSetUnorderedAccessViews(0, 1, &g_mainRenderTargetUav, &initialCount);
+			g_pd3dDeviceContext->CSSetUnorderedAccessViews(0, 1, &g_mainRenderTargetUav, 
+				&initialCount);
 			u32 groupWidth = (u32)((io.DisplaySize.x - 1) / 8) + 1;
 			u32 groupHeight = (u32)((io.DisplaySize.y - 1) / 8) + 1;
 			g_pd3dDeviceContext->Dispatch(groupWidth,groupHeight,1);
 
-			// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously
+			// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously.
 			//	Swap back to RT for drawing. 
 			ID3D11UnorderedAccessView* emptyUAV = nullptr;
 			g_pd3dDeviceContext->CSSetUnorderedAccessViews(0, 1, &emptyUAV, &initialCount);
@@ -244,9 +244,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 	CleanupShader();
 	CleanupRenderTarget();
-	if (g_pSwapChain) { g_pSwapChain->Release(); g_pSwapChain = NULL; }
-	if (g_pd3dDeviceContext) { g_pd3dDeviceContext->Release(); g_pd3dDeviceContext = NULL; }
-	if (g_pd3dDevice) { g_pd3dDevice->Release(); g_pd3dDevice = NULL; }
+	SafeRelease(g_pSwapChain);
+	SafeRelease(g_pd3dDeviceContext);
+	SafeRelease(g_pd3dDevice);
 
 	::DestroyWindow(hwnd);
 	::UnregisterClass(wc.lpszClassName, wc.hInstance);
@@ -267,23 +267,24 @@ void CreateRenderTarget()
 
 void CleanupRenderTarget()
 {
-	if (g_mainRenderTargetView)
-	{
-		g_mainRenderTargetView->Release();
-		g_mainRenderTargetView = NULL;
-	}
-	if (g_mainRenderTargetUav)
-	{
-		g_mainRenderTargetUav->Release();
-		g_mainRenderTargetUav = NULL;
-	}
+	SafeRelease(g_mainRenderTargetView);
+	SafeRelease(g_mainRenderTargetUav);
 }
 
 void CreateShader()
 {
 	char* filename = "E:\\dev\\renderland\\source\\shader.hlsl";
 
-	HANDLE file = fileio::OpenFileAlways(filename, GENERIC_READ);
+	HANDLE file = fileio::OpenFileOptional(filename, GENERIC_READ);
+
+	if (file == INVALID_HANDLE_VALUE) // file not found
+	{
+		ShaderCompileSuccess = false;
+		ShaderCompileErrorMessage = std::string("Couldn't find file: ") + 
+			filename;
+		return;
+	}
+
 	u32 shaderSize = fileio::GetFileSize(file);
 
 	char* buffer = (char*)malloc(shaderSize);	
@@ -294,8 +295,9 @@ void CreateShader()
 	CloseHandle(file);
 	
 	ID3DBlob* shaderBlob;
+	ID3DBlob* errorBlob;
 	HRESULT hr = D3DCompile(buffer, shaderSize, filename, NULL, NULL, "CSMain", "cs_5_0",
-		0, 0, &shaderBlob, &g_errorBlob);
+		0, 0, &shaderBlob, &errorBlob);
 	Assert(hr == S_OK || hr == E_FAIL, "failed to compile shader hr=%x", hr);
 
 	ShaderCompileSuccess = (hr == S_OK);
@@ -310,7 +312,11 @@ void CreateShader()
 	}
 	else
 	{
-		Assert(g_errorBlob != nullptr, "no error info given");
+		Assert(errorBlob != nullptr, "no error info given");
+		char* errorText = (char*)errorBlob->GetBufferPointer();
+		ShaderCompileErrorMessage = errorText;
+
+		SafeRelease(errorBlob);
 	}
 
 	free(buffer);
@@ -318,17 +324,7 @@ void CreateShader()
 
 void CleanupShader()
 {
-	if (g_errorBlob)
-	{
-		g_errorBlob->Release();	
-		g_errorBlob = nullptr;
-	}
-
-	if (g_computeShader)
-	{
-		g_computeShader->Release();
-		g_computeShader = nullptr;
-	}
+	SafeRelease(g_computeShader);
 }
 
 // Forward declare message handler from imgui_impl_win32.cpp

@@ -24,10 +24,9 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 	else
 		theta = (0.5*atan2(-delta.y,-delta.x) )/3.14 + 0.5;
 
-	float intensity = (sin(dist/30 + (theta)*3.14*2 - Time*10) + 1) /2;
+	float intensity = (sin(dist/30 + theta*3.14*2 - Time*10) + 1) /2;
 	if ((DTid.x/4 + DTid.y/4)%2 == 0)
 		intensity = pow(intensity,2);
 
-	
 	OutTexture[DTid.xy] = float4(intensity, intensity, intensity, 1);
 }
