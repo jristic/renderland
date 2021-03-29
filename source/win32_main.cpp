@@ -155,7 +155,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			ImGui::ColorEdit3("Clear color", (float*)&clear_color);
 			ImGui::Text("DisplaySize = %u / %u", (u32)io.DisplaySize.x, (u32)io.DisplaySize.y);
 			ImGui::Text("Time = %f", time);
-			if (ImGui::Button("Reload shader"))
+			if (ImGui::Button("Reload shader") || ImGui::IsKeyDown(VK_F5))
 			{
 				CleanupShader();
 				CreateShader();
