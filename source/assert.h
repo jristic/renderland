@@ -38,3 +38,20 @@ void SPrint(char* buf, int buf_size, const char *str, ...)
 		}												\
 		__pragma(warning(default:4127))					\
 	} while (0);										\
+
+#define Prompt(message, ...) 							\
+	do { 												\
+		char __buf[512];								\
+		SPrint(__buf, 512,								\
+			"/* ---- Prompt ---- */ \n"					\
+			"LOCATION:  %s@%d		\n"					\
+			"MESSAGE: " message "	\n",				\
+			__FILE__, __LINE__, 						\
+			##__VA_ARGS__);								\
+		{												\
+			MessageBoxA(NULL, 							\
+				__buf,									\
+				"Prompt", 								\
+				MB_OK);									\
+		}												\
+	} while (0);										\

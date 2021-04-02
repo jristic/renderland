@@ -17,6 +17,7 @@
 // Project headers
 #include "types.h"
 #include "assert.h"
+#include "config.h"
 #include "fileio.h"
 
 #define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
@@ -31,6 +32,7 @@ static ID3D11Buffer*            g_pConstantBuffer = nullptr;
 
 bool ShaderCompileSuccess = false;
 std::string ShaderCompileErrorMessage;
+config::Parameters Cfg = {};
 
 // Forward declarations of helper functions
 bool CreateDeviceD3D(HWND hWnd);
@@ -55,6 +57,25 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	::RegisterClassEx(&wc);
 	HWND hwnd = ::CreateWindow(wc.lpszClassName, "Renderland",
 		WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, NULL, NULL, wc.hInstance, NULL);
+
+	// Establish the full path to the current exe and its directory
+	std::string ExePath;
+	std::string ExeDirectoryPath;
+	{
+		const char* exeName = "renderland.exe";
+		char PathBuffer[2048];
+		fileio::GetModuleFileName(nullptr, PathBuffer, ARRAYSIZE(PathBuffer));
+		ExePath = PathBuffer;
+
+		size_t exePos = ExePath.rfind(exeName);
+		Assert(exePos != std::string::npos, "Could not find exe path in string %s",
+			ExePath.c_str());
+		ExeDirectoryPath = ExePath.substr(0, exePos);
+	}
+
+	std::string ConfigPath = ExeDirectoryPath + "rl.cfg";
+
+	LoadConfig(ConfigPath.c_str(), &Cfg);
 
 	// Initialize Direct3D
 	DXGI_SWAP_CHAIN_DESC sd;
@@ -155,10 +176,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			ImGui::ColorEdit3("Clear color", (float*)&clear_color);
 			ImGui::Text("DisplaySize = %u / %u", (u32)io.DisplaySize.x, (u32)io.DisplaySize.y);
 			ImGui::Text("Time = %f", time);
+			ImGui::InputText("Shader path", Cfg.ShaderPath, IM_ARRAYSIZE(Cfg.ShaderPath));
 			if (ImGui::Button("Reload shader") || ImGui::IsKeyDown(VK_F5))
 			{
 				CleanupShader();
 				CreateShader();
+				config::SaveConfig(ConfigPath.c_str(), &Cfg);
 			}
 			if (!ShaderCompileSuccess)
 			{
@@ -174,6 +197,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
 				1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+
+			ImGui::Text("Exe directory: %s", ExeDirectoryPath.c_str());
+
 			ImGui::End();
 		}
 
@@ -242,6 +268,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
 
+	config::SaveConfig(ConfigPath.c_str(), &Cfg);
+
 	CleanupShader();
 	CleanupRenderTarget();
 	SafeRelease(g_pSwapChain);
@@ -273,7 +301,7 @@ void CleanupRenderTarget()
 
 void CreateShader()
 {
-	char* filename = "E:\\dev\\renderland\\source\\shader.hlsl";
+	char* filename = Cfg.ShaderPath;
 
 	HANDLE file = fileio::OpenFileOptional(filename, GENERIC_READ);
 
@@ -371,4 +399,5 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 #include "imgui_impl_dx11.cpp"
 
 // Project source
+#include "config.cpp"
 #include "fileio.cpp"

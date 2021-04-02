@@ -1,8 +1,4 @@
-*.obj
-*.v12.suo
 *.sublime-workspace
-renderland.exe
-renderland.pdb
 imgui.ini
-/build/
+/built/
 .vs

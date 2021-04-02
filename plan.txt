@@ -1,8 +1,7 @@
-* User specifiable shader location which is remembered between runs.
-* F5 keyboard shortcut to reload shader.
 * Process window remembers size and position between runs. 
 * Make shader reloading optionally automatic any time the file is updated
 * Expand input to be an initial format (RLF?) which allows specifying shader and parameters to be passed to the shader. 
-	* allow tuning of shader parameters via the imgui display
+	* Allow tuning of shader parameters via the imgui display.
 * Allow specifying textures to be sampled by the shader.
 * Integrate RenderDoc capture. 
+* Expand to the draw pipeline.

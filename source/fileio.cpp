@@ -52,7 +52,7 @@ HANDLE OpenFileOptional(const char* fileName, u32 desiredAccess)
 	if (handle == INVALID_HANDLE_VALUE)
 	{
 		DWORD lastError = GetLastError();
-		Assert(lastError == ERROR_FILE_NOT_FOUND,
+		Assert(lastError == ERROR_FILE_NOT_FOUND || lastError == ERROR_PATH_NOT_FOUND,
 			"Opening file %s failed unexpectedly, error=%d",
 			fileName, lastError);
 	}
