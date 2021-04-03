@@ -32,7 +32,8 @@ static ID3D11Buffer*            g_pConstantBuffer = nullptr;
 
 bool ShaderCompileSuccess = false;
 std::string ShaderCompileErrorMessage;
-config::Parameters Cfg = {};
+config::Parameters Cfg = { "", false, 0, 0, 1280, 800 };
+bool StartupComplete = false;
 
 // Forward declarations of helper functions
 bool CreateDeviceD3D(HWND hWnd);
@@ -130,6 +131,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	::ShowWindow(hwnd, SW_SHOWDEFAULT);
 	::UpdateWindow(hwnd);
 
+	BOOL result = ::MoveWindow(hwnd, Cfg.WindowPosX, Cfg.WindowPosY, Cfg.WindowWidth,
+		Cfg.WindowHeight, TRUE);
+	Assert(result, "Failed, error=%x", GetLastError());
+	if (Cfg.Maximized)
+	{
+		::ShowWindow(hwnd, SW_MAXIMIZE);
+	}
+
+	StartupComplete = true;
+
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -181,7 +192,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			{
 				CleanupShader();
 				CreateShader();
-				config::SaveConfig(ConfigPath.c_str(), &Cfg);
 			}
 			if (!ShaderCompileSuccess)
 			{
@@ -355,6 +365,20 @@ void CleanupShader()
 	SafeRelease(g_computeShader);
 }
 
+void UpdateWindowStats(HWND hWnd)
+{
+	if (StartupComplete)
+	{
+		WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
+		GetWindowPlacement(hWnd, &wp);
+		Cfg.Maximized = wp.showCmd == SW_MAXIMIZE;
+		Cfg.WindowPosX = wp.rcNormalPosition.left;
+		Cfg.WindowPosY = wp.rcNormalPosition.top;
+		Cfg.WindowWidth = wp.rcNormalPosition.right - wp.rcNormalPosition.left;
+		Cfg.WindowHeight = wp.rcNormalPosition.bottom - wp.rcNormalPosition.top;
+	}
+}
+
 // Forward declare message handler from imgui_impl_win32.cpp
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, 
 	WPARAM wParam, LPARAM lParam);
@@ -374,7 +398,12 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			g_pSwapChain->ResizeBuffers(0, (UINT)LOWORD(lParam), (UINT)HIWORD(lParam), 
 				DXGI_FORMAT_UNKNOWN, 0);
 			CreateRenderTarget();
+
+			UpdateWindowStats(hWnd);
 		}
+		return 0;
+	case WM_MOVE:
+		UpdateWindowStats(hWnd);
 		return 0;
 	case WM_SYSCOMMAND:
 		if ((wParam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu

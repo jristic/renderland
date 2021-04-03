@@ -9,8 +9,7 @@ void LoadConfig(const char* configPath, Parameters* outConfig)
 	HANDLE file = fileio::OpenFileOptional(configPath, GENERIC_READ);
 	if (file == INVALID_HANDLE_VALUE)
 	{
-		// No config file exists, default to no file for now
-		outConfig->ShaderPath[0] = '\0';
+		// No config file exists, assume the config was already filled with defaults.
 		return;
 	}
 	
@@ -32,9 +31,37 @@ void LoadConfig(const char* configPath, Parameters* outConfig)
 				memcpy(outConfig->ShaderPath, value.c_str(), value.length());
 				outConfig->ShaderPath[value.length()] = '\0';
 			}
+			else if (label == "Maximized")
+			{
+				outConfig->Maximized = value == "true";
+			}
+			else if (label == "WindowPosX")
+			{
+				int val = atoi(value.c_str());
+				if (val != 0) 
+					outConfig->WindowPosX = val;
+			}
+			else if (label == "WindowPosY")
+			{
+				int val = atoi(value.c_str());
+				if (val != 0) 
+					outConfig->WindowPosY = val;
+			}
+			else if (label == "WindowWidth")
+			{
+				int val = atoi(value.c_str());
+				if (val > 0) 
+					outConfig->WindowWidth = val;
+			}
+			else if (label == "WindowHeight")
+			{
+				int val = atoi(value.c_str());
+				if (val > 0) 
+					outConfig->WindowHeight = val;
+			}
 			else
 			{
-				// TODO: Unhandled, should we error?
+				Prompt("Invalid config item: %s", label.c_str());
 			}
 		}
 	};
@@ -54,11 +81,15 @@ void LoadConfig(const char* configPath, Parameters* outConfig)
 	CloseHandle(file);
 }
 
-void SaveConfig(const char* configPath, const Parameters* config)
+void SaveConfig(const char* configPath, const Parameters* cfg)
 {
 	HANDLE file = fileio::CreateFileOverwrite(configPath, GENERIC_WRITE);
-	std::string contents = std::string("ShaderPath=") + config->ShaderPath + "\n";
-	fileio::WriteFile(file, contents.c_str(), (u32)contents.length());
+	char buf[2048];
+	snprintf(buf, 2048,
+		"ShaderPath=%s\nMaximized=%s\nWindowPosX=%i\nWindowPosY=%i\n"
+		"WindowWidth=%i\nWindowHeight=%i\n", cfg->ShaderPath, cfg->Maximized ? "true" : "false",
+		cfg->WindowPosX, cfg->WindowPosY, cfg->WindowWidth, cfg->WindowHeight);
+	fileio::WriteFile(file, buf, (u32)strlen(buf));
 	CloseHandle(file);
 }
 

@@ -5,6 +5,11 @@ namespace config
 struct Parameters
 {
 	char ShaderPath[256];
+	bool Maximized;
+	i32 WindowPosX;
+	i32 WindowPosY;
+	i32 WindowWidth;
+	i32 WindowHeight;
 };
 
 void LoadConfig(const char* configPath, Parameters* outConfig);
