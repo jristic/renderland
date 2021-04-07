@@ -1,0 +1,8 @@
+
+DispatchCompute computeTest {
+	ShaderPath = "shader.hlsl"
+}
+
+Passes {
+	computeTest
+}

@@ -6,6 +6,8 @@
 #include <dwmapi.h>
 #include <stdio.h>
 #include <string>
+#include <unordered_map>
+#include <set>
 
 // External headers
 #include "imgui/imgui.h"
@@ -19,6 +21,7 @@
 #include "assert.h"
 #include "config.h"
 #include "fileio.h"
+#include "rlfparse.h"
 
 #define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
 
@@ -430,3 +433,4 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 // Project source
 #include "config.cpp"
 #include "fileio.cpp"
+#include "rlfparse.cpp"
