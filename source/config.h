@@ -4,7 +4,7 @@ namespace config
 
 struct Parameters
 {
-	char ShaderPath[256];
+	char FilePath[256];
 	bool Maximized;
 	i32 WindowPosX;
 	i32 WindowPosY;

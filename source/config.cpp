@@ -26,10 +26,10 @@ void LoadConfig(const char* configPath, Parameters* outConfig)
 		{
 			std::string label = line.substr(0, split);
 			std::string value = line.substr(split+1);
-			if (label == "ShaderPath")
+			if (label == "FilePath")
 			{
-				memcpy(outConfig->ShaderPath, value.c_str(), value.length());
-				outConfig->ShaderPath[value.length()] = '\0';
+				memcpy(outConfig->FilePath, value.c_str(), value.length());
+				outConfig->FilePath[value.length()] = '\0';
 			}
 			else if (label == "Maximized")
 			{
@@ -86,8 +86,8 @@ void SaveConfig(const char* configPath, const Parameters* cfg)
 	HANDLE file = fileio::CreateFileOverwrite(configPath, GENERIC_WRITE);
 	char buf[2048];
 	snprintf(buf, 2048,
-		"ShaderPath=%s\nMaximized=%s\nWindowPosX=%i\nWindowPosY=%i\n"
-		"WindowWidth=%i\nWindowHeight=%i\n", cfg->ShaderPath, cfg->Maximized ? "true" : "false",
+		"FilePath=%s\nMaximized=%s\nWindowPosX=%i\nWindowPosY=%i\n"
+		"WindowWidth=%i\nWindowHeight=%i\n", cfg->FilePath, cfg->Maximized ? "true" : "false",
 		cfg->WindowPosX, cfg->WindowPosY, cfg->WindowWidth, cfg->WindowHeight);
 	fileio::WriteFile(file, buf, (u32)strlen(buf));
 	CloseHandle(file);

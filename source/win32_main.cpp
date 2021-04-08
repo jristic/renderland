@@ -190,7 +190,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			ImGui::ColorEdit3("Clear color", (float*)&clear_color);
 			ImGui::Text("DisplaySize = %u / %u", (u32)io.DisplaySize.x, (u32)io.DisplaySize.y);
 			ImGui::Text("Time = %f", time);
-			ImGui::InputText("Shader path", Cfg.ShaderPath, IM_ARRAYSIZE(Cfg.ShaderPath));
+			ImGui::InputText("Rlf path", Cfg.FilePath, IM_ARRAYSIZE(Cfg.FilePath));
 			if (ImGui::Button("Reload shader") || ImGui::IsKeyDown(VK_F5))
 			{
 				CleanupShader();
@@ -234,6 +234,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		// Dispatch our shader
 		if (ShaderCompileSuccess)
 		{
+			// TODO: render RenderDescription scene
+
 			// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously.
 			//	Swap to UAV for compute shader. 
 			ID3D11RenderTargetView* emptyRT = nullptr;
@@ -314,7 +316,7 @@ void CleanupRenderTarget()
 
 void CreateShader()
 {
-	char* filename = Cfg.ShaderPath;
+	char* filename = Cfg.FilePath;
 
 	HANDLE file = fileio::OpenFileOptional(filename, GENERIC_READ);
 
@@ -334,6 +336,11 @@ void CreateShader()
 	fileio::ReadFile(file, buffer, shaderSize);
 
 	CloseHandle(file);
+
+	rlfparse::RenderDescription* rd = rlfparse::ParseBuffer(buffer, shaderSize);
+	(void)rd;
+
+	// TODO: construct RenderDescription scene 
 	
 	ID3DBlob* shaderBlob;
 	ID3DBlob* errorBlob;
@@ -365,6 +372,7 @@ void CreateShader()
 
 void CleanupShader()
 {
+	// TODO: destruct RenderDescription scene
 	SafeRelease(g_computeShader);
 }
 

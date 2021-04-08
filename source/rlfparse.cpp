@@ -17,6 +17,36 @@ enum Token {
 struct BufferString {
 	const char* base;
 	size_t len;
+
+	bool operator==(const BufferString& other) const
+	{
+		if (len != other.len)
+			return false;
+		for (size_t i = 0 ; i < len ; ++i)
+		{
+			if (base[i] != other.base[i])
+				return false;
+		}
+		return true;
+	}
+};
+
+struct BufferStringHash
+{
+	size_t operator()(const BufferString& s) const
+	{
+		unsigned long h;
+		unsigned const char* us;
+		us = (unsigned const char *) s.base;
+		unsigned const char* end;
+		end = (unsigned const char *) s.base + s.len;
+		h = 0;
+		while(us < end) {
+			h = h * 97 + *us;
+			us++;
+		}
+		return h; 
+	}
 };
 
 struct BufferIter {
@@ -86,6 +116,7 @@ BufferIter PeekNextToken(
 		do {
 			++b.next;
 		} while (b.next < b.end && *b.next != '"');
+		++b.next; // pass the closing quotes
 		*outTok = TOKEN_STRING;
 	}
 	else {
@@ -149,9 +180,8 @@ BufferIter ConsumeString(
 	BufferIter tokRead = PeekNextToken(start, &tok);
 	Assert(tok == TOKEN_STRING, "unexpected token (wanted string)");
 
-	// TODO: strip the quotation marks off the string
-	str->base = start.next;
-	str->len = tokRead.next - start.next;
+	str->base = start.next + 1;
+	str->len = tokRead.next - start.next - 2;
 
 	return tokRead;	
 }
@@ -190,12 +220,14 @@ const char* AddStringToDescriptionData(BufferString str, RenderDescription* rd)
 	return pair.first->c_str();
 }
 
+
+
 RenderDescription* ParseBuffer(
 	char* buffer,
 	int buffer_len)
 {
 	RenderDescription* rd = new RenderDescription();
-	std::unordered_map<std::string, DispatchCompute*> dcMap;
+	std::unordered_map<BufferString, DispatchCompute*, BufferStringHash> dcMap;
 
 	BufferIter b = { buffer, buffer + buffer_len };
 	while (b.next != b.end)
@@ -208,20 +240,27 @@ RenderDescription* ParseBuffer(
 			BufferString nameId;
 			b = ConsumeIdentifier(b, &nameId);
 			std::string name = IdentifierToString(nameId);
-			Assert(dcMap.find(name) == dcMap.end(), "%s already defined", name.c_str());
+			Assert(dcMap.find(nameId) == dcMap.end(), "%s already defined", name.c_str());
 
 			DispatchCompute* dc = new DispatchCompute();
+
+			b = ConsumeToken(TOKEN_LBRACE, b);
 
 			while (true)
 			{
 				BufferString fieldId;
 				b = ConsumeIdentifier(b, &fieldId);
+				std::string field = IdentifierToString(fieldId);
 				if (CompareIdentifier(fieldId, "ShaderPath"))
 				{
 					b = ConsumeToken(TOKEN_EQUALS, b);
 					BufferString value;
 					b = ConsumeString(b, &value);
 					dc->ShaderPath = AddStringToDescriptionData(value, rd);
+				}
+				else
+				{
+					Assert(false, "unexpected field %s", field.c_str());
 				}
 
 				if (!TryConsumeToken(TOKEN_COMMA, &b))
@@ -230,13 +269,31 @@ RenderDescription* ParseBuffer(
 				}
 			}
 
-			rd->Dispatches.insert(dc);
+			b = ConsumeToken(TOKEN_RBRACE, b);
 
+			rd->Dispatches.insert(dc);
+			dcMap[nameId] = dc;
 		}
 		else if (CompareIdentifier(structureId, "Passes"))
 		{
-			// TODO: Parse comma separated list of identifier and populate Passes
-			//	by looking them up in the map. 
+			b = ConsumeToken(TOKEN_LBRACE, b);
+
+			while (true)
+			{
+				BufferString pass;
+				b = ConsumeIdentifier(b, &pass);
+				std::string name = IdentifierToString(pass);
+				auto iter = dcMap.find(pass);
+				Assert(iter != dcMap.end(), "couldn't find pass %s", name.c_str());
+				rd->Passes.push_back(iter->second);
+
+				if (!TryConsumeToken(TOKEN_COMMA, &b))
+				{
+					break;
+				}
+			}
+
+			b = ConsumeToken(TOKEN_RBRACE, b);
 		}
 		else
 		{
@@ -253,7 +310,10 @@ void ReleaseData(RenderDescription* data)
 {
 	Assert(data, "Invalid pointer.");
 
-	// TODO: delete the rest of the allocations for this data
+	for (DispatchCompute* dc : data->Dispatches)
+	{
+		delete dc;
+	}
 
 	delete data;
 }
