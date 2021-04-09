@@ -54,15 +54,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	(void)pCmdLine;
 	(void)nCmdShow;
 
-	// Create application window
-	//ImGui_ImplWin32_EnableDpiAwareness();
-	WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, hInstance, 
-		NULL, NULL, NULL, NULL, "renderland", NULL };
-	::RegisterClassEx(&wc);
-	HWND hwnd = ::CreateWindow(wc.lpszClassName, "Renderland",
-		WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, NULL, NULL, wc.hInstance, NULL);
-
-	// Establish the full path to the current exe and its directory
+		// Establish the full path to the current exe and its directory
 	std::string ExePath;
 	std::string ExeDirectoryPath;
 	{
@@ -80,6 +72,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	std::string ConfigPath = ExeDirectoryPath + "rl.cfg";
 
 	LoadConfig(ConfigPath.c_str(), &Cfg);
+
+	// Create application window
+	//ImGui_ImplWin32_EnableDpiAwareness();
+	WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, hInstance, 
+		NULL, NULL, NULL, NULL, "renderland", NULL };
+	::RegisterClassEx(&wc);
+	HWND hwnd = ::CreateWindow(wc.lpszClassName, "Renderland", WS_OVERLAPPEDWINDOW, 
+		Cfg.WindowPosX, Cfg.WindowPosY, Cfg.WindowWidth, Cfg.WindowHeight, NULL, 
+		NULL, wc.hInstance, NULL);
 
 	// Initialize Direct3D
 	DXGI_SWAP_CHAIN_DESC sd;
@@ -131,16 +132,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	}
 
 	// Show the window
-	::ShowWindow(hwnd, SW_SHOWDEFAULT);
+	::ShowWindow(hwnd, Cfg.Maximized ? SW_MAXIMIZE : SW_SHOWDEFAULT);
 	::UpdateWindow(hwnd);
-
-	BOOL result = ::MoveWindow(hwnd, Cfg.WindowPosX, Cfg.WindowPosY, Cfg.WindowWidth,
-		Cfg.WindowHeight, TRUE);
-	Assert(result, "Failed, error=%x", GetLastError());
-	if (Cfg.Maximized)
-	{
-		::ShowWindow(hwnd, SW_MAXIMIZE);
-	}
 
 	StartupComplete = true;
 
