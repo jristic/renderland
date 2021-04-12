@@ -1,6 +1,6 @@
 
 
-namespace rlfparse
+namespace rlf
 {
 
 

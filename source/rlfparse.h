@@ -1,9 +1,10 @@
 
-namespace rlfparse
+namespace rlf
 {
 	struct DispatchCompute
 	{
 		const char* ShaderPath;
+		ID3D11ComputeShader* ShaderObject;
 	};
 	struct RenderDescription
 	{

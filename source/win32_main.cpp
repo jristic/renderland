@@ -38,6 +38,8 @@ std::string ShaderCompileErrorMessage;
 config::Parameters Cfg = { "", false, 0, 0, 1280, 800 };
 bool StartupComplete = false;
 
+rlf::RenderDescription* CurrentRenderDesc;
+
 // Forward declarations of helper functions
 bool CreateDeviceD3D(HWND hWnd);
 void CleanupDeviceD3D();
@@ -54,7 +56,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	(void)pCmdLine;
 	(void)nCmdShow;
 
-		// Establish the full path to the current exe and its directory
+	// Establish the full path to the current exe and its directory
 	std::string ExePath;
 	std::string ExeDirectoryPath;
 	{
@@ -330,10 +332,16 @@ void CreateShader()
 
 	CloseHandle(file);
 
-	rlfparse::RenderDescription* rd = rlfparse::ParseBuffer(buffer, shaderSize);
-	(void)rd;
+	Assert(CurrentRenderDesc == nullptr, "leaking data");
+	CurrentRenderDesc = rlf::ParseBuffer(buffer, shaderSize);
+
+
 
 	// TODO: construct RenderDescription scene 
+	for (rlf::DispatchCompute* dc : CurrentRenderDesc->Dispatches)
+	{
+
+	}
 	
 	ID3DBlob* shaderBlob;
 	ID3DBlob* errorBlob;
@@ -366,7 +374,12 @@ void CreateShader()
 void CleanupShader()
 {
 	// TODO: destruct RenderDescription scene
-	SafeRelease(g_computeShader);
+	for (rlf::DispatchCompute* dc : CurrentRenderDesc->Dispatches)
+	{
+		SafeRelease(dc->ShaderObject);
+	}
+	rlf::ReleaseData(CurrentRenderDesc);
+	CurrentRenderDesc = nullptr;
 }
 
 void UpdateWindowStats(HWND hWnd)

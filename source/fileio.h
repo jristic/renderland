@@ -19,6 +19,7 @@ void ReadFileAtOffset(HANDLE file, void* outBuffer, u32 readOffset, u32 bytesToR
 void ResetFilePointer(HANDLE file);
 
 void GetCurrentDirectory(char* outDirectoryBuffer, u32 bufferSize);
-void GetModuleFileName(HMODULE module, char* outFileNameBuffer, DWORD bufferSize);
+void GetModuleFileName(HMODULE module, char* outFileNameBuffer, u32 bufferSize);
+void GetFilePath(HANDLE file, char* outFilePath, u32 pathBufferSize);
 
 } // namespace fileio
