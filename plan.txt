@@ -1,8 +1,11 @@
-* Expand input to be an initial format (RLF?) which allows specifying shader and parameters to be passed to the shader. 
-	* Allow tuning of shader parameters via the imgui display.
-	* Proper error reporting mechanism rather than asserts. 
-		* Count newlines and characters to indicate line and char where it happened. 
-* Allow specifying textures to be sampled by the shader.
-* Integrate RenderDoc capture. 
+* Specify groups/threads in RLF. 
+* Specify shader parameters in the RLF and allow tuning via the imgui display.
+* Proper error reporting mechanism for RLF (rather than asserts).
+	* Count newlines and characters to indicate line and char where it happened. 
+* Allow specifying buffers/textures in RLF.
+	* Declaration for buffers and textures -> format, usage, etc.
+	* Speicfy input and output resources for dispatches
+	* Special value texture for backbuffer?
+* Integrate RenderDoc capture?
 * Expand to the draw pipeline.
 * Investigate automatically reloading any time a file is updated.
