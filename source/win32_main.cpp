@@ -374,6 +374,8 @@ void CreateShader()
 			NULL, "CSMain", "cs_5_0", 0, 0, &shaderBlob, &errorBlob);
 		Assert(hr == S_OK || hr == E_FAIL, "failed to compile shader hr=%x", hr);
 
+		free(shaderBuffer);
+
 		ShaderCompileSuccess = (hr == S_OK);
 
 		if (ShaderCompileSuccess)
@@ -391,9 +393,9 @@ void CreateShader()
 			ShaderCompileErrorMessage = errorText;
 
 			SafeRelease(errorBlob);
-		}
 
-		free(shaderBuffer);
+			return;
+		}
 	}
 }
 
