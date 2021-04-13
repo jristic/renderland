@@ -134,20 +134,4 @@ void GetModuleFileName(HMODULE module, char* outFileNameBuffer, u32 bufferSize)
 	}
 }
 
-void GetFilePath(HANDLE file, char* outFilePath, u32 pathBufferSize)
-{
-	DWORD copiedSize = ::GetFinalPathNameByHandle(file, outFilePath, pathBufferSize, 
-		FILE_NAME_NORMALIZED);
-	if (copiedSize == 0)
-	{
-		Assert(false, "Error: failed to get file path. \n");
-	}
-	else if (copiedSize == pathBufferSize &&
-		GetLastError() == ERROR_INSUFFICIENT_BUFFER)
-	{
-		Assert(false, "Error: buffer too short for module path. \n");
-	}
-}
-
-
 } // namespace fileio

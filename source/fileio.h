@@ -20,6 +20,5 @@ void ResetFilePointer(HANDLE file);
 
 void GetCurrentDirectory(char* outDirectoryBuffer, u32 bufferSize);
 void GetModuleFileName(HMODULE module, char* outFileNameBuffer, u32 bufferSize);
-void GetFilePath(HANDLE file, char* outFilePath, u32 pathBufferSize);
 
 } // namespace fileio

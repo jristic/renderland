@@ -104,11 +104,12 @@ BufferIter PeekNextToken(
 	// 		++b.next;
 	// 	retval = TOKEN_INTEGER_LITERAL;
 	// }
-	else if (islower(*b.next) || isupper(*b.next))
+	else if (isalpha(*b.next))
 	{
+		// identifiers have to start with a letter, but can contain numbers
 		do {
 			++b.next;
-		} while (b.next < b.end && (islower(*b.next) || isupper(*b.next)));
+		} while (b.next < b.end && (isalpha(*b.next) || isdigit(*b.next)));
 		*outTok = TOKEN_IDENTIFIER;
 	}
 	else if (*b.next == '"')

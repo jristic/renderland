@@ -29,7 +29,6 @@ static ID3D11Device*            g_pd3dDevice = NULL;
 static ID3D11DeviceContext*     g_pd3dDeviceContext = NULL;
 static IDXGISwapChain*          g_pSwapChain = NULL;
 static ID3D11RenderTargetView*  g_mainRenderTargetView = NULL;
-static ID3D11ComputeShader*     g_computeShader = nullptr;
 static ID3D11UnorderedAccessView*  g_mainRenderTargetUav = NULL;
 static ID3D11Buffer*            g_pConstantBuffer = nullptr;
 
@@ -229,8 +228,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		// Dispatch our shader
 		if (ShaderCompileSuccess)
 		{
-			// TODO: render RenderDescription scene
-
 			// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously.
 			//	Swap to UAV for compute shader. 
 			ID3D11RenderTargetView* emptyRT = nullptr;
@@ -249,14 +246,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 				g_pd3dDeviceContext->Unmap(g_pConstantBuffer, 0);
 			}
 
-			g_pd3dDeviceContext->CSSetShader(g_computeShader, nullptr, 0);
-			g_pd3dDeviceContext->CSSetConstantBuffers(0, 1, &g_pConstantBuffer);
 			UINT initialCount = (UINT)-1;
-			g_pd3dDeviceContext->CSSetUnorderedAccessViews(0, 1, &g_mainRenderTargetUav, 
-				&initialCount);
-			u32 groupWidth = (u32)((io.DisplaySize.x - 1) / 8) + 1;
-			u32 groupHeight = (u32)((io.DisplaySize.y - 1) / 8) + 1;
-			g_pd3dDeviceContext->Dispatch(groupWidth,groupHeight,1);
+			for (rlf::DispatchCompute* dc : CurrentRenderDesc->Passes)
+			{
+				g_pd3dDeviceContext->CSSetShader(dc->ShaderObject, nullptr, 0);
+				g_pd3dDeviceContext->CSSetConstantBuffers(0, 1, &g_pConstantBuffer);
+				g_pd3dDeviceContext->CSSetUnorderedAccessViews(0, 1, &g_mainRenderTargetUav, 
+					&initialCount);
+				u32 groupWidth = (u32)((io.DisplaySize.x - 1) / 8) + 1;
+				u32 groupHeight = (u32)((io.DisplaySize.y - 1) / 8) + 1;
+				g_pd3dDeviceContext->Dispatch(groupWidth,groupHeight,1);
+			}
 
 			// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously.
 			//	Swap back to RT for drawing. 
@@ -313,73 +313,101 @@ void CreateShader()
 {
 	char* filename = Cfg.FilePath;
 
-	HANDLE file = fileio::OpenFileOptional(filename, GENERIC_READ);
+	HANDLE rlf = fileio::OpenFileOptional(filename, GENERIC_READ);
 
-	if (file == INVALID_HANDLE_VALUE) // file not found
+	if (rlf == INVALID_HANDLE_VALUE) // file not found
 	{
 		ShaderCompileSuccess = false;
-		ShaderCompileErrorMessage = std::string("Couldn't find file: ") + 
+		ShaderCompileErrorMessage = std::string("Couldn't find RLF file: ") + 
 			filename;
 		return;
 	}
 
-	u32 shaderSize = fileio::GetFileSize(file);
+	u32 rlfSize = fileio::GetFileSize(rlf);
 
-	char* buffer = (char*)malloc(shaderSize);	
-	Assert(buffer != nullptr, "failed to alloc");
+	char* rlfBuffer = (char*)malloc(rlfSize);	
+	Assert(rlfBuffer != nullptr, "failed to alloc");
 
-	fileio::ReadFile(file, buffer, shaderSize);
+	fileio::ReadFile(rlf, rlfBuffer, rlfSize);
 
-	CloseHandle(file);
+	CloseHandle(rlf);
 
 	Assert(CurrentRenderDesc == nullptr, "leaking data");
-	CurrentRenderDesc = rlf::ParseBuffer(buffer, shaderSize);
+	CurrentRenderDesc = rlf::ParseBuffer(rlfBuffer, rlfSize);
 
+	free(rlfBuffer);
 
+	std::string filePath(filename);
+	std::string dirPath;
+	size_t pos = filePath.find_last_of("/\\");
+	if (pos != std::string::npos)
+	{
+		dirPath = filePath.substr(0, pos+1);
+	}
 
-	// TODO: construct RenderDescription scene 
 	for (rlf::DispatchCompute* dc : CurrentRenderDesc->Dispatches)
 	{
+		std::string shaderPath = dirPath + dc->ShaderPath;
 
+		HANDLE shader = fileio::OpenFileOptional(shaderPath.c_str(), GENERIC_READ);
+
+		if (shader == INVALID_HANDLE_VALUE) // file not found
+		{
+			ShaderCompileSuccess = false;
+			ShaderCompileErrorMessage = std::string("Couldn't find shader file: ") + 
+				shaderPath.c_str();
+			return;
+		}
+
+		u32 shaderSize = fileio::GetFileSize(shader);
+
+		char* shaderBuffer = (char*)malloc(shaderSize);	
+		Assert(shaderBuffer != nullptr, "failed to alloc");
+
+		fileio::ReadFile(shader, shaderBuffer, shaderSize);
+
+		CloseHandle(shader);
+
+		ID3DBlob* shaderBlob;
+		ID3DBlob* errorBlob;
+		HRESULT hr = D3DCompile(shaderBuffer, shaderSize, shaderPath.c_str(), NULL,
+			NULL, "CSMain", "cs_5_0", 0, 0, &shaderBlob, &errorBlob);
+		Assert(hr == S_OK || hr == E_FAIL, "failed to compile shader hr=%x", hr);
+
+		ShaderCompileSuccess = (hr == S_OK);
+
+		if (ShaderCompileSuccess)
+		{
+			hr = g_pd3dDevice->CreateComputeShader(shaderBlob->GetBufferPointer(), 
+				shaderBlob->GetBufferSize(), NULL, &dc->ShaderObject);
+			Assert(hr == S_OK, "Failed to create shader hr=%x", hr);
+
+			shaderBlob->Release();
+		}
+		else
+		{
+			Assert(errorBlob != nullptr, "no error info given");
+			char* errorText = (char*)errorBlob->GetBufferPointer();
+			ShaderCompileErrorMessage = errorText;
+
+			SafeRelease(errorBlob);
+		}
+
+		free(shaderBuffer);
 	}
-	
-	ID3DBlob* shaderBlob;
-	ID3DBlob* errorBlob;
-	HRESULT hr = D3DCompile(buffer, shaderSize, filename, NULL, NULL, "CSMain", "cs_5_0",
-		0, 0, &shaderBlob, &errorBlob);
-	Assert(hr == S_OK || hr == E_FAIL, "failed to compile shader hr=%x", hr);
-
-	ShaderCompileSuccess = (hr == S_OK);
-
-	if (ShaderCompileSuccess)
-	{
-		hr = g_pd3dDevice->CreateComputeShader(shaderBlob->GetBufferPointer(), 
-			shaderBlob->GetBufferSize(), NULL, &g_computeShader);
-		Assert(hr == S_OK, "Failed to create shader hr=%x", hr);
-
-		shaderBlob->Release();
-	}
-	else
-	{
-		Assert(errorBlob != nullptr, "no error info given");
-		char* errorText = (char*)errorBlob->GetBufferPointer();
-		ShaderCompileErrorMessage = errorText;
-
-		SafeRelease(errorBlob);
-	}
-
-	free(buffer);
 }
 
 void CleanupShader()
 {
-	// TODO: destruct RenderDescription scene
-	for (rlf::DispatchCompute* dc : CurrentRenderDesc->Dispatches)
+	if (CurrentRenderDesc)
 	{
-		SafeRelease(dc->ShaderObject);
+		for (rlf::DispatchCompute* dc : CurrentRenderDesc->Dispatches)
+		{
+			SafeRelease(dc->ShaderObject);
+		}
+		rlf::ReleaseData(CurrentRenderDesc);
+		CurrentRenderDesc = nullptr;
 	}
-	rlf::ReleaseData(CurrentRenderDesc);
-	CurrentRenderDesc = nullptr;
 }
 
 void UpdateWindowStats(HWND hWnd)
