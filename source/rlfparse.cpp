@@ -269,6 +269,108 @@ struct ParseState
 	std::unordered_map<BufferString, ComputeShader*, BufferStringHash> shaderMap;
 };
 
+void ConsumeComputeShaderDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	RenderDescription* rd = ps.rd;
+
+	ConsumeToken(TOKEN_LBRACE, b);
+
+	ComputeShader* cs = new ComputeShader();
+	rd->Shaders.push_back(cs);
+
+	while (true)
+	{
+		BufferString fieldId = ConsumeIdentifier(b);
+		if (fieldId == "ShaderPath")
+		{
+			ConsumeToken(TOKEN_EQUALS, b);
+			BufferString value = ConsumeString(b);
+			cs->ShaderPath = AddStringToDescriptionData(value, rd);
+		}
+		else if (fieldId == "EntryPoint")
+		{
+			ConsumeToken(TOKEN_EQUALS, b);
+			BufferString value = ConsumeString(b);
+			cs->EntryPoint = AddStringToDescriptionData(value, rd);
+		}
+		else
+		{
+			Assert(false, "unexpected field %.*s", fieldId.len, fieldId.base);
+		}
+
+		if (!TryConsumeToken(TOKEN_COMMA, b))
+		{
+			break;
+		}
+	}
+
+	ConsumeToken(TOKEN_RBRACE, b);
+
+	BufferString nameId = ConsumeIdentifier(b);
+	Assert(ps.shaderMap.find(nameId) == ps.shaderMap.end(), "%.*s already defined", 
+		nameId.len, nameId.base);
+	ps.shaderMap[nameId] = cs;
+}
+
+void ConsumeDispatchDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	RenderDescription* rd = ps.rd;
+
+	ConsumeToken(TOKEN_LBRACE, b);
+
+	Dispatch* dc = new Dispatch();
+	rd->Dispatches.push_back(dc);
+
+	while (true)
+	{
+		BufferString fieldId = ConsumeIdentifier(b);
+		if (fieldId == "Shader")
+		{
+			ConsumeToken(TOKEN_EQUALS, b);
+			BufferString shader = ConsumeIdentifier(b);
+			auto iter = ps.shaderMap.find(shader);
+			Assert(iter != ps.shaderMap.end(), "couldn't find shader %.*s", 
+				shader.len, shader.base);
+			dc->Shader = iter->second;
+		}
+		else if (fieldId == "ThreadPerPixel")
+		{
+			ConsumeToken(TOKEN_EQUALS, b);
+			dc->ThreadPerPixel = ConsumeBool(b);
+		}
+		else if (fieldId == "Groups")
+		{
+			ConsumeToken(TOKEN_EQUALS, b);
+			ConsumeToken(TOKEN_LBRACE, b);
+			dc->Groups.x = ConsumeUintLiteral(b);
+			ConsumeToken(TOKEN_COMMA, b);
+			dc->Groups.y = ConsumeUintLiteral(b);
+			ConsumeToken(TOKEN_COMMA, b);
+			dc->Groups.z = ConsumeUintLiteral(b);
+			ConsumeToken(TOKEN_RBRACE, b);
+		}
+		else
+		{
+			Assert(false, "unexpected field %.*s", fieldId.len, fieldId.base);
+		}
+
+		if (!TryConsumeToken(TOKEN_COMMA, b))
+		{
+			break;
+		}
+	}
+
+	ConsumeToken(TOKEN_RBRACE, b);
+
+	BufferString nameId = ConsumeIdentifier(b);
+	Assert(ps.dcMap.find(nameId) == ps.dcMap.end(), "%.*s already defined", 
+		nameId.len, nameId.base);
+	ps.dcMap[nameId] = dc;
+}
 
 RenderDescription* ParseBuffer(
 	char* buffer,
@@ -285,98 +387,11 @@ RenderDescription* ParseBuffer(
 
 		if (structureId == "ComputeShader")
 		{
-			BufferString nameId = ConsumeIdentifier(b);
-			Assert(ps.shaderMap.find(nameId) == ps.shaderMap.end(), "%.*s already defined", 
-				nameId.len, nameId.base);
-
-			ComputeShader* cs = new ComputeShader();
-
-			ConsumeToken(TOKEN_LBRACE, b);
-
-			while (true)
-			{
-				BufferString fieldId = ConsumeIdentifier(b);
-				if (fieldId == "ShaderPath")
-				{
-					ConsumeToken(TOKEN_EQUALS, b);
-					BufferString value = ConsumeString(b);
-					cs->ShaderPath = AddStringToDescriptionData(value, rd);
-				}
-				else if (fieldId == "EntryPoint")
-				{
-					ConsumeToken(TOKEN_EQUALS, b);
-					BufferString value = ConsumeString(b);
-					cs->EntryPoint = AddStringToDescriptionData(value, rd);
-				}
-				else
-				{
-					Assert(false, "unexpected field %.*s", fieldId.len, fieldId.base);
-				}
-
-				if (!TryConsumeToken(TOKEN_COMMA, b))
-				{
-					break;
-				}
-			}
-
-			ConsumeToken(TOKEN_RBRACE, b);
-
-			rd->Shaders.push_back(cs);
-			ps.shaderMap[nameId] = cs;
+			ConsumeComputeShaderDef(b, ps);
 		}
 		else if (structureId == "Dispatch")
 		{
-			BufferString nameId = ConsumeIdentifier(b);
-			Assert(ps.dcMap.find(nameId) == ps.dcMap.end(), "%.*s already defined", 
-				nameId.len, nameId.base);
-
-			Dispatch* dc = new Dispatch();
-
-			ConsumeToken(TOKEN_LBRACE, b);
-
-			while (true)
-			{
-				BufferString fieldId = ConsumeIdentifier(b);
-				if (fieldId == "Shader")
-				{
-					ConsumeToken(TOKEN_EQUALS, b);
-					BufferString shader = ConsumeIdentifier(b);
-					auto iter = ps.shaderMap.find(shader);
-					Assert(iter != ps.shaderMap.end(), "couldn't find shader %.*s", 
-						shader.len, shader.base);
-					dc->Shader = iter->second;
-				}
-				else if (fieldId == "ThreadPerPixel")
-				{
-					ConsumeToken(TOKEN_EQUALS, b);
-					dc->ThreadPerPixel = ConsumeBool(b);
-				}
-				else if (fieldId == "Groups")
-				{
-					ConsumeToken(TOKEN_EQUALS, b);
-					ConsumeToken(TOKEN_LBRACE, b);
-					dc->Groups.x = ConsumeUintLiteral(b);
-					ConsumeToken(TOKEN_COMMA, b);
-					dc->Groups.y = ConsumeUintLiteral(b);
-					ConsumeToken(TOKEN_COMMA, b);
-					dc->Groups.z = ConsumeUintLiteral(b);
-					ConsumeToken(TOKEN_RBRACE, b);
-				}
-				else
-				{
-					Assert(false, "unexpected field %.*s", fieldId.len, fieldId.base);
-				}
-
-				if (!TryConsumeToken(TOKEN_COMMA, b))
-				{
-					break;
-				}
-			}
-
-			ConsumeToken(TOKEN_RBRACE, b);
-
-			rd->Dispatches.push_back(dc);
-			ps.dcMap[nameId] = dc;
+			ConsumeDispatchDef(b, ps);
 		}
 		else if (structureId == "Passes")
 		{

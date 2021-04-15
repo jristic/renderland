@@ -1,13 +1,13 @@
 
-ComputeShader testShader {
+ComputeShader {
 	ShaderPath = "shader.hlsl",
 	EntryPoint = "CSMain"
-}
+} testShader
 
-Dispatch perPixelDispatch {
+Dispatch {
 	Shader = testShader,
 	ThreadPerPixel = true
-}
+} perPixelDispatch
 
 Passes {
 	perPixelDispatch
