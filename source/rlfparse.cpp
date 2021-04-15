@@ -1,10 +1,9 @@
 
-
 namespace rlf
 {
 
-
-enum Token {
+enum Token
+{
 	TOKEN_INVALID,
 	TOKEN_LPAREN,
 	TOKEN_RPAREN,
@@ -18,22 +17,23 @@ enum Token {
 	TOKEN_STRING,
 };
 
-struct BufferString {
+struct BufferString
+{
 	const char* base;
 	size_t len;
-
-	bool operator==(const BufferString& other) const
-	{
-		if (len != other.len)
-			return false;
-		for (size_t i = 0 ; i < len ; ++i)
-		{
-			if (base[i] != other.base[i])
-				return false;
-		}
-		return true;
-	}
 };
+
+bool operator==(const BufferString& l, const BufferString& r)
+{
+	if (l.len != r.len)
+		return false;
+	for (size_t i = 0 ; i < l.len ; ++i)
+	{
+		if (l.base[i] != r.base[i])
+			return false;
+	}
+	return true;
+}
 
 struct BufferStringHash
 {
@@ -53,7 +53,8 @@ struct BufferStringHash
 	}
 };
 
-struct BufferIter {
+struct BufferIter
+{
 	char* next;
 	char* end;
 };
@@ -81,67 +82,60 @@ Token PeekNextToken(
 {
 	Assert(b.next != b.end, "unexpected end-of-buffer.");
 
-	if (*b.next == '(')
+	switch (*b.next)
 	{
+	case '(':
 		++b.next;
 		return TOKEN_LPAREN;
-	}
-	else if (*b.next == ')')
-	{
+	case ')':
 		++b.next;
 		return TOKEN_RPAREN;
-	}
-	else if (*b.next == '{')
-	{
+	case '{':
 		++b.next;
 		return TOKEN_LBRACE;
-	}
-	else if (*b.next == '}')
-	{
+	case '}':
 		++b.next;
 		return TOKEN_RBRACE;
-	}
-	else if (*b.next == ',')
-	{
+	case ',':
 		++b.next;
 		return TOKEN_COMMA;
-	}
-	else if (*b.next == '=')
-	{
+	case '=':
 		++b.next;
 		return TOKEN_EQUALS;
-	}
-	else if (*b.next == '-')
-	{
+	case '-':
 		++b.next;
 		return TOKEN_MINUS;
-	}
-	else if (isdigit(*b.next)) {
-		++b.next;
-		while(b.next < b.end && isdigit(*b.next))
-			++b.next;
-		return TOKEN_INTEGER_LITERAL;
-	}
-	else if (isalpha(*b.next))
-	{
-		// identifiers have to start with a letter, but can contain numbers
-		do {
-			++b.next;
-		} while (b.next < b.end && (isalpha(*b.next) || isdigit(*b.next)));
-		return TOKEN_IDENTIFIER;
-	}
-	else if (*b.next == '"')
-	{
+	case '"':
 		do {
 			++b.next;
 		} while (b.next < b.end && *b.next != '"');
 		++b.next; // pass the closing quotes
 		return TOKEN_STRING;
+	case '0': case '1': case '2': case '3': case '4': 
+	case '5': case '6': case '7': case '8': case '9':
+		++b.next;
+		while(b.next < b.end && isdigit(*b.next))
+			++b.next;
+		return TOKEN_INTEGER_LITERAL;
+	case 'a': case 'b': case 'c': case 'd': case 'e': case 'f': case 'g': case 'h':
+	case 'i': case 'j': case 'k': case 'l': case 'm': case 'n': case 'o': case 'p':
+	case 'q': case 'r': case 's': case 't': case 'u': case 'v': case 'w': case 'x':
+	case 'y': case 'z':
+	case 'A': case 'B': case 'C': case 'D': case 'E': case 'F': case 'G': case 'H':
+	case 'I': case 'J': case 'K': case 'L': case 'M': case 'N': case 'O': case 'P':
+	case 'Q': case 'R': case 'S': case 'T': case 'U': case 'V': case 'W': case 'X':
+	case 'Y': case 'Z':
+		// identifiers have to start with a letter, but can contain numbers
+		do {
+			++b.next;
+		} while (b.next < b.end && (isalpha(*b.next) || isdigit(*b.next)));
+		return TOKEN_IDENTIFIER;
+	default:
+		Assert(false, "unexpected character when reading token: %c",
+			*b.next);
+		return TOKEN_INVALID;
 	}
 
-	Assert(false, "unexpected character when reading token: %c",
-		*b.next);
-	return TOKEN_INVALID;
 }
 
 void ConsumeToken(

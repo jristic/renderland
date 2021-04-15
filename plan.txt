@@ -1,5 +1,3 @@
-* Clean up parsing -> pass BufferIter by reference
-* Use switch statement for PeekNextToken.
 * Allow declaring RLF structures inline as well as by reference. 
 * Specify shader parameters in the RLF and allow tuning via the imgui display.
 * Proper error reporting mechanism for RLF (rather than asserts).
