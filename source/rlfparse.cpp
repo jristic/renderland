@@ -58,7 +58,8 @@ struct BufferIter {
 	char* end;
 };
 
-bool CompareIdentifier(BufferString id, const char* string) {
+bool operator==(const BufferString id, const char* string)
+{
 	if (id.len != strlen(string))
 		return false;
 	for (int i = 0 ; i < id.len ; ++i)
@@ -67,61 +68,59 @@ bool CompareIdentifier(BufferString id, const char* string) {
 	return true;
 }
 
-BufferIter SkipWhitespace(
-	BufferIter b)
+void SkipWhitespace(
+	BufferIter& b)
 {
 	while (b.next < b.end && isspace(*b.next)) {
 		++b.next;
 	}
-	return b;
 }
 
-BufferIter PeekNextToken(
-	BufferIter b,
-	Token* outTok)
+Token PeekNextToken(
+	BufferIter& b)
 {
 	Assert(b.next != b.end, "unexpected end-of-buffer.");
 
 	if (*b.next == '(')
 	{
 		++b.next;
-		*outTok = TOKEN_LPAREN;
+		return TOKEN_LPAREN;
 	}
 	else if (*b.next == ')')
 	{
 		++b.next;
-		*outTok = TOKEN_RPAREN;
+		return TOKEN_RPAREN;
 	}
 	else if (*b.next == '{')
 	{
 		++b.next;
-		*outTok = TOKEN_LBRACE;
+		return TOKEN_LBRACE;
 	}
 	else if (*b.next == '}')
 	{
 		++b.next;
-		*outTok = TOKEN_RBRACE;
+		return TOKEN_RBRACE;
 	}
 	else if (*b.next == ',')
 	{
 		++b.next;
-		*outTok = TOKEN_COMMA;
+		return TOKEN_COMMA;
 	}
 	else if (*b.next == '=')
 	{
 		++b.next;
-		*outTok = TOKEN_EQUALS;
+		return TOKEN_EQUALS;
 	}
 	else if (*b.next == '-')
 	{
 		++b.next;
-		*outTok = TOKEN_MINUS;
+		return TOKEN_MINUS;
 	}
 	else if (isdigit(*b.next)) {
 		++b.next;
 		while(b.next < b.end && isdigit(*b.next))
 			++b.next;
-		*outTok = TOKEN_INTEGER_LITERAL;
+		return TOKEN_INTEGER_LITERAL;
 	}
 	else if (isalpha(*b.next))
 	{
@@ -129,7 +128,7 @@ BufferIter PeekNextToken(
 		do {
 			++b.next;
 		} while (b.next < b.end && (isalpha(*b.next) || isdigit(*b.next)));
-		*outTok = TOKEN_IDENTIFIER;
+		return TOKEN_IDENTIFIER;
 	}
 	else if (*b.next == '"')
 	{
@@ -137,143 +136,130 @@ BufferIter PeekNextToken(
 			++b.next;
 		} while (b.next < b.end && *b.next != '"');
 		++b.next; // pass the closing quotes
-		*outTok = TOKEN_STRING;
-	}
-	else {
-		*outTok = TOKEN_INVALID;
-		Assert(false, "unexpected character when reading token: %c",
-			*b.next);
+		return TOKEN_STRING;
 	}
 
-	return b;
+	Assert(false, "unexpected character when reading token: %c",
+		*b.next);
+	return TOKEN_INVALID;
 }
 
-BufferIter ConsumeToken(
+void ConsumeToken(
 	Token tok,
-	BufferIter b)
+	BufferIter& b)
 {
-	b = SkipWhitespace(b);
+	SkipWhitespace(b);
 	Token foundTok;
-	b = PeekNextToken(b, &foundTok);
+	foundTok = PeekNextToken(b);
 	Assert(foundTok == tok, "unexpected token, expected %d found %d",
 		tok, foundTok);
-	return b;
 }
 
 bool TryConsumeToken(
 	Token tok,
-	BufferIter* pb)
+	BufferIter& b)
 {
-	BufferIter b = SkipWhitespace(*pb);
+	BufferIter nb = b;
+	SkipWhitespace(nb);
 	Token foundTok;
-	b = PeekNextToken(b, &foundTok);
+	foundTok = PeekNextToken(nb);
 	bool found = (foundTok == tok);
 	if (found)
 	{
-		*pb = b;
+		b = nb;
 	}
 	return found;
 }
 
-BufferIter ConsumeIdentifier(
-	BufferIter b,
-	BufferString* id)
+BufferString ConsumeIdentifier(
+	BufferIter& b)
 {
-	BufferIter start = SkipWhitespace(b);
-	Token tok;
-	BufferIter tokRead = PeekNextToken(start, &tok);
+	SkipWhitespace(b);
+	BufferIter start = b; 
+	Token tok = PeekNextToken(b);
 	Assert(tok == TOKEN_IDENTIFIER, "unexpected token (wanted identifier)");
 
-	id->base = start.next;
-	id->len = tokRead.next - start.next;
+	BufferString id;
+	id.base = start.next;
+	id.len = b.next - start.next;
 
-	return tokRead;
+	return id;
 }
 
-BufferIter ConsumeString(
-	BufferIter b,
-	BufferString* str)
+BufferString ConsumeString(
+	BufferIter& b)
 {
-	BufferIter start = SkipWhitespace(b);
-	Token tok;
-	BufferIter tokRead = PeekNextToken(start, &tok);
+	SkipWhitespace(b);
+	BufferIter start = b;
+	Token tok = PeekNextToken(b);
 	Assert(tok == TOKEN_STRING, "unexpected token (wanted string)");
 
-	str->base = start.next + 1;
-	str->len = tokRead.next - start.next - 2;
+	BufferString str;
+	str.base = start.next + 1;
+	str.len = b.next - start.next - 2;
 
-	return tokRead;	
+	return str;	
 }
 
-BufferIter ConsumeBool(
-	BufferIter b, 
-	bool* outBool)
+bool ConsumeBool(
+	BufferIter& b)
 {
-	BufferString value;
-	b = ConsumeIdentifier(b, &value);	
-	if (CompareIdentifier(value, "true"))
-		*outBool = true;
-	else if (CompareIdentifier(value, "false"))
-		*outBool = false;
-	else
-	{
-		Assert(false, "expected bool (true/false), got: %.*s", value.len, value.base);
-	}
-	return b;
+	BufferString value = ConsumeIdentifier(b);
+	if (value == "true")
+		return true;
+	else if (value == "false")
+		return false;
+
+	Assert(false, "expected bool (true/false), got: %.*s", value.len, value.base);
+	return false;
 }
 
-BufferIter ConsumeIntLiteral(
-	BufferIter b,
-	i32* outVal)
+i32 ConsumeIntLiteral(
+	BufferIter& b)
 {
-	b = SkipWhitespace(b);
+	SkipWhitespace(b);
 	bool negative = false;
-	if (TryConsumeToken(TOKEN_MINUS, &b))
+	if (TryConsumeToken(TOKEN_MINUS, b))
 	{
 		negative = true;
-		b = SkipWhitespace(b);
+		SkipWhitespace(b);
 	}
-	Token tok;
-	BufferIter tokRead = PeekNextToken(b, &tok);
+	BufferIter nb = b;
+	Token tok = PeekNextToken(b);
 	Assert(tok == TOKEN_INTEGER_LITERAL, "unexpected token (wanted string)");
 
 	i32 val = 0;
 	do 
 	{
 		val *= 10;
-		val += (*b.next - '0');
-		++b.next;
-	} while (b.next < tokRead.next);
+		val += (*nb.next - '0');
+		++nb.next;
+	} while (nb.next < b.next);
 
-	*outVal = negative ? -val : val;
-
-	return tokRead;
+	return negative ? -val : val;
 }
 
-BufferIter ConsumeUintLiteral(
-	BufferIter b,
-	u32* outVal)
+u32 ConsumeUintLiteral(
+	BufferIter& b)
 {
-	b = SkipWhitespace(b);
-	if (TryConsumeToken(TOKEN_MINUS, &b))
+	SkipWhitespace(b);
+	if (TryConsumeToken(TOKEN_MINUS, b))
 	{
 		Assert(false, "Unsigned int expected, TOKEN_MINUS invalid here");
 	}
-	Token tok;
-	BufferIter tokRead = PeekNextToken(b, &tok);
+	BufferIter nb = b;
+	Token tok = PeekNextToken(b);
 	Assert(tok == TOKEN_INTEGER_LITERAL, "unexpected token (wanted string)");
 
 	u32 val = 0;
 	do 
 	{
 		val *= 10;
-		val += (*b.next - '0');
-		++b.next;
-	} while (b.next < tokRead.next);
+		val += (*nb.next - '0');
+		++nb.next;
+	} while (nb.next < b.next);
 
-	*outVal = val;
-
-	return tokRead;
+	return val;
 }
 
 const char* AddStringToDescriptionData(BufferString str, RenderDescription* rd)
@@ -301,36 +287,31 @@ RenderDescription* ParseBuffer(
 	BufferIter b = { buffer, buffer + buffer_len };
 	while (b.next != b.end)
 	{
-		BufferString structureId;
-		b = ConsumeIdentifier(b, &structureId);
+		BufferString structureId = ConsumeIdentifier(b);
 
-		if (CompareIdentifier(structureId, "ComputeShader"))
+		if (structureId == "ComputeShader")
 		{
-			BufferString nameId;
-			b = ConsumeIdentifier(b, &nameId);
+			BufferString nameId = ConsumeIdentifier(b);
 			Assert(ps.shaderMap.find(nameId) == ps.shaderMap.end(), "%.*s already defined", 
 				nameId.len, nameId.base);
 
 			ComputeShader* cs = new ComputeShader();
 
-			b = ConsumeToken(TOKEN_LBRACE, b);
+			ConsumeToken(TOKEN_LBRACE, b);
 
 			while (true)
 			{
-				BufferString fieldId;
-				b = ConsumeIdentifier(b, &fieldId);
-				if (CompareIdentifier(fieldId, "ShaderPath"))
+				BufferString fieldId = ConsumeIdentifier(b);
+				if (fieldId == "ShaderPath")
 				{
-					b = ConsumeToken(TOKEN_EQUALS, b);
-					BufferString value;
-					b = ConsumeString(b, &value);
+					ConsumeToken(TOKEN_EQUALS, b);
+					BufferString value = ConsumeString(b);
 					cs->ShaderPath = AddStringToDescriptionData(value, rd);
 				}
-				else if (CompareIdentifier(fieldId, "EntryPoint"))
+				else if (fieldId == "EntryPoint")
 				{
-					b = ConsumeToken(TOKEN_EQUALS, b);
-					BufferString value;
-					b = ConsumeString(b, &value);
+					ConsumeToken(TOKEN_EQUALS, b);
+					BufferString value = ConsumeString(b);
 					cs->EntryPoint = AddStringToDescriptionData(value, rd);
 				}
 				else
@@ -338,102 +319,98 @@ RenderDescription* ParseBuffer(
 					Assert(false, "unexpected field %.*s", fieldId.len, fieldId.base);
 				}
 
-				if (!TryConsumeToken(TOKEN_COMMA, &b))
+				if (!TryConsumeToken(TOKEN_COMMA, b))
 				{
 					break;
 				}
 			}
 
-			b = ConsumeToken(TOKEN_RBRACE, b);
+			ConsumeToken(TOKEN_RBRACE, b);
 
 			rd->Shaders.push_back(cs);
 			ps.shaderMap[nameId] = cs;
 		}
-		else if (CompareIdentifier(structureId, "Dispatch"))
+		else if (structureId == "Dispatch")
 		{
-			BufferString nameId;
-			b = ConsumeIdentifier(b, &nameId);
+			BufferString nameId = ConsumeIdentifier(b);
 			Assert(ps.dcMap.find(nameId) == ps.dcMap.end(), "%.*s already defined", 
 				nameId.len, nameId.base);
 
 			Dispatch* dc = new Dispatch();
 
-			b = ConsumeToken(TOKEN_LBRACE, b);
+			ConsumeToken(TOKEN_LBRACE, b);
 
 			while (true)
 			{
-				BufferString fieldId;
-				b = ConsumeIdentifier(b, &fieldId);
-				if (CompareIdentifier(fieldId, "Shader"))
+				BufferString fieldId = ConsumeIdentifier(b);
+				if (fieldId == "Shader")
 				{
-					b = ConsumeToken(TOKEN_EQUALS, b);
-					BufferString shader;
-					b = ConsumeIdentifier(b, &shader);
+					ConsumeToken(TOKEN_EQUALS, b);
+					BufferString shader = ConsumeIdentifier(b);
 					auto iter = ps.shaderMap.find(shader);
 					Assert(iter != ps.shaderMap.end(), "couldn't find shader %.*s", 
 						shader.len, shader.base);
 					dc->Shader = iter->second;
 				}
-				else if (CompareIdentifier(fieldId, "ThreadPerPixel"))
+				else if (fieldId == "ThreadPerPixel")
 				{
-					b = ConsumeToken(TOKEN_EQUALS, b);
-					b = ConsumeBool(b, &dc->ThreadPerPixel);
+					ConsumeToken(TOKEN_EQUALS, b);
+					dc->ThreadPerPixel = ConsumeBool(b);
 				}
-				else if (CompareIdentifier(fieldId, "Groups"))
+				else if (fieldId == "Groups")
 				{
-					b = ConsumeToken(TOKEN_EQUALS, b);
-					b = ConsumeToken(TOKEN_LBRACE, b);
-					b = ConsumeUintLiteral(b, &dc->Groups.x);
-					b = ConsumeToken(TOKEN_COMMA, b);
-					b = ConsumeUintLiteral(b, &dc->Groups.y);
-					b = ConsumeToken(TOKEN_COMMA, b);
-					b = ConsumeUintLiteral(b, &dc->Groups.z);
-					b = ConsumeToken(TOKEN_RBRACE, b);
+					ConsumeToken(TOKEN_EQUALS, b);
+					ConsumeToken(TOKEN_LBRACE, b);
+					dc->Groups.x = ConsumeUintLiteral(b);
+					ConsumeToken(TOKEN_COMMA, b);
+					dc->Groups.y = ConsumeUintLiteral(b);
+					ConsumeToken(TOKEN_COMMA, b);
+					dc->Groups.z = ConsumeUintLiteral(b);
+					ConsumeToken(TOKEN_RBRACE, b);
 				}
 				else
 				{
 					Assert(false, "unexpected field %.*s", fieldId.len, fieldId.base);
 				}
 
-				if (!TryConsumeToken(TOKEN_COMMA, &b))
+				if (!TryConsumeToken(TOKEN_COMMA, b))
 				{
 					break;
 				}
 			}
 
-			b = ConsumeToken(TOKEN_RBRACE, b);
+			ConsumeToken(TOKEN_RBRACE, b);
 
 			rd->Dispatches.push_back(dc);
 			ps.dcMap[nameId] = dc;
 		}
-		else if (CompareIdentifier(structureId, "Passes"))
+		else if (structureId == "Passes")
 		{
-			b = ConsumeToken(TOKEN_LBRACE, b);
+			ConsumeToken(TOKEN_LBRACE, b);
 
 			while (true)
 			{
-				BufferString pass;
-				b = ConsumeIdentifier(b, &pass);
+				BufferString pass = ConsumeIdentifier(b);
 				auto iter = ps.dcMap.find(pass);
 				Assert(iter != ps.dcMap.end(), "couldn't find pass %.*s", 
 					pass.len, pass.base);
 				rd->Passes.push_back(iter->second);
 
-				if (!TryConsumeToken(TOKEN_COMMA, &b))
+				if (!TryConsumeToken(TOKEN_COMMA, b))
 				{
 					break;
 				}
 			}
 
-			b = ConsumeToken(TOKEN_RBRACE, b);
+			ConsumeToken(TOKEN_RBRACE, b);
 		}
 		else
 		{
-			Assert(false, "Unexpected identifier.");
+			Assert(false, "Unexpected structure: %.*s", structureId.len, structureId.base);
 		}
 
 		// Skip trailing whitespace so we don't miss the exit condition for this loop. 
-		b = SkipWhitespace(b);
+		SkipWhitespace(b);
 	}
 	return rd;
 }
