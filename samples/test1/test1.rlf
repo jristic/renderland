@@ -1,8 +1,14 @@
 
-DispatchCompute computeTest {
-	ShaderPath = "shader.hlsl"
+ComputeShader testShader {
+	ShaderPath = "shader.hlsl",
+	EntryPoint = "CSMain"
+}
+
+Dispatch perPixelDispatch {
+	Shader = testShader,
+	ThreadPerPixel = true
 }
 
 Passes {
-	computeTest
+	perPixelDispatch
 }

@@ -2,6 +2,7 @@
 // System headers
 #include <windows.h>
 #include <d3d11.h>
+#include <d3d11shader.h>
 #include <d3dcompiler.h>
 #include <dwmapi.h>
 #include <stdio.h>
@@ -21,6 +22,7 @@
 #include "assert.h"
 #include "config.h"
 #include "fileio.h"
+#include "rlf.h"
 #include "rlfparse.h"
 
 #define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
@@ -247,15 +249,22 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			}
 
 			UINT initialCount = (UINT)-1;
-			for (rlf::DispatchCompute* dc : CurrentRenderDesc->Passes)
+			for (rlf::Dispatch* dc : CurrentRenderDesc->Passes)
 			{
-				g_pd3dDeviceContext->CSSetShader(dc->ShaderObject, nullptr, 0);
+				g_pd3dDeviceContext->CSSetShader(dc->Shader->ShaderObject, nullptr, 0);
 				g_pd3dDeviceContext->CSSetConstantBuffers(0, 1, &g_pConstantBuffer);
 				g_pd3dDeviceContext->CSSetUnorderedAccessViews(0, 1, &g_mainRenderTargetUav, 
 					&initialCount);
-				u32 groupWidth = (u32)((io.DisplaySize.x - 1) / 8) + 1;
-				u32 groupHeight = (u32)((io.DisplaySize.y - 1) / 8) + 1;
-				g_pd3dDeviceContext->Dispatch(groupWidth,groupHeight,1);
+				uint3 groups = dc->Groups;
+				if (dc->ThreadPerPixel)
+				{
+					uint3 tgs = dc->Shader->ThreadGroupSize;
+					groups.x = (u32)((io.DisplaySize.x - 1) / tgs.x) + 1;
+					groups.y = (u32)((io.DisplaySize.y - 1) / tgs.y) + 1;
+					groups.z = 1;
+				}
+
+				g_pd3dDeviceContext->Dispatch(groups.x, groups.y, groups.z);
 			}
 
 			// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously.
@@ -345,9 +354,9 @@ void CreateShader()
 		dirPath = filePath.substr(0, pos+1);
 	}
 
-	for (rlf::DispatchCompute* dc : CurrentRenderDesc->Dispatches)
+	for (rlf::ComputeShader* cs : CurrentRenderDesc->Shaders)
 	{
-		std::string shaderPath = dirPath + dc->ShaderPath;
+		std::string shaderPath = dirPath + cs->ShaderPath;
 
 		HANDLE shader = fileio::OpenFileOptional(shaderPath.c_str(), GENERIC_READ);
 
@@ -361,7 +370,7 @@ void CreateShader()
 
 		u32 shaderSize = fileio::GetFileSize(shader);
 
-		char* shaderBuffer = (char*)malloc(shaderSize);	
+		char* shaderBuffer = (char*)malloc(shaderSize);
 		Assert(shaderBuffer != nullptr, "failed to alloc");
 
 		fileio::ReadFile(shader, shaderBuffer, shaderSize);
@@ -371,31 +380,41 @@ void CreateShader()
 		ID3DBlob* shaderBlob;
 		ID3DBlob* errorBlob;
 		HRESULT hr = D3DCompile(shaderBuffer, shaderSize, shaderPath.c_str(), NULL,
-			NULL, "CSMain", "cs_5_0", 0, 0, &shaderBlob, &errorBlob);
+			NULL, cs->EntryPoint, "cs_5_0", 0, 0, &shaderBlob, &errorBlob);
 		Assert(hr == S_OK || hr == E_FAIL, "failed to compile shader hr=%x", hr);
 
 		free(shaderBuffer);
 
 		ShaderCompileSuccess = (hr == S_OK);
 
-		if (ShaderCompileSuccess)
-		{
-			hr = g_pd3dDevice->CreateComputeShader(shaderBlob->GetBufferPointer(), 
-				shaderBlob->GetBufferSize(), NULL, &dc->ShaderObject);
-			Assert(hr == S_OK, "Failed to create shader hr=%x", hr);
-
-			shaderBlob->Release();
-		}
-		else
+		if (!ShaderCompileSuccess)
 		{
 			Assert(errorBlob != nullptr, "no error info given");
 			char* errorText = (char*)errorBlob->GetBufferPointer();
 			ShaderCompileErrorMessage = errorText;
 
+			Assert(shaderBlob == nullptr, "leak");
+
 			SafeRelease(errorBlob);
 
 			return;
 		}
+
+		hr = g_pd3dDevice->CreateComputeShader(shaderBlob->GetBufferPointer(), 
+			shaderBlob->GetBufferSize(), NULL, &cs->ShaderObject);
+		Assert(hr == S_OK, "Failed to create shader, hr=%x", hr);
+
+		ID3D11ShaderReflection* reflector = nullptr; 
+		hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
+            IID_ID3D11ShaderReflection, (void**) &reflector);
+		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
+
+		reflector->GetThreadGroupSize(&cs->ThreadGroupSize.x, &cs->ThreadGroupSize.y,
+			&cs->ThreadGroupSize.z);
+
+		SafeRelease(reflector);
+		SafeRelease(shaderBlob);
+		SafeRelease(errorBlob);
 	}
 }
 
@@ -403,9 +422,9 @@ void CleanupShader()
 {
 	if (CurrentRenderDesc)
 	{
-		for (rlf::DispatchCompute* dc : CurrentRenderDesc->Dispatches)
+		for (rlf::ComputeShader* cs : CurrentRenderDesc->Shaders)
 		{
-			SafeRelease(dc->ShaderObject);
+			SafeRelease(cs->ShaderObject);
 		}
 		rlf::ReleaseData(CurrentRenderDesc);
 		CurrentRenderDesc = nullptr;

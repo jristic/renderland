@@ -1,4 +1,6 @@
-* Specify groups/threads in RLF. 
+* Clean up parsing -> pass BufferIter by reference
+* Use switch statement for PeekNextToken.
+* Allow declaring RLF structures inline as well as by reference. 
 * Specify shader parameters in the RLF and allow tuning via the imgui display.
 * Proper error reporting mechanism for RLF (rather than asserts).
 	* Count newlines and characters to indicate line and char where it happened. 
@@ -6,6 +8,7 @@
 	* Declaration for buffers and textures -> format, usage, etc.
 	* Speicfy input and output resources for dispatches
 	* Special value texture for backbuffer?
+* Replace std::string usage with own implementation. 
 * Integrate RenderDoc capture?
 * Expand to the draw pipeline.
 * Investigate automatically reloading any time a file is updated.

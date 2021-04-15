@@ -6,10 +6,14 @@ namespace rlf
 
 enum Token {
 	TOKEN_INVALID,
+	TOKEN_LPAREN,
+	TOKEN_RPAREN,
 	TOKEN_LBRACE,
 	TOKEN_RBRACE,
 	TOKEN_COMMA,
 	TOKEN_EQUALS,
+	TOKEN_MINUS,
+	TOKEN_INTEGER_LITERAL,
 	TOKEN_IDENTIFIER,
 	TOKEN_STRING,
 };
@@ -78,7 +82,17 @@ BufferIter PeekNextToken(
 {
 	Assert(b.next != b.end, "unexpected end-of-buffer.");
 
-	if (*b.next == '{')
+	if (*b.next == '(')
+	{
+		++b.next;
+		*outTok = TOKEN_LPAREN;
+	}
+	else if (*b.next == ')')
+	{
+		++b.next;
+		*outTok = TOKEN_RPAREN;
+	}
+	else if (*b.next == '{')
 	{
 		++b.next;
 		*outTok = TOKEN_LBRACE;
@@ -98,12 +112,17 @@ BufferIter PeekNextToken(
 		++b.next;
 		*outTok = TOKEN_EQUALS;
 	}
-	// else if (isdigit(*b.next)) {
-	// 	++b.next;
-	// 	while(b.next < b.end && isdigit(*b.next))
-	// 		++b.next;
-	// 	retval = TOKEN_INTEGER_LITERAL;
-	// }
+	else if (*b.next == '-')
+	{
+		++b.next;
+		*outTok = TOKEN_MINUS;
+	}
+	else if (isdigit(*b.next)) {
+		++b.next;
+		while(b.next < b.end && isdigit(*b.next))
+			++b.next;
+		*outTok = TOKEN_INTEGER_LITERAL;
+	}
 	else if (isalpha(*b.next))
 	{
 		// identifiers have to start with a letter, but can contain numbers
@@ -145,8 +164,7 @@ bool TryConsumeToken(
 	Token tok,
 	BufferIter* pb)
 {
-	BufferIter b = *pb;
-	b = SkipWhitespace(b);
+	BufferIter b = SkipWhitespace(*pb);
 	Token foundTok;
 	b = PeekNextToken(b, &foundTok);
 	bool found = (foundTok == tok);
@@ -187,32 +205,75 @@ BufferIter ConsumeString(
 	return tokRead;	
 }
 
-// int GetIntegerLiteral(
-// 	char* buffer_start,
-// 	char* buffer_end,
-// 	char** out_buffer_read)
-// {
-// 	char* buffer_next = buffer_start;
-// 	int len = 0;
-// 	while (buffer_next < buffer_end && isdigit(*buffer_next)) {
-// 		++buffer_next;
-// 		++len;
-// 	}
-// 	buffer_next = buffer_start;
-// 	int val = 0;
-// 	int base = pow(10, len-1);
-// 	while (buffer_next < buffer_end && isdigit(*buffer_next)) {
-// 		val += (*buffer_next - '0') * base;
-// 		base /= 10;
-// 		++buffer_next;
-// 	}
-// 	*out_buffer_read = buffer_next;
-// 	return val;
-// }
-
-std::string IdentifierToString(BufferString id)
+BufferIter ConsumeBool(
+	BufferIter b, 
+	bool* outBool)
 {
-	return std::string(id.base, id.len);
+	BufferString value;
+	b = ConsumeIdentifier(b, &value);	
+	if (CompareIdentifier(value, "true"))
+		*outBool = true;
+	else if (CompareIdentifier(value, "false"))
+		*outBool = false;
+	else
+	{
+		Assert(false, "expected bool (true/false), got: %.*s", value.len, value.base);
+	}
+	return b;
+}
+
+BufferIter ConsumeIntLiteral(
+	BufferIter b,
+	i32* outVal)
+{
+	b = SkipWhitespace(b);
+	bool negative = false;
+	if (TryConsumeToken(TOKEN_MINUS, &b))
+	{
+		negative = true;
+		b = SkipWhitespace(b);
+	}
+	Token tok;
+	BufferIter tokRead = PeekNextToken(b, &tok);
+	Assert(tok == TOKEN_INTEGER_LITERAL, "unexpected token (wanted string)");
+
+	i32 val = 0;
+	do 
+	{
+		val *= 10;
+		val += (*b.next - '0');
+		++b.next;
+	} while (b.next < tokRead.next);
+
+	*outVal = negative ? -val : val;
+
+	return tokRead;
+}
+
+BufferIter ConsumeUintLiteral(
+	BufferIter b,
+	u32* outVal)
+{
+	b = SkipWhitespace(b);
+	if (TryConsumeToken(TOKEN_MINUS, &b))
+	{
+		Assert(false, "Unsigned int expected, TOKEN_MINUS invalid here");
+	}
+	Token tok;
+	BufferIter tokRead = PeekNextToken(b, &tok);
+	Assert(tok == TOKEN_INTEGER_LITERAL, "unexpected token (wanted string)");
+
+	u32 val = 0;
+	do 
+	{
+		val *= 10;
+		val += (*b.next - '0');
+		++b.next;
+	} while (b.next < tokRead.next);
+
+	*outVal = val;
+
+	return tokRead;
 }
 
 const char* AddStringToDescriptionData(BufferString str, RenderDescription* rd)
@@ -221,6 +282,12 @@ const char* AddStringToDescriptionData(BufferString str, RenderDescription* rd)
 	return pair.first->c_str();
 }
 
+struct ParseState 
+{
+	RenderDescription* rd;
+	std::unordered_map<BufferString, Dispatch*, BufferStringHash> dcMap;
+	std::unordered_map<BufferString, ComputeShader*, BufferStringHash> shaderMap;
+};
 
 
 RenderDescription* ParseBuffer(
@@ -228,7 +295,8 @@ RenderDescription* ParseBuffer(
 	int buffer_len)
 {
 	RenderDescription* rd = new RenderDescription();
-	std::unordered_map<BufferString, DispatchCompute*, BufferStringHash> dcMap;
+	ParseState ps;
+	ps.rd = rd;
 
 	BufferIter b = { buffer, buffer + buffer_len };
 	while (b.next != b.end)
@@ -236,14 +304,14 @@ RenderDescription* ParseBuffer(
 		BufferString structureId;
 		b = ConsumeIdentifier(b, &structureId);
 
-		if (CompareIdentifier(structureId, "DispatchCompute"))
+		if (CompareIdentifier(structureId, "ComputeShader"))
 		{
 			BufferString nameId;
 			b = ConsumeIdentifier(b, &nameId);
-			std::string name = IdentifierToString(nameId);
-			Assert(dcMap.find(nameId) == dcMap.end(), "%s already defined", name.c_str());
+			Assert(ps.shaderMap.find(nameId) == ps.shaderMap.end(), "%.*s already defined", 
+				nameId.len, nameId.base);
 
-			DispatchCompute* dc = new DispatchCompute();
+			ComputeShader* cs = new ComputeShader();
 
 			b = ConsumeToken(TOKEN_LBRACE, b);
 
@@ -251,17 +319,23 @@ RenderDescription* ParseBuffer(
 			{
 				BufferString fieldId;
 				b = ConsumeIdentifier(b, &fieldId);
-				std::string field = IdentifierToString(fieldId);
 				if (CompareIdentifier(fieldId, "ShaderPath"))
 				{
 					b = ConsumeToken(TOKEN_EQUALS, b);
 					BufferString value;
 					b = ConsumeString(b, &value);
-					dc->ShaderPath = AddStringToDescriptionData(value, rd);
+					cs->ShaderPath = AddStringToDescriptionData(value, rd);
+				}
+				else if (CompareIdentifier(fieldId, "EntryPoint"))
+				{
+					b = ConsumeToken(TOKEN_EQUALS, b);
+					BufferString value;
+					b = ConsumeString(b, &value);
+					cs->EntryPoint = AddStringToDescriptionData(value, rd);
 				}
 				else
 				{
-					Assert(false, "unexpected field %s", field.c_str());
+					Assert(false, "unexpected field %.*s", fieldId.len, fieldId.base);
 				}
 
 				if (!TryConsumeToken(TOKEN_COMMA, &b))
@@ -272,8 +346,65 @@ RenderDescription* ParseBuffer(
 
 			b = ConsumeToken(TOKEN_RBRACE, b);
 
-			rd->Dispatches.insert(dc);
-			dcMap[nameId] = dc;
+			rd->Shaders.push_back(cs);
+			ps.shaderMap[nameId] = cs;
+		}
+		else if (CompareIdentifier(structureId, "Dispatch"))
+		{
+			BufferString nameId;
+			b = ConsumeIdentifier(b, &nameId);
+			Assert(ps.dcMap.find(nameId) == ps.dcMap.end(), "%.*s already defined", 
+				nameId.len, nameId.base);
+
+			Dispatch* dc = new Dispatch();
+
+			b = ConsumeToken(TOKEN_LBRACE, b);
+
+			while (true)
+			{
+				BufferString fieldId;
+				b = ConsumeIdentifier(b, &fieldId);
+				if (CompareIdentifier(fieldId, "Shader"))
+				{
+					b = ConsumeToken(TOKEN_EQUALS, b);
+					BufferString shader;
+					b = ConsumeIdentifier(b, &shader);
+					auto iter = ps.shaderMap.find(shader);
+					Assert(iter != ps.shaderMap.end(), "couldn't find shader %.*s", 
+						shader.len, shader.base);
+					dc->Shader = iter->second;
+				}
+				else if (CompareIdentifier(fieldId, "ThreadPerPixel"))
+				{
+					b = ConsumeToken(TOKEN_EQUALS, b);
+					b = ConsumeBool(b, &dc->ThreadPerPixel);
+				}
+				else if (CompareIdentifier(fieldId, "Groups"))
+				{
+					b = ConsumeToken(TOKEN_EQUALS, b);
+					b = ConsumeToken(TOKEN_LBRACE, b);
+					b = ConsumeUintLiteral(b, &dc->Groups.x);
+					b = ConsumeToken(TOKEN_COMMA, b);
+					b = ConsumeUintLiteral(b, &dc->Groups.y);
+					b = ConsumeToken(TOKEN_COMMA, b);
+					b = ConsumeUintLiteral(b, &dc->Groups.z);
+					b = ConsumeToken(TOKEN_RBRACE, b);
+				}
+				else
+				{
+					Assert(false, "unexpected field %.*s", fieldId.len, fieldId.base);
+				}
+
+				if (!TryConsumeToken(TOKEN_COMMA, &b))
+				{
+					break;
+				}
+			}
+
+			b = ConsumeToken(TOKEN_RBRACE, b);
+
+			rd->Dispatches.push_back(dc);
+			ps.dcMap[nameId] = dc;
 		}
 		else if (CompareIdentifier(structureId, "Passes"))
 		{
@@ -283,9 +414,9 @@ RenderDescription* ParseBuffer(
 			{
 				BufferString pass;
 				b = ConsumeIdentifier(b, &pass);
-				std::string name = IdentifierToString(pass);
-				auto iter = dcMap.find(pass);
-				Assert(iter != dcMap.end(), "couldn't find pass %s", name.c_str());
+				auto iter = ps.dcMap.find(pass);
+				Assert(iter != ps.dcMap.end(), "couldn't find pass %.*s", 
+					pass.len, pass.base);
 				rd->Passes.push_back(iter->second);
 
 				if (!TryConsumeToken(TOKEN_COMMA, &b))
@@ -311,11 +442,14 @@ void ReleaseData(RenderDescription* data)
 {
 	Assert(data, "Invalid pointer.");
 
-	for (DispatchCompute* dc : data->Dispatches)
+	for (Dispatch* dc : data->Dispatches)
 	{
 		delete dc;
 	}
-
+	for (ComputeShader* cs : data->Shaders)
+	{
+		delete cs;
+	}
 	delete data;
 }
 
