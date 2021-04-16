@@ -269,7 +269,7 @@ struct ParseState
 	std::unordered_map<BufferString, ComputeShader*, BufferStringHash> shaderMap;
 };
 
-void ConsumeComputeShaderDef(
+ComputeShader* ConsumeComputeShaderDef(
 	BufferIter& b,
 	ParseState& ps)
 {
@@ -307,14 +307,28 @@ void ConsumeComputeShaderDef(
 	}
 
 	ConsumeToken(TOKEN_RBRACE, b);
-
-	BufferString nameId = ConsumeIdentifier(b);
-	Assert(ps.shaderMap.find(nameId) == ps.shaderMap.end(), "%.*s already defined", 
-		nameId.len, nameId.base);
-	ps.shaderMap[nameId] = cs;
+	return cs;
 }
 
-void ConsumeDispatchDef(
+ComputeShader* ConsumeComputeShaderRefOrDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	BufferString id = ConsumeIdentifier(b);
+	if (id == "ComputeShader")
+	{
+		return ConsumeComputeShaderDef(b, ps);
+	}
+	else
+	{
+		auto iter = ps.shaderMap.find(id);
+		Assert(iter != ps.shaderMap.end(), "couldn't find shader %.*s", 
+			id.len, id.base);
+		return iter->second;
+	}
+}
+
+Dispatch* ConsumeDispatchDef(
 	BufferIter& b,
 	ParseState& ps)
 {
@@ -331,11 +345,8 @@ void ConsumeDispatchDef(
 		if (fieldId == "Shader")
 		{
 			ConsumeToken(TOKEN_EQUALS, b);
-			BufferString shader = ConsumeIdentifier(b);
-			auto iter = ps.shaderMap.find(shader);
-			Assert(iter != ps.shaderMap.end(), "couldn't find shader %.*s", 
-				shader.len, shader.base);
-			dc->Shader = iter->second;
+			ComputeShader* cs = ConsumeComputeShaderRefOrDef(b, ps);
+			dc->Shader = cs;
 		}
 		else if (fieldId == "ThreadPerPixel")
 		{
@@ -365,11 +376,25 @@ void ConsumeDispatchDef(
 	}
 
 	ConsumeToken(TOKEN_RBRACE, b);
+	return dc;
+}
 
-	BufferString nameId = ConsumeIdentifier(b);
-	Assert(ps.dcMap.find(nameId) == ps.dcMap.end(), "%.*s already defined", 
-		nameId.len, nameId.base);
-	ps.dcMap[nameId] = dc;
+Dispatch* ConsumeDispatchRefOrDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	BufferString id = ConsumeIdentifier(b);
+	if (id == "Dispatch")
+	{
+		return ConsumeDispatchDef(b, ps);
+	}
+	else
+	{
+		auto iter = ps.dcMap.find(id);
+		Assert(iter != ps.dcMap.end(), "couldn't find dispatch %.*s", 
+			id.len, id.base);
+		return iter->second;
+	}
 }
 
 RenderDescription* ParseBuffer(
@@ -387,11 +412,19 @@ RenderDescription* ParseBuffer(
 
 		if (structureId == "ComputeShader")
 		{
-			ConsumeComputeShaderDef(b, ps);
+			ComputeShader* cs = ConsumeComputeShaderDef(b, ps);
+			BufferString nameId = ConsumeIdentifier(b);
+			Assert(ps.shaderMap.find(nameId) == ps.shaderMap.end(), "%.*s already defined", 
+				nameId.len, nameId.base);
+			ps.shaderMap[nameId] = cs;
 		}
 		else if (structureId == "Dispatch")
 		{
-			ConsumeDispatchDef(b, ps);
+			Dispatch* dc = ConsumeDispatchDef(b, ps);
+			BufferString nameId = ConsumeIdentifier(b);
+			Assert(ps.dcMap.find(nameId) == ps.dcMap.end(), "%.*s already defined", 
+				nameId.len, nameId.base);
+			ps.dcMap[nameId] = dc;
 		}
 		else if (structureId == "Passes")
 		{
@@ -399,11 +432,8 @@ RenderDescription* ParseBuffer(
 
 			while (true)
 			{
-				BufferString pass = ConsumeIdentifier(b);
-				auto iter = ps.dcMap.find(pass);
-				Assert(iter != ps.dcMap.end(), "couldn't find pass %.*s", 
-					pass.len, pass.base);
-				rd->Passes.push_back(iter->second);
+				Dispatch* dc = ConsumeDispatchRefOrDef(b, ps);
+				rd->Passes.push_back(dc);
 
 				if (!TryConsumeToken(TOKEN_COMMA, b))
 				{

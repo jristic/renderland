@@ -1,0 +1,12 @@
+
+ComputeShader {
+	ShaderPath = "shader.hlsl",
+	EntryPoint = "CSMain"
+} testShader
+
+Passes {
+	Dispatch {
+		Shader = testShader,
+		ThreadPerPixel = true
+	}
+}
