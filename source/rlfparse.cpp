@@ -2,6 +2,18 @@
 namespace rlf
 {
 
+/******************************** Parser notes /********************************
+	Parse code happens entirely in a separate thread, so that we can abort at 
+	any time due to parse errors. That means the stack isn't cleaned up in 
+	case of an error, so make sure no dynamic allocations are never contained
+	on the stack. Any allocations which are used for the RLF representation 
+	should be immediately recorded in the RenderDescription, which will be 
+	freed in ReleaseData. Immediately in this context means before any further
+	parsing occurs. Any STL containers used for intermediate state tracking 
+	should live in the ParseState and not on the stack so that they	are 
+	cleaned up properly. 
+*******************************************************************************/
+
 enum Token
 {
 	TOKEN_INVALID,
@@ -69,6 +81,41 @@ bool operator==(const BufferString id, const char* string)
 	return true;
 }
 
+struct ParseState 
+{
+	BufferIter b;
+	RenderDescription* rd;
+	std::unordered_map<BufferString, Dispatch*, BufferStringHash> dcMap;
+	std::unordered_map<BufferString, ComputeShader*, BufferStringHash> shaderMap;
+	ParseErrorState* es;
+} *GPS;
+
+void ParserError(const char* str, ...)
+{
+	char buf[512];
+	va_list ptr;
+	va_start(ptr,str);
+	vsprintf_s(buf,512,str,ptr);
+	va_end(ptr);
+	GPS->es->ParseSuccess = false;
+	GPS->es->ErrorMessage = buf;
+	// This if statement is meaningless (rd will always be non-null here), but
+	//	the compiler doesn't know that. Otherwise it will either generate 
+	// 	C4702 (unreachable code) for any code that comes after a ParserError in 
+	// 	optimized builds, or will generate C4715 (not all paths return value)
+	// 	in non-optimized builds if you remove the unreachable code. 
+	if (GPS->rd) 
+		ExitThread(1);
+}
+
+#define ParserAssert(expression, message, ...) 	\
+do {											\
+	if (!(expression)) {						\
+		ParserError(message, ##__VA_ARGS__);	\
+	}											\
+} while (0);									\
+
+
 void SkipWhitespace(
 	BufferIter& b)
 {
@@ -80,7 +127,7 @@ void SkipWhitespace(
 Token PeekNextToken(
 	BufferIter& b)
 {
-	Assert(b.next != b.end, "unexpected end-of-buffer.");
+	ParserAssert(b.next != b.end, "unexpected end-of-buffer.");
 
 	switch (*b.next)
 	{
@@ -113,9 +160,9 @@ Token PeekNextToken(
 		return TOKEN_STRING;
 	case '0': case '1': case '2': case '3': case '4': 
 	case '5': case '6': case '7': case '8': case '9':
-		++b.next;
-		while(b.next < b.end && isdigit(*b.next))
+		do {
 			++b.next;
+		} while(b.next < b.end && isdigit(*b.next));
 		return TOKEN_INTEGER_LITERAL;
 	case 'a': case 'b': case 'c': case 'd': case 'e': case 'f': case 'g': case 'h':
 	case 'i': case 'j': case 'k': case 'l': case 'm': case 'n': case 'o': case 'p':
@@ -131,11 +178,9 @@ Token PeekNextToken(
 		} while (b.next < b.end && (isalpha(*b.next) || isdigit(*b.next)));
 		return TOKEN_IDENTIFIER;
 	default:
-		Assert(false, "unexpected character when reading token: %c",
-			*b.next);
+		ParserError("unexpected character when reading token: %c", *b.next);
 		return TOKEN_INVALID;
 	}
-
 }
 
 void ConsumeToken(
@@ -145,7 +190,7 @@ void ConsumeToken(
 	SkipWhitespace(b);
 	Token foundTok;
 	foundTok = PeekNextToken(b);
-	Assert(foundTok == tok, "unexpected token, expected %d found %d",
+	ParserAssert(foundTok == tok, "unexpected token, expected %d found %d",
 		tok, foundTok);
 }
 
@@ -171,7 +216,7 @@ BufferString ConsumeIdentifier(
 	SkipWhitespace(b);
 	BufferIter start = b; 
 	Token tok = PeekNextToken(b);
-	Assert(tok == TOKEN_IDENTIFIER, "unexpected token (wanted identifier)");
+	ParserAssert(tok == TOKEN_IDENTIFIER, "unexpected token (wanted identifier)");
 
 	BufferString id;
 	id.base = start.next;
@@ -186,7 +231,7 @@ BufferString ConsumeString(
 	SkipWhitespace(b);
 	BufferIter start = b;
 	Token tok = PeekNextToken(b);
-	Assert(tok == TOKEN_STRING, "unexpected token (wanted string)");
+	ParserAssert(tok == TOKEN_STRING, "unexpected token (wanted string)");
 
 	BufferString str;
 	str.base = start.next + 1;
@@ -204,7 +249,7 @@ bool ConsumeBool(
 	else if (value == "false")
 		return false;
 
-	Assert(false, "expected bool (true/false), got: %.*s", value.len, value.base);
+	ParserError("expected bool (true/false), got: %.*s", value.len, value.base);
 	return false;
 }
 
@@ -220,7 +265,7 @@ i32 ConsumeIntLiteral(
 	}
 	BufferIter nb = b;
 	Token tok = PeekNextToken(b);
-	Assert(tok == TOKEN_INTEGER_LITERAL, "unexpected token (wanted string)");
+	ParserAssert(tok == TOKEN_INTEGER_LITERAL, "unexpected token (wanted string)");
 
 	i32 val = 0;
 	do 
@@ -239,11 +284,11 @@ u32 ConsumeUintLiteral(
 	SkipWhitespace(b);
 	if (TryConsumeToken(TOKEN_MINUS, b))
 	{
-		Assert(false, "Unsigned int expected, TOKEN_MINUS invalid here");
+		ParserError("Unsigned int expected, '-' invalid here");
 	}
 	BufferIter nb = b;
 	Token tok = PeekNextToken(b);
-	Assert(tok == TOKEN_INTEGER_LITERAL, "unexpected token (wanted string)");
+	ParserAssert(tok == TOKEN_INTEGER_LITERAL, "unexpected token (wanted string)");
 
 	u32 val = 0;
 	do 
@@ -262,12 +307,6 @@ const char* AddStringToDescriptionData(BufferString str, RenderDescription* rd)
 	return pair.first->c_str();
 }
 
-struct ParseState 
-{
-	RenderDescription* rd;
-	std::unordered_map<BufferString, Dispatch*, BufferStringHash> dcMap;
-	std::unordered_map<BufferString, ComputeShader*, BufferStringHash> shaderMap;
-};
 
 ComputeShader* ConsumeComputeShaderDef(
 	BufferIter& b,
@@ -297,7 +336,7 @@ ComputeShader* ConsumeComputeShaderDef(
 		}
 		else
 		{
-			Assert(false, "unexpected field %.*s", fieldId.len, fieldId.base);
+			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
 		}
 
 		if (!TryConsumeToken(TOKEN_COMMA, b))
@@ -322,7 +361,7 @@ ComputeShader* ConsumeComputeShaderRefOrDef(
 	else
 	{
 		auto iter = ps.shaderMap.find(id);
-		Assert(iter != ps.shaderMap.end(), "couldn't find shader %.*s", 
+		ParserAssert(iter != ps.shaderMap.end(), "couldn't find shader %.*s", 
 			id.len, id.base);
 		return iter->second;
 	}
@@ -366,7 +405,7 @@ Dispatch* ConsumeDispatchDef(
 		}
 		else
 		{
-			Assert(false, "unexpected field %.*s", fieldId.len, fieldId.base);
+			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
 		}
 
 		if (!TryConsumeToken(TOKEN_COMMA, b))
@@ -391,21 +430,18 @@ Dispatch* ConsumeDispatchRefOrDef(
 	else
 	{
 		auto iter = ps.dcMap.find(id);
-		Assert(iter != ps.dcMap.end(), "couldn't find dispatch %.*s", 
+		ParserAssert(iter != ps.dcMap.end(), "couldn't find dispatch %.*s", 
 			id.len, id.base);
 		return iter->second;
 	}
 }
 
-RenderDescription* ParseBuffer(
-	char* buffer,
-	int buffer_len)
+DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 {
-	RenderDescription* rd = new RenderDescription();
-	ParseState ps;
-	ps.rd = rd;
+	ParseState& ps = *(ParseState*)lpParameter;
+	RenderDescription* rd = ps.rd;
+	BufferIter& b = ps.b;
 
-	BufferIter b = { buffer, buffer + buffer_len };
 	while (b.next != b.end)
 	{
 		BufferString structureId = ConsumeIdentifier(b);
@@ -414,15 +450,15 @@ RenderDescription* ParseBuffer(
 		{
 			ComputeShader* cs = ConsumeComputeShaderDef(b, ps);
 			BufferString nameId = ConsumeIdentifier(b);
-			Assert(ps.shaderMap.find(nameId) == ps.shaderMap.end(), "%.*s already defined", 
-				nameId.len, nameId.base);
+			ParserAssert(ps.shaderMap.find(nameId) == ps.shaderMap.end(),
+				"%.*s already defined", nameId.len, nameId.base);
 			ps.shaderMap[nameId] = cs;
 		}
 		else if (structureId == "Dispatch")
 		{
 			Dispatch* dc = ConsumeDispatchDef(b, ps);
 			BufferString nameId = ConsumeIdentifier(b);
-			Assert(ps.dcMap.find(nameId) == ps.dcMap.end(), "%.*s already defined", 
+			ParserAssert(ps.dcMap.find(nameId) == ps.dcMap.end(), "%.*s already defined", 
 				nameId.len, nameId.base);
 			ps.dcMap[nameId] = dc;
 		}
@@ -445,13 +481,47 @@ RenderDescription* ParseBuffer(
 		}
 		else
 		{
-			Assert(false, "Unexpected structure: %.*s", structureId.len, structureId.base);
+			ParserError("Unexpected structure: %.*s", structureId.len, 
+				structureId.base);
 		}
 
 		// Skip trailing whitespace so we don't miss the exit condition for this loop. 
 		SkipWhitespace(b);
 	}
-	return rd;
+
+	return 0;
+}
+
+
+RenderDescription* ParseBuffer(
+	char* buffer,
+	int buffer_len,
+	ParseErrorState* errorState)
+{
+	ParseState ps;
+	ps.rd = new RenderDescription();
+	ps.es = errorState;
+	ps.b = { buffer, buffer + buffer_len };
+
+	GPS = &ps;
+	errorState->ParseSuccess = true;
+
+	HANDLE parseThread = CreateThread(nullptr, 0, &ParseMain, &ps, 0, nullptr);
+	WaitForSingleObject(parseThread, INFINITE);
+	CloseHandle(parseThread);
+
+	GPS = nullptr;
+
+	if (ps.es->ParseSuccess == false)
+	{
+		ReleaseData(ps.rd);
+		return nullptr;
+	}
+	else
+	{
+		Assert(ps.b.next == ps.b.end, "Didn't consume full buffer.");
+		return ps.rd;
+	}
 }
 
 void ReleaseData(RenderDescription* data)
@@ -469,4 +539,6 @@ void ReleaseData(RenderDescription* data)
 	delete data;
 }
 
-}// namespace rlparse
+#undef ParserAssert
+
+} // namespace rlf

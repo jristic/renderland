@@ -34,8 +34,8 @@ static ID3D11RenderTargetView*  g_mainRenderTargetView = NULL;
 static ID3D11UnorderedAccessView*  g_mainRenderTargetUav = NULL;
 static ID3D11Buffer*            g_pConstantBuffer = nullptr;
 
-bool ShaderCompileSuccess = false;
-std::string ShaderCompileErrorMessage;
+bool RlfCompileSuccess = false;
+std::string RlfCompileErrorMessage;
 config::Parameters Cfg = { "", false, 0, 0, 1280, 800 };
 bool StartupComplete = false;
 
@@ -192,13 +192,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 				CleanupShader();
 				CreateShader();
 			}
-			if (!ShaderCompileSuccess)
+			if (!RlfCompileSuccess)
 			{
 				ImVec4 color = ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
 				ImGui::PushStyleColor(ImGuiCol_Text, color);
 		        ImGui::PushTextWrapPos(0.f);
 
-				ImGui::TextUnformatted(ShaderCompileErrorMessage.c_str());
+				ImGui::TextUnformatted(RlfCompileErrorMessage.c_str());
 
 				ImGui::PopTextWrapPos();
 				ImGui::PopStyleColor();
@@ -228,7 +228,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			clear_color_with_alpha);
 
 		// Dispatch our shader
-		if (ShaderCompileSuccess)
+		if (RlfCompileSuccess)
 		{
 			// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously.
 			//	Swap to UAV for compute shader. 
@@ -326,8 +326,8 @@ void CreateShader()
 
 	if (rlf == INVALID_HANDLE_VALUE) // file not found
 	{
-		ShaderCompileSuccess = false;
-		ShaderCompileErrorMessage = std::string("Couldn't find RLF file: ") + 
+		RlfCompileSuccess = false;
+		RlfCompileErrorMessage = std::string("Couldn't find RLF file: ") + 
 			filename;
 		return;
 	}
@@ -342,7 +342,17 @@ void CreateShader()
 	CloseHandle(rlf);
 
 	Assert(CurrentRenderDesc == nullptr, "leaking data");
-	CurrentRenderDesc = rlf::ParseBuffer(rlfBuffer, rlfSize);
+	rlf::ParseErrorState es = {};
+	CurrentRenderDesc = rlf::ParseBuffer(rlfBuffer, rlfSize, &es);
+
+	if (es.ParseSuccess == false)
+	{
+		Assert(CurrentRenderDesc == nullptr, "leaking data");
+		RlfCompileSuccess = false;
+		RlfCompileErrorMessage = std::string("Failed to parse RLF file: ") +
+			filename + "\n" + es.ErrorMessage;
+		return;
+	}
 
 	free(rlfBuffer);
 
@@ -362,8 +372,8 @@ void CreateShader()
 
 		if (shader == INVALID_HANDLE_VALUE) // file not found
 		{
-			ShaderCompileSuccess = false;
-			ShaderCompileErrorMessage = std::string("Couldn't find shader file: ") + 
+			RlfCompileSuccess = false;
+			RlfCompileErrorMessage = std::string("Couldn't find shader file: ") + 
 				shaderPath.c_str();
 			return;
 		}
@@ -385,13 +395,13 @@ void CreateShader()
 
 		free(shaderBuffer);
 
-		ShaderCompileSuccess = (hr == S_OK);
+		RlfCompileSuccess = (hr == S_OK);
 
-		if (!ShaderCompileSuccess)
+		if (!RlfCompileSuccess)
 		{
 			Assert(errorBlob != nullptr, "no error info given");
 			char* errorText = (char*)errorBlob->GetBufferPointer();
-			ShaderCompileErrorMessage = errorText;
+			RlfCompileErrorMessage = errorText;
 
 			Assert(shaderBlob == nullptr, "leak");
 

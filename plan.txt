@@ -1,11 +1,8 @@
-* Allow declaring RLF structures inline as well as by reference. 
+* Add semicolons to RLF, after top-level structure declaration and field assignment (instead of commas). 
+* Parser errors should count newlines and characters to indicate line and char where it happened. 
+* PeekNextToken can use a look-up-table based on the first character encountered. 
+* Text representation of Token values for error messages. 
 * Specify shader parameters in the RLF and allow tuning via the imgui display.
-* Proper error reporting mechanism for RLF (rather than asserts).
-	* Put the parsing on a thread so it can exit on error without affecting the process.
-		* will need to make sure any allocations that need to be freed are recorded in the state before an error could interrupt. 
-		* must not put things like std containers on the stack as they won't be cleaned up by ExitThread
-			-> currently the ParseState will have this problem. 
-	* Count newlines and characters to indicate line and char where it happened. 
 * Allow specifying buffers/textures in RLF.
 	* Declaration for buffers and textures -> format, usage, etc.
 	* Speicfy input and output resources for dispatches
