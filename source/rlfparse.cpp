@@ -12,6 +12,9 @@ namespace rlf
 	parsing occurs. Any STL containers used for intermediate state tracking 
 	should live in the ParseState and not on the stack so that they	are 
 	cleaned up properly. 
+	Also watch out for dangling iterators from STL containers. On destruction
+	of the container you'll likely get an access violation from it trying to 
+	orphan what it thinks is a still-existing iterator. 
 *******************************************************************************/
 
 enum Token
@@ -90,6 +93,8 @@ struct ParseState
 	std::unordered_map<BufferString, ComputeShader*, BufferStringHash> shaderMap;
 	ParseErrorState* es;
 
+	const char* filename;
+	char* bufferStart;
 	Token fcLUT[128];
 } *GPS;
 
@@ -100,8 +105,38 @@ void ParserError(const char* str, ...)
 	va_start(ptr,str);
 	vsprintf_s(buf,512,str,ptr);
 	va_end(ptr);
-	GPS->es->ParseSuccess = false;
-	GPS->es->ErrorMessage = buf;
+
+	ParseState* ps = GPS;
+	ps->es->ParseSuccess = false;
+	ps->es->ErrorMessage = buf;
+
+	u32 line = 1;
+	u32 chr = 0;
+	char* lineStart = ps->bufferStart;
+	for (char* b = ps->bufferStart; b < ps->b.next ; ++b)
+	{
+		if (*b == '\n')
+		{
+			lineStart = b+1;
+			++line;
+			chr = 1;
+		}
+		else
+		{
+			++chr;
+		}
+	}
+
+	sprintf_s(buf, 512, "%s(%u,%u): error: ", ps->filename, line, chr);
+	ps->es->ErrorMessage = std::string(buf) + ps->es->ErrorMessage + "\n";
+
+	char* lineEnd = lineStart;
+	while (lineEnd < ps->b.next && *lineEnd != '\n')
+		++lineEnd;
+
+	sprintf_s(buf, 512, "line: %.*s", (u32)(lineEnd-lineStart), lineStart);
+	ps->es->ErrorMessage += buf;
+
 	// This if statement is meaningless (rd will always be non-null here), but
 	//	the compiler doesn't know that. Otherwise it will either generate 
 	// 	C4702 (unreachable code) for any code that comes after a ParserError in 
@@ -375,10 +410,9 @@ ComputeShader* ConsumeComputeShaderRefOrDef(
 	}
 	else
 	{
-		auto iter = ps.shaderMap.find(id);
-		ParserAssert(iter != ps.shaderMap.end(), "couldn't find shader %.*s", 
+		ParserAssert(ps.shaderMap.count(id) != 0, "couldn't find shader %.*s", 
 			id.len, id.base);
-		return iter->second;
+		return ps.shaderMap[id];
 	}
 }
 
@@ -445,10 +479,9 @@ Dispatch* ConsumeDispatchRefOrDef(
 	}
 	else
 	{
-		auto iter = ps.dcMap.find(id);
-		ParserAssert(iter != ps.dcMap.end(), "couldn't find dispatch %.*s", 
+		ParserAssert(ps.dcMap.count(id) != 0, "couldn't find dispatch %.*s", 
 			id.len, id.base);
-		return iter->second;
+		return ps.dcMap[id];
 	}
 }
 
@@ -509,15 +542,34 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 }
 
 
-RenderDescription* ParseBuffer(
-	char* buffer,
-	int buffer_len,
+RenderDescription* ParseFile(
+	const char* filename,
 	ParseErrorState* errorState)
 {
+	HANDLE rlf = fileio::OpenFileOptional(filename, GENERIC_READ);
+
+	if (rlf == INVALID_HANDLE_VALUE) // file not found
+	{
+		errorState->ParseSuccess = false;
+		errorState->ErrorMessage = std::string("Couldn't find ") + filename;
+		return nullptr;
+	}
+
+	u32 rlfSize = fileio::GetFileSize(rlf);
+
+	char* rlfBuffer = (char*)malloc(rlfSize);	
+	Assert(rlfBuffer != nullptr, "failed to alloc");
+
+	fileio::ReadFile(rlf, rlfBuffer, rlfSize);
+
+	CloseHandle(rlf);
+
 	ParseState ps;
 	ps.rd = new RenderDescription();
 	ps.es = errorState;
-	ps.b = { buffer, buffer + buffer_len };
+	ps.b = { rlfBuffer, rlfBuffer + rlfSize };
+	ps.bufferStart = rlfBuffer;
+	ps.filename = filename;
 	ParseStateInit(&ps);
 
 	GPS = &ps;
@@ -528,6 +580,7 @@ RenderDescription* ParseBuffer(
 	CloseHandle(parseThread);
 
 	GPS = nullptr;
+	free(rlfBuffer);
 
 	if (ps.es->ParseSuccess == false)
 	{

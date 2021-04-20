@@ -7,9 +7,8 @@ namespace rlf
 		std::string ErrorMessage;
 	};
 
-	RenderDescription* ParseBuffer(
-		char* buffer,
-		int buffer_len,
+	RenderDescription* ParseFile(
+		const char* filename,
 		ParseErrorState* errorState);
 
 	void ReleaseData(RenderDescription* data);

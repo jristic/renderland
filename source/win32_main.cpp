@@ -322,39 +322,17 @@ void CreateShader()
 {
 	char* filename = Cfg.FilePath;
 
-	HANDLE rlf = fileio::OpenFileOptional(filename, GENERIC_READ);
-
-	if (rlf == INVALID_HANDLE_VALUE) // file not found
-	{
-		RlfCompileSuccess = false;
-		RlfCompileErrorMessage = std::string("Couldn't find RLF file: ") + 
-			filename;
-		return;
-	}
-
-	u32 rlfSize = fileio::GetFileSize(rlf);
-
-	char* rlfBuffer = (char*)malloc(rlfSize);	
-	Assert(rlfBuffer != nullptr, "failed to alloc");
-
-	fileio::ReadFile(rlf, rlfBuffer, rlfSize);
-
-	CloseHandle(rlf);
-
 	Assert(CurrentRenderDesc == nullptr, "leaking data");
 	rlf::ParseErrorState es = {};
-	CurrentRenderDesc = rlf::ParseBuffer(rlfBuffer, rlfSize, &es);
+	CurrentRenderDesc = rlf::ParseFile(filename, &es);
 
 	if (es.ParseSuccess == false)
 	{
 		Assert(CurrentRenderDesc == nullptr, "leaking data");
 		RlfCompileSuccess = false;
-		RlfCompileErrorMessage = std::string("Failed to parse RLF file: ") +
-			filename + "\n" + es.ErrorMessage;
+		RlfCompileErrorMessage = std::string("Failed to parse RLF:\n") + es.ErrorMessage;
 		return;
 	}
-
-	free(rlfBuffer);
 
 	std::string filePath(filename);
 	std::string dirPath;
