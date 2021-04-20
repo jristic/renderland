@@ -89,6 +89,8 @@ struct ParseState
 	std::unordered_map<BufferString, Dispatch*, BufferStringHash> dcMap;
 	std::unordered_map<BufferString, ComputeShader*, BufferStringHash> shaderMap;
 	ParseErrorState* es;
+
+	Token fcLUT[128];
 } *GPS;
 
 void ParserError(const char* str, ...)
@@ -125,6 +127,29 @@ void SkipWhitespace(
 	}
 }
 
+void ParseStateInit(ParseState* ps)
+{
+	Token* fcLUT = ps->fcLUT;
+	for (u32 fc = 0 ; fc < 128 ; ++fc)
+		fcLUT[fc] = TOKEN_INVALID;
+	fcLUT['('] = TOKEN_LPAREN;
+	fcLUT[')'] = TOKEN_RPAREN;
+	fcLUT['{'] = TOKEN_LBRACE;
+	fcLUT['}'] = TOKEN_RBRACE;
+	fcLUT[','] = TOKEN_COMMA;
+	fcLUT['='] = TOKEN_EQUALS;
+	fcLUT['-'] = TOKEN_MINUS;
+	fcLUT[';'] = TOKEN_SEMICOLON;
+	fcLUT['"'] = TOKEN_STRING;
+	for (u32 fc = 0 ; fc < 128 ; ++fc)
+	{
+		if (isalpha(fc))
+			fcLUT[fc] = TOKEN_IDENTIFIER;
+		else if (isdigit(fc))
+			fcLUT[fc] = TOKEN_INTEGER_LITERAL;
+	} 
+}
+
 Token PeekNextToken(
 	BufferIter& b)
 {
@@ -133,53 +158,43 @@ Token PeekNextToken(
 	char firstChar = *b.next;
 	++b.next;
 
-	switch (firstChar)
+	Token tok = GPS->fcLUT[firstChar];
+
+	switch (tok)
 	{
-	case '(':
-		return TOKEN_LPAREN;
-	case ')':
-		return TOKEN_RPAREN;
-	case '{':
-		return TOKEN_LBRACE;
-	case '}':
-		return TOKEN_RBRACE;
-	case ',':
-		return TOKEN_COMMA;
-	case '=':
-		return TOKEN_EQUALS;
-	case '-':
-		return TOKEN_MINUS;
-	case ';':
-		return TOKEN_SEMICOLON;
-	case '"':
+	case TOKEN_LPAREN:
+	case TOKEN_RPAREN:
+	case TOKEN_LBRACE:
+	case TOKEN_RBRACE:
+	case TOKEN_COMMA:
+	case TOKEN_EQUALS:
+	case TOKEN_MINUS:
+	case TOKEN_SEMICOLON:
+		break;
+	case TOKEN_INTEGER_LITERAL:
+		while(b.next < b.end && isdigit(*b.next)) {
+			++b.next;
+		}
+		break;
+	case TOKEN_IDENTIFIER:
+		// identifiers have to start with a letter, but can contain numbers
+		while (b.next < b.end && (isalpha(*b.next) || isdigit(*b.next))) {
+			++b.next;
+		}
+		break;
+	case TOKEN_STRING:
 		while (b.next < b.end && *b.next != '"') {
 			++b.next;
 		}
 		++b.next; // pass the closing quotes
-		return TOKEN_STRING;
-	case '0': case '1': case '2': case '3': case '4': 
-	case '5': case '6': case '7': case '8': case '9':
-		while(b.next < b.end && isdigit(*b.next)) {
-			++b.next;
-		} 
-		return TOKEN_INTEGER_LITERAL;
-	case 'a': case 'b': case 'c': case 'd': case 'e': case 'f': case 'g': case 'h':
-	case 'i': case 'j': case 'k': case 'l': case 'm': case 'n': case 'o': case 'p':
-	case 'q': case 'r': case 's': case 't': case 'u': case 'v': case 'w': case 'x':
-	case 'y': case 'z':
-	case 'A': case 'B': case 'C': case 'D': case 'E': case 'F': case 'G': case 'H':
-	case 'I': case 'J': case 'K': case 'L': case 'M': case 'N': case 'O': case 'P':
-	case 'Q': case 'R': case 'S': case 'T': case 'U': case 'V': case 'W': case 'X':
-	case 'Y': case 'Z':
-		// identifiers have to start with a letter, but can contain numbers
-		while (b.next < b.end && (isalpha(*b.next) || isdigit(*b.next))) {
-			++b.next;
-		} 
-		return TOKEN_IDENTIFIER;
+		break;
+	case TOKEN_INVALID:
 	default:
-		ParserError("unexpected character when reading token: %c", *b.next);
-		return TOKEN_INVALID;
+		ParserError("unexpected character when reading token: %c", firstChar);
+		break;
 	}
+
+	return tok;
 }
 
 void ConsumeToken(
@@ -503,6 +518,7 @@ RenderDescription* ParseBuffer(
 	ps.rd = new RenderDescription();
 	ps.es = errorState;
 	ps.b = { buffer, buffer + buffer_len };
+	ParseStateInit(&ps);
 
 	GPS = &ps;
 	errorState->ParseSuccess = true;
