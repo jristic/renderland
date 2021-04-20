@@ -1,4 +1,3 @@
-* Add semicolons to RLF, after top-level structure declaration and field assignment (instead of commas). 
 * Parser errors should count newlines and characters to indicate line and char where it happened. 
 * PeekNextToken can use a look-up-table based on the first character encountered. 
 * Text representation of Token values for error messages. 

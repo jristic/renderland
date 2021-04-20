@@ -1,12 +1,12 @@
 
 ComputeShader {
-	ShaderPath = "shader.hlsl",
-	EntryPoint = "CSMain"
+	ShaderPath = "shader.hlsl";
+	EntryPoint = "CSMain";
 } testShader
 
 Dispatch {
-	Shader = testShader,
-	ThreadPerPixel = true
+	Shader = testShader;
+	ThreadPerPixel = true;
 } perPixelDispatch
 
 Passes {

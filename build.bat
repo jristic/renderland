@@ -7,7 +7,7 @@ set ExternalPath=external
 
 if /i "%1"=="release" (
 	set Config=release
-	set ConfigCompilerOptions=/MT /O2 /Oi /Oy /GL
+	set ConfigCompilerOptions=/MT /O2 /Oi /Oy /GL /wd4189
 	set ConfigLinkerOptions=/opt:ref
 ) else (
 	set Config=debug

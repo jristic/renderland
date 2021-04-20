@@ -24,6 +24,7 @@ enum Token
 	TOKEN_COMMA,
 	TOKEN_EQUALS,
 	TOKEN_MINUS,
+	TOKEN_SEMICOLON,
 	TOKEN_INTEGER_LITERAL,
 	TOKEN_IDENTIFIER,
 	TOKEN_STRING,
@@ -129,40 +130,38 @@ Token PeekNextToken(
 {
 	ParserAssert(b.next != b.end, "unexpected end-of-buffer.");
 
-	switch (*b.next)
+	char firstChar = *b.next;
+	++b.next;
+
+	switch (firstChar)
 	{
 	case '(':
-		++b.next;
 		return TOKEN_LPAREN;
 	case ')':
-		++b.next;
 		return TOKEN_RPAREN;
 	case '{':
-		++b.next;
 		return TOKEN_LBRACE;
 	case '}':
-		++b.next;
 		return TOKEN_RBRACE;
 	case ',':
-		++b.next;
 		return TOKEN_COMMA;
 	case '=':
-		++b.next;
 		return TOKEN_EQUALS;
 	case '-':
-		++b.next;
 		return TOKEN_MINUS;
+	case ';':
+		return TOKEN_SEMICOLON;
 	case '"':
-		do {
+		while (b.next < b.end && *b.next != '"') {
 			++b.next;
-		} while (b.next < b.end && *b.next != '"');
+		}
 		++b.next; // pass the closing quotes
 		return TOKEN_STRING;
 	case '0': case '1': case '2': case '3': case '4': 
 	case '5': case '6': case '7': case '8': case '9':
-		do {
+		while(b.next < b.end && isdigit(*b.next)) {
 			++b.next;
-		} while(b.next < b.end && isdigit(*b.next));
+		} 
 		return TOKEN_INTEGER_LITERAL;
 	case 'a': case 'b': case 'c': case 'd': case 'e': case 'f': case 'g': case 'h':
 	case 'i': case 'j': case 'k': case 'l': case 'm': case 'n': case 'o': case 'p':
@@ -173,9 +172,9 @@ Token PeekNextToken(
 	case 'Q': case 'R': case 'S': case 'T': case 'U': case 'V': case 'W': case 'X':
 	case 'Y': case 'Z':
 		// identifiers have to start with a letter, but can contain numbers
-		do {
+		while (b.next < b.end && (isalpha(*b.next) || isdigit(*b.next))) {
 			++b.next;
-		} while (b.next < b.end && (isalpha(*b.next) || isdigit(*b.next)));
+		} 
 		return TOKEN_IDENTIFIER;
 	default:
 		ParserError("unexpected character when reading token: %c", *b.next);
@@ -339,13 +338,14 @@ ComputeShader* ConsumeComputeShaderDef(
 			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
 		}
 
-		if (!TryConsumeToken(TOKEN_COMMA, b))
+		ConsumeToken(TOKEN_SEMICOLON, b);
+
+		if (TryConsumeToken(TOKEN_RBRACE, b))
 		{
 			break;
 		}
 	}
 
-	ConsumeToken(TOKEN_RBRACE, b);
 	return cs;
 }
 
@@ -408,13 +408,14 @@ Dispatch* ConsumeDispatchDef(
 			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
 		}
 
-		if (!TryConsumeToken(TOKEN_COMMA, b))
+		ConsumeToken(TOKEN_SEMICOLON, b);
+
+		if (TryConsumeToken(TOKEN_RBRACE, b))
 		{
 			break;
 		}
 	}
 
-	ConsumeToken(TOKEN_RBRACE, b);
 	return dc;
 }
 

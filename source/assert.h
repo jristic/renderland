@@ -7,6 +7,8 @@ void SPrint(char* buf, int buf_size, const char *str, ...)
 	va_end(ptr);
 }
 
+#ifdef _DEBUG
+
 #define Assert(expression, message, ...) 			\
 do {												\
 	__pragma(warning(suppress:4127))				\
@@ -38,6 +40,13 @@ do {												\
 	}												\
 	__pragma(warning(default:4127))					\
 } while (0);										\
+
+
+#else // ifdef _DEBUG
+
+#define Assert(expression, message, ...)
+
+#endif // ifdef _DEBUG
 
 #define Prompt(message, ...) 						\
 do { 												\
