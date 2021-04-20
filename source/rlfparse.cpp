@@ -33,6 +33,22 @@ enum Token
 	TOKEN_STRING,
 };
 
+const char* TokenNames[] =
+{
+	"invalid",
+	"lparen",
+	"rparen",
+	"lbrace",
+	"rbrace",
+	"comma",
+	"equals",
+	"minus",
+	"semicolon",
+	"integer literal",
+	"identifier",
+	"string",
+};
+
 struct BufferString
 {
 	const char* base;
@@ -131,7 +147,7 @@ void ParserError(const char* str, ...)
 	ps->es->ErrorMessage = std::string(buf) + ps->es->ErrorMessage + "\n";
 
 	char* lineEnd = lineStart;
-	while (lineEnd < ps->b.next && *lineEnd != '\n')
+	while (lineEnd < ps->b.end && *lineEnd != '\n')
 		++lineEnd;
 
 	sprintf_s(buf, 512, "line: %.*s", (u32)(lineEnd-lineStart), lineStart);
@@ -225,7 +241,7 @@ Token PeekNextToken(
 		break;
 	case TOKEN_INVALID:
 	default:
-		ParserError("unexpected character when reading token: %c", firstChar);
+		ParserError("unexpected character when parsing token: %c", firstChar);
 		break;
 	}
 
@@ -239,8 +255,8 @@ void ConsumeToken(
 	SkipWhitespace(b);
 	Token foundTok;
 	foundTok = PeekNextToken(b);
-	ParserAssert(foundTok == tok, "unexpected token, expected %d found %d",
-		tok, foundTok);
+	ParserAssert(foundTok == tok, "unexpected token, expected %s but found %s",
+		TokenNames[tok], TokenNames[foundTok]);
 }
 
 bool TryConsumeToken(
@@ -265,7 +281,8 @@ BufferString ConsumeIdentifier(
 	SkipWhitespace(b);
 	BufferIter start = b; 
 	Token tok = PeekNextToken(b);
-	ParserAssert(tok == TOKEN_IDENTIFIER, "unexpected token (wanted identifier)");
+	ParserAssert(tok == TOKEN_IDENTIFIER, "unexpected %s (wanted identifier)", 
+		TokenNames[tok]);
 
 	BufferString id;
 	id.base = start.next;
@@ -280,7 +297,8 @@ BufferString ConsumeString(
 	SkipWhitespace(b);
 	BufferIter start = b;
 	Token tok = PeekNextToken(b);
-	ParserAssert(tok == TOKEN_STRING, "unexpected token (wanted string)");
+	ParserAssert(tok == TOKEN_STRING, "unexpected %s (wanted string)", 
+		TokenNames[tok]);
 
 	BufferString str;
 	str.base = start.next + 1;
@@ -314,7 +332,8 @@ i32 ConsumeIntLiteral(
 	}
 	BufferIter nb = b;
 	Token tok = PeekNextToken(b);
-	ParserAssert(tok == TOKEN_INTEGER_LITERAL, "unexpected token (wanted string)");
+	ParserAssert(tok == TOKEN_INTEGER_LITERAL, "unexpected %s (wanted integer literal)",
+		TokenNames[tok]);
 
 	i32 val = 0;
 	do 
@@ -337,7 +356,8 @@ u32 ConsumeUintLiteral(
 	}
 	BufferIter nb = b;
 	Token tok = PeekNextToken(b);
-	ParserAssert(tok == TOKEN_INTEGER_LITERAL, "unexpected token (wanted string)");
+	ParserAssert(tok == TOKEN_INTEGER_LITERAL, "unexpected %s (wanted integer literal)",
+		TokenNames[tok]);
 
 	u32 val = 0;
 	do 

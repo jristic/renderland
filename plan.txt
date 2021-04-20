@@ -1,5 +1,3 @@
-* Parser errors should count newlines and characters to indicate line and char where it happened. 
-* Text representation of Token values for error messages. 
 * Specify shader parameters in the RLF and allow tuning via the imgui display.
 * Allow specifying buffers/textures in RLF.
 	* Declaration for buffers and textures -> format, usage, etc.
