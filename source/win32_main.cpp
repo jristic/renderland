@@ -22,8 +22,8 @@
 #include "assert.h"
 #include "config.h"
 #include "fileio.h"
-#include "rlf.h"
-#include "rlfparse.h"
+#include "rlf/rlf.h"
+#include "rlf/rlfparser.h"
 
 #define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
 
@@ -484,4 +484,4 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 // Project source
 #include "config.cpp"
 #include "fileio.cpp"
-#include "rlfparse.cpp"
+#include "rlf/rlfparser.cpp"

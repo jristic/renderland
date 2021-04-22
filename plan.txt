@@ -1,9 +1,10 @@
-* Specify shader parameters in the RLF and allow tuning via the imgui display.
 * Allow specifying buffers/textures in RLF.
 	* Declaration for buffers and textures -> format, usage, etc.
-	* Speicfy input and output resources for dispatches
+	* Specify input and output resources for dispatches
 	* Special value texture for backbuffer?
-* Replace std::string usage with own implementation. 
+* Specify shader parameters in the RLF and allow tuning via the imgui display.
+* Defines that are usable within the RLF and shader. 
+* Allow #include of other RLF files
 * Integrate RenderDoc capture?
 * Expand to the draw pipeline.
 * Investigate automatically reloading any time a file is updated.
