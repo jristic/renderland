@@ -1,0 +1,37 @@
+
+Buffer {
+	Type = BufferDesc {
+		ElementType = float4;
+		ElementCount = 32;
+	};
+	InitToZero = true;
+} Points
+
+ComputeShader {
+	ShaderPath = "producer.hlsl";
+	EntryPoint = "CSMain";
+	OutputBuffer <float4> Points;
+} producer
+
+Dispatch {
+	Shader = producer;
+	Groups = { 1, 1, 1 };
+	Bind Points = Points;
+} producerDispatch
+
+ComputeShader {
+	ShaderPath = "consumer.hlsl";
+	EntryPoint = "CSMain";
+	InputBuffer <float4> Points;
+} consumer
+
+Dispatch {
+	Shader = consumer;
+	ThreadPerPixel = true;
+	Bind Points=Points;
+} consumerDispatch
+
+Passes {
+	producerDispatch,
+	consumerDispatch
+}
