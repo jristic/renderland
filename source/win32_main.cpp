@@ -24,6 +24,7 @@
 #include "fileio.h"
 #include "rlf/rlf.h"
 #include "rlf/rlfparser.h"
+#include "rlf/rlfinterpreter.h"
 
 #define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
 
@@ -230,48 +231,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		// Dispatch our shader
 		if (RlfCompileSuccess)
 		{
-			// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously.
-			//	Swap to UAV for compute shader. 
-			ID3D11RenderTargetView* emptyRT = nullptr;
-			g_pd3dDeviceContext->OMSetRenderTargets(1, &emptyRT, nullptr);
-
-			// Update constant buffer
-			{
-				D3D11_MAPPED_SUBRESOURCE mapped_resource;
-				hr = g_pd3dDeviceContext->Map(g_pConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 
-					0, &mapped_resource);
-				Assert(hr == S_OK, "failed to map CB hr=%x", hr);
-				ConstantBuffer* cb = (ConstantBuffer*)mapped_resource.pData;
-				cb->DisplaySizeX = io.DisplaySize.x;
-				cb->DisplaySizeY = io.DisplaySize.y;
-				cb->Time = time;
-				g_pd3dDeviceContext->Unmap(g_pConstantBuffer, 0);
-			}
-
-			UINT initialCount = (UINT)-1;
-			for (rlf::Dispatch* dc : CurrentRenderDesc->Passes)
-			{
-				g_pd3dDeviceContext->CSSetShader(dc->Shader->ShaderObject, nullptr, 0);
-				g_pd3dDeviceContext->CSSetConstantBuffers(0, 1, &g_pConstantBuffer);
-				g_pd3dDeviceContext->CSSetUnorderedAccessViews(0, 1, &g_mainRenderTargetUav, 
-					&initialCount);
-				uint3 groups = dc->Groups;
-				if (dc->ThreadPerPixel)
-				{
-					uint3 tgs = dc->Shader->ThreadGroupSize;
-					groups.x = (u32)((io.DisplaySize.x - 1) / tgs.x) + 1;
-					groups.y = (u32)((io.DisplaySize.y - 1) / tgs.y) + 1;
-					groups.z = 1;
-				}
-
-				g_pd3dDeviceContext->Dispatch(groups.x, groups.y, groups.z);
-			}
-
-			// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously.
-			//	Swap back to RT for drawing. 
-			ID3D11UnorderedAccessView* emptyUAV = nullptr;
-			g_pd3dDeviceContext->CSSetUnorderedAccessViews(0, 1, &emptyUAV, &initialCount);
-			g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
+			rlf::Execute(g_pd3dDeviceContext, CurrentRenderDesc, time);
 		}
 
 		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -342,68 +302,19 @@ void CreateShader()
 		dirPath = filePath.substr(0, pos+1);
 	}
 
-	for (rlf::ComputeShader* cs : CurrentRenderDesc->Shaders)
+	rlf::InitErrorState ies = {};
+	rlf::InitD3D(g_pd3dDevice, CurrentRenderDesc, dirPath.c_str(), &ies);
+
+	if (ies.InitSuccess == false)
 	{
-		std::string shaderPath = dirPath + cs->ShaderPath;
-
-		HANDLE shader = fileio::OpenFileOptional(shaderPath.c_str(), GENERIC_READ);
-
-		if (shader == INVALID_HANDLE_VALUE) // file not found
-		{
-			RlfCompileSuccess = false;
-			RlfCompileErrorMessage = std::string("Couldn't find shader file: ") + 
-				shaderPath.c_str();
-			return;
-		}
-
-		u32 shaderSize = fileio::GetFileSize(shader);
-
-		char* shaderBuffer = (char*)malloc(shaderSize);
-		Assert(shaderBuffer != nullptr, "failed to alloc");
-
-		fileio::ReadFile(shader, shaderBuffer, shaderSize);
-
-		CloseHandle(shader);
-
-		ID3DBlob* shaderBlob;
-		ID3DBlob* errorBlob;
-		HRESULT hr = D3DCompile(shaderBuffer, shaderSize, shaderPath.c_str(), NULL,
-			NULL, cs->EntryPoint, "cs_5_0", 0, 0, &shaderBlob, &errorBlob);
-		Assert(hr == S_OK || hr == E_FAIL, "failed to compile shader hr=%x", hr);
-
-		free(shaderBuffer);
-
-		RlfCompileSuccess = (hr == S_OK);
-
-		if (!RlfCompileSuccess)
-		{
-			Assert(errorBlob != nullptr, "no error info given");
-			char* errorText = (char*)errorBlob->GetBufferPointer();
-			RlfCompileErrorMessage = errorText;
-
-			Assert(shaderBlob == nullptr, "leak");
-
-			SafeRelease(errorBlob);
-
-			return;
-		}
-
-		hr = g_pd3dDevice->CreateComputeShader(shaderBlob->GetBufferPointer(), 
-			shaderBlob->GetBufferSize(), NULL, &cs->ShaderObject);
-		Assert(hr == S_OK, "Failed to create shader, hr=%x", hr);
-
-		ID3D11ShaderReflection* reflector = nullptr; 
-		hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
-            IID_ID3D11ShaderReflection, (void**) &reflector);
-		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
-
-		reflector->GetThreadGroupSize(&cs->ThreadGroupSize.x, &cs->ThreadGroupSize.y,
-			&cs->ThreadGroupSize.z);
-
-		SafeRelease(reflector);
-		SafeRelease(shaderBlob);
-		SafeRelease(errorBlob);
+		CleanupShader();
+		RlfCompileSuccess = false;
+		RlfCompileErrorMessage = std::string("Failed to create RLF scene:\n") +
+			ies.ErrorMessage;
+		return;
 	}
+
+	RlfCompileSuccess = ies.InitSuccess;
 }
 
 void CleanupShader()
@@ -485,3 +396,4 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 #include "config.cpp"
 #include "fileio.cpp"
 #include "rlf/rlfparser.cpp"
+#include "rlf/rlfinterpreter.cpp"
