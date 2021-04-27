@@ -13,6 +13,9 @@ namespace rlf
 		const char* workingDirectory,
 		InitErrorState* errorState);
 
+	void ReleaseD3D(
+		RenderDescription* rd);
+
 	void Execute(
 		ID3D11DeviceContext* ctx,
 		RenderDescription* rd,

@@ -321,10 +321,7 @@ void CleanupShader()
 {
 	if (CurrentRenderDesc)
 	{
-		for (rlf::ComputeShader* cs : CurrentRenderDesc->Shaders)
-		{
-			SafeRelease(cs->ShaderObject);
-		}
+		rlf::ReleaseD3D(CurrentRenderDesc);
 		rlf::ReleaseData(CurrentRenderDesc);
 		CurrentRenderDesc = nullptr;
 	}

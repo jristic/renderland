@@ -75,6 +75,15 @@ void InitD3D(
 	}
 }
 
+void ReleaseD3D(
+	RenderDescription* rd)
+{
+	for (ComputeShader* cs : rd->Shaders)
+	{
+		SafeRelease(cs->ShaderObject);
+	}
+}
+
 void Execute(
 	ID3D11DeviceContext* ctx,
 	RenderDescription* rd,
