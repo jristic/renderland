@@ -11,41 +11,41 @@ cbuffer ConstantBuffer : register(b0)
 [numthreads(32,1,1)]
 void CSMain(uint3 DTid : SV_DispatchThreadID)
 {
-	float4 point = Points[DTid.x];
-	if (all(point == 0))
+	float4 pt = Points[DTid.x];
+	if (all(pt == 0))
 	{
 		// setup random velocity
 		uint random = DTid.x * 3973217;
-		point.z = (random % 256) / 255.0;
-		point.w = ((random / 256) % 256) / 255.0;
-		point.zw *= (random / 65536) % 5;
+		pt.z = (random % 256) / 255.0;
+		pt.w = ((random / 256) % 256) / 255.0;
+		pt.zw *= (random / 65536) % 5;
 	}
 
-	point.xy += point.zw;
+	pt.xy += pt.zw;
 
 	// check collision
-	if (point.x < 0)
+	if (pt.x < 0)
 	{
-		point.x = abs(point.x);
-		point.z = -point.z;
+		pt.x = abs(pt.x);
+		pt.z = -pt.z;
 	}
-	else if (point.x > TextureSize.x)
+	else if (pt.x > TextureSize.x)
 	{
-		point.x = 2*TextureSize.x - point.x;
-		point.z = -point.z;
+		pt.x = 2*TextureSize.x - pt.x;
+		pt.z = -pt.z;
 	}
 
-	if (point.y < 0)
+	if (pt.y < 0)
 	{
-		point.y = abs(point.y);
-		point.w = -point.w;
+		pt.y = abs(pt.y);
+		pt.w = -pt.w;
 	}
-	else if (point.y > TextureSize.y)
+	else if (pt.y > TextureSize.y)
 	{
-		point.y = 2*TextureSize.y - point.y;
-		point.w = -point.w;
+		pt.y = 2*TextureSize.y - pt.y;
+		pt.w = -pt.w;
 	}
 
 	// output updated result
-	Points[DTid.x] = point;
+	Points[DTid.x] = pt;
 }

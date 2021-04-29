@@ -19,8 +19,8 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 
 	for (uint i = 0 ; i < 32 ; ++i)
 	{
-		float4 point = Points[i];
-		if (dist(DTid.xy, point.xy) < 10)
+		float4 pt = Points[i];
+		if (distance(DTid.xy, pt.xy) < 10)
 		{
 			hit = 1;
 			break;
