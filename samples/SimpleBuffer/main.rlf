@@ -28,6 +28,7 @@ ComputeShader {
 Dispatch {
 	Shader = consumer;
 	ThreadPerPixel = true;
+	Bind OutTexture = @BackBuffer;
 	Bind Points=Points;
 } consumerDispatch
 

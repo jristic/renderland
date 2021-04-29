@@ -28,6 +28,7 @@ enum Token
 	TOKEN_EQUALS,
 	TOKEN_MINUS,
 	TOKEN_SEMICOLON,
+	TOKEN_AT,
 	TOKEN_INTEGER_LITERAL,
 	TOKEN_IDENTIFIER,
 	TOKEN_STRING,
@@ -191,6 +192,7 @@ void ParseStateInit(ParseState* ps)
 	fcLUT['='] = TOKEN_EQUALS;
 	fcLUT['-'] = TOKEN_MINUS;
 	fcLUT[';'] = TOKEN_SEMICOLON;
+	fcLUT['@'] = TOKEN_AT;
 	fcLUT['"'] = TOKEN_STRING;
 	for (u32 fc = 0 ; fc < 128 ; ++fc)
 	{
@@ -221,6 +223,7 @@ Token PeekNextToken(
 	case TOKEN_EQUALS:
 	case TOKEN_MINUS:
 	case TOKEN_SEMICOLON:
+	case TOKEN_AT:
 		break;
 	case TOKEN_INTEGER_LITERAL:
 		while(b.next < b.end && isdigit(*b.next)) {
@@ -377,6 +380,17 @@ const char* AddStringToDescriptionData(BufferString str, RenderDescription* rd)
 }
 
 
+SystemValue ConsumeSystemValue(BufferIter& b)
+{
+	BufferString sysId = ConsumeIdentifier(b);
+	if (sysId == "BackBuffer")
+	{
+		return SystemValue::BackBuffer;
+	}
+	ParserError("Invalid system value: %.*s", sysId.len, sysId.base);
+	return SystemValue::Invalid;
+}
+
 ComputeShader* ConsumeComputeShaderDef(
 	BufferIter& b,
 	ParseState& ps)
@@ -471,6 +485,25 @@ Dispatch* ConsumeDispatchDef(
 			ConsumeToken(TOKEN_COMMA, b);
 			dc->Groups.z = ConsumeUintLiteral(b);
 			ConsumeToken(TOKEN_RBRACE, b);
+		}
+		else if (fieldId == "Bind")
+		{
+			BufferString bindName = ConsumeIdentifier(b);
+			ConsumeToken(TOKEN_EQUALS, b);
+			Bind bind;
+			bind.BindTarget = AddStringToDescriptionData(bindName, rd);
+			if (TryConsumeToken(TOKEN_AT, b))
+			{
+				bind.IsSystemValue = true;
+				bind.SystemBind = ConsumeSystemValue(b);
+			}
+			else
+			{
+				bind.IsSystemValue = false;
+				BufferString texId = ConsumeIdentifier(b);
+				bind.TextureBind = AddStringToDescriptionData(texId, rd);
+			}
+			dc->Binds.push_back(bind);
 		}
 		else
 		{

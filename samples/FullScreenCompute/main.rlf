@@ -7,6 +7,7 @@ ComputeShader {
 Dispatch {
 	Shader = testShader;
 	ThreadPerPixel = true;
+	Bind OutTexture = @BackBuffer;
 } perPixelDispatch
 
 Passes {

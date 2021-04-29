@@ -6,5 +6,6 @@ Passes {
 			EntryPoint = "CSMain";
 		};
 		ThreadPerPixel = true;
+		Bind OutTexture = @BackBuffer;
 	}
 }

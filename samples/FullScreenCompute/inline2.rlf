@@ -8,5 +8,6 @@ Passes {
 	Dispatch {
 		Shader = testShader;
 		ThreadPerPixel = true;
+		Bind OutTexture = @BackBuffer;
 	}
 }

@@ -5,6 +5,7 @@ Dispatch {
 		EntryPoint = "CSMain";
 	};
 	ThreadPerPixel = true;
+	Bind OutTexture = @BackBuffer;
 } perPixelDispatch
 
 Passes {

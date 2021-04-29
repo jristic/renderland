@@ -10,7 +10,7 @@ void InitD3D(
 {
 	std::string dirPath = workingDirectory;
 
-	for (rlf::ComputeShader* cs : rd->Shaders)
+	for (ComputeShader* cs : rd->Shaders)
 	{
 		std::string shaderPath = dirPath + cs->ShaderPath;
 
@@ -61,17 +61,57 @@ void InitD3D(
 			shaderBlob->GetBufferSize(), NULL, &cs->ShaderObject);
 		Assert(hr == S_OK, "Failed to create shader, hr=%x", hr);
 
-		ID3D11ShaderReflection* reflector = nullptr; 
 		hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
-            IID_ID3D11ShaderReflection, (void**) &reflector);
+            IID_ID3D11ShaderReflection, (void**) &cs->Reflector);
 		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
 
-		reflector->GetThreadGroupSize(&cs->ThreadGroupSize.x, &cs->ThreadGroupSize.y,
+		cs->Reflector->GetThreadGroupSize(&cs->ThreadGroupSize.x, &cs->ThreadGroupSize.y,
 			&cs->ThreadGroupSize.z);
 
-		SafeRelease(reflector);
 		SafeRelease(shaderBlob);
 		SafeRelease(errorBlob);
+	}
+
+	for (Dispatch* dc : rd->Dispatches)
+	{
+		ID3D11ShaderReflection* reflector = dc->Shader->Reflector;
+		for (Bind& bind : dc->Binds)
+		{
+			D3D11_SHADER_INPUT_BIND_DESC desc;
+			HRESULT hr = reflector->GetResourceBindingDescByName(bind.BindTarget, 
+				&desc);
+			Assert(hr == S_OK || hr == E_INVALIDARG, "unhandled error, hr=%x", hr);
+			if (hr == E_INVALIDARG)
+			{
+				errorState->InitSuccess = false;
+				errorState->ErrorMessage = std::string("Could not find resource ") +
+					bind.BindTarget + " in shader " + dc->Shader->ShaderPath;
+				return;
+			}
+			bind.BindIndex = desc.BindPoint;
+			switch (desc.Type)
+			{
+			case D3D_SIT_STRUCTURED:
+				bind.IsOutput = false;
+				break;
+			case D3D_SIT_UAV_RWTYPED:
+			case D3D_SIT_UAV_RWSTRUCTURED:
+				bind.IsOutput = true;
+				break;
+			case D3D_SIT_BYTEADDRESS:
+			case D3D_SIT_UAV_RWBYTEADDRESS:
+			case D3D_SIT_UAV_APPEND_STRUCTURED:
+			case D3D_SIT_UAV_CONSUME_STRUCTURED:
+			case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
+			case D3D_SIT_CBUFFER:
+			case D3D_SIT_TBUFFER:
+			case D3D_SIT_TEXTURE:
+			case D3D_SIT_SAMPLER:
+			default:
+				Assert(false, "Unhandled type %d", desc.Type);
+				break;
+			}
+		}
 	}
 }
 
@@ -81,6 +121,7 @@ void ReleaseD3D(
 	for (ComputeShader* cs : rd->Shaders)
 	{
 		SafeRelease(cs->ShaderObject);
+		SafeRelease(cs->Reflector);
 	}
 }
 
@@ -118,12 +159,22 @@ void Execute(
 	}
 
 	UINT initialCount = (UINT)-1;
-	for (rlf::Dispatch* dc : rd->Passes)
+	for (Dispatch* dc : rd->Passes)
 	{
 		ctx->CSSetShader(dc->Shader->ShaderObject, nullptr, 0);
 		ctx->CSSetConstantBuffers(0, 1, &g_pConstantBuffer);
-		ctx->CSSetUnorderedAccessViews(0, 1, &g_mainRenderTargetUav, 
-			&initialCount);
+		for (Bind& bind : dc->Binds)
+		{
+			if (bind.IsSystemValue && bind.SystemBind == SystemValue::BackBuffer)
+			{
+				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &g_mainRenderTargetUav, 
+					&initialCount);
+			}
+			else 
+			{
+				Assert(false, "unhandled");
+			}
+		}
 		uint3 groups = dc->Groups;
 		if (dc->ThreadPerPixel)
 		{

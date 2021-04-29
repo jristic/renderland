@@ -1,6 +1,6 @@
 
-RWTexture2D<float4> OutTexture : register(u0);
 StructuredBuffer<float4> Points : register(t0);
+RWTexture2D<float4> OutTexture : register(u0);
 
 cbuffer ConstantBuffer : register(b0)
 {
