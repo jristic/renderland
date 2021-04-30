@@ -202,6 +202,7 @@ void ParseStateInit(ParseState* ps)
 		else if (isdigit(fc))
 			fcLUT[fc] = TOKEN_INTEGER_LITERAL;
 	} 
+	fcLUT['_'] = TOKEN_IDENTIFIER;
 }
 
 Token PeekNextToken(
@@ -233,7 +234,9 @@ Token PeekNextToken(
 		break;
 	case TOKEN_IDENTIFIER:
 		// identifiers have to start with a letter, but can contain numbers
-		while (b.next < b.end && (isalpha(*b.next) || isdigit(*b.next))) {
+		while (b.next < b.end && (isalpha(*b.next) || isdigit(*b.next) || 
+			*b.next == '_')) 
+		{
 			++b.next;
 		}
 		break;
@@ -241,6 +244,7 @@ Token PeekNextToken(
 		while (b.next < b.end && *b.next != '"') {
 			++b.next;
 		}
+		ParserAssert(b.next < b.end, "End-of-buffer before closing parenthesis.");
 		++b.next; // pass the closing quotes
 		break;
 	case TOKEN_INVALID:
@@ -547,7 +551,7 @@ Dispatch* ConsumeDispatchDef(
 			{
 				bind.IsSystemValue = false;
 				BufferString id = ConsumeIdentifier(b);
-				ParserAssert(ps.resMap.count(id) != 0, "couldn't find shader %.*s", 
+				ParserAssert(ps.resMap.count(id) != 0, "couldn't find resource %.*s", 
 					id.len, id.base);
 				bind.BufferBind = ps.resMap[id];
 			}
