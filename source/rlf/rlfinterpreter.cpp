@@ -113,6 +113,40 @@ void InitD3D(
 			}
 		}
 	}
+
+	for (Buffer* buf : rd->Buffers)
+	{
+		u32 bufSize = buf->ElementSize * buf->ElementCount;
+
+		D3D11_SUBRESOURCE_DATA initData = {};
+		void* zeroMem = nullptr;
+		if (buf->InitToZero)
+		{
+			initData.pSysMem = zeroMem = malloc(bufSize);
+			ZeroMemory(zeroMem, bufSize);
+		}
+
+		D3D11_BUFFER_DESC desc;
+		desc.ByteWidth = bufSize;
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+		desc.StructureByteStride = buf->ElementSize;
+
+		HRESULT hr = device->CreateBuffer(&desc, buf->InitToZero ? &initData : 0, 
+			&buf->BufferObject);
+		Assert(hr == S_OK, "failed to create buffer, hr=%x", hr);
+
+		hr = device->CreateShaderResourceView(buf->BufferObject, nullptr, &buf->SRV);
+		Assert(hr == S_OK, "failed to create SRV, hr=%x", hr);
+
+		hr = device->CreateUnorderedAccessView(buf->BufferObject, nullptr, &buf->UAV);
+		Assert(hr == S_OK, "failed to create UAV, hr=%x", hr);
+
+		if (buf->InitToZero)
+			free(zeroMem);
+	}
 }
 
 void ReleaseD3D(
@@ -122,6 +156,13 @@ void ReleaseD3D(
 	{
 		SafeRelease(cs->ShaderObject);
 		SafeRelease(cs->Reflector);
+	}
+
+	for (Buffer* buf : rd->Buffers)
+	{
+		SafeRelease(buf->UAV);
+		SafeRelease(buf->SRV);
+		SafeRelease(buf->BufferObject);
 	}
 }
 
@@ -165,14 +206,22 @@ void Execute(
 		ctx->CSSetConstantBuffers(0, 1, &g_pConstantBuffer);
 		for (Bind& bind : dc->Binds)
 		{
-			if (bind.IsSystemValue && bind.SystemBind == SystemValue::BackBuffer)
+			if (bind.IsSystemValue)
 			{
-				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &g_mainRenderTargetUav, 
+				if (bind.SystemBind == SystemValue::BackBuffer)
+					ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &g_mainRenderTargetUav, 
+						&initialCount);
+				else
+					Assert(false, "unhandled");
+			}
+			else if (bind.IsOutput)
+			{
+				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &bind.BufferBind->UAV, 
 					&initialCount);
 			}
-			else 
+			else
 			{
-				Assert(false, "unhandled");
+				ctx->CSSetShaderResources(bind.BindIndex, 1, &bind.BufferBind->SRV);
 			}
 		}
 		uint3 groups = dc->Groups;

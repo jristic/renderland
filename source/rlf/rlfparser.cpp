@@ -108,6 +108,7 @@ struct ParseState
 	RenderDescription* rd;
 	std::unordered_map<BufferString, Dispatch*, BufferStringHash> dcMap;
 	std::unordered_map<BufferString, ComputeShader*, BufferStringHash> shaderMap;
+	std::unordered_map<BufferString, Buffer*, BufferStringHash> resMap;
 	ParseErrorState* es;
 
 	const char* filename;
@@ -450,6 +451,51 @@ ComputeShader* ConsumeComputeShaderRefOrDef(
 	}
 }
 
+Buffer* ConsumeBufferDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	RenderDescription* rd = ps.rd;
+
+	ConsumeToken(TOKEN_LBRACE, b);
+
+	Buffer* buf = new Buffer();
+	rd->Buffers.push_back(buf);
+
+	while (true)
+	{
+		BufferString fieldId = ConsumeIdentifier(b);
+		if (fieldId == "ElementSize")
+		{
+			ConsumeToken(TOKEN_EQUALS, b);
+			buf->ElementSize = ConsumeUintLiteral(b);
+		}
+		else if (fieldId == "ElementCount")
+		{
+			ConsumeToken(TOKEN_EQUALS, b);
+			buf->ElementCount = ConsumeUintLiteral(b);
+		}
+		else if (fieldId == "InitToZero")
+		{
+			ConsumeToken(TOKEN_EQUALS, b);
+			buf->InitToZero = ConsumeBool(b);
+		}
+		else
+		{
+			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+		}
+
+		ConsumeToken(TOKEN_SEMICOLON, b);
+
+		if (TryConsumeToken(TOKEN_RBRACE, b))
+		{
+			break;
+		}
+	}
+
+	return buf;
+}
+
 Dispatch* ConsumeDispatchDef(
 	BufferIter& b,
 	ParseState& ps)
@@ -500,8 +546,10 @@ Dispatch* ConsumeDispatchDef(
 			else
 			{
 				bind.IsSystemValue = false;
-				BufferString texId = ConsumeIdentifier(b);
-				bind.TextureBind = AddStringToDescriptionData(texId, rd);
+				BufferString id = ConsumeIdentifier(b);
+				ParserAssert(ps.resMap.count(id) != 0, "couldn't find shader %.*s", 
+					id.len, id.base);
+				bind.BufferBind = ps.resMap[id];
 			}
 			dc->Binds.push_back(bind);
 		}
@@ -552,15 +600,23 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 		{
 			ComputeShader* cs = ConsumeComputeShaderDef(b, ps);
 			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.shaderMap.find(nameId) == ps.shaderMap.end(),
-				"%.*s already defined", nameId.len, nameId.base);
+			ParserAssert(ps.shaderMap.count(nameId) == 0, "Shader %.*s already defined", 
+				nameId.len, nameId.base);
 			ps.shaderMap[nameId] = cs;
+		}
+		else if (structureId == "Buffer")
+		{
+			Buffer* buf = ConsumeBufferDef(b, ps);
+			BufferString nameId = ConsumeIdentifier(b);
+			ParserAssert(ps.resMap.count(nameId) == 0,  "Buffer %.*s already defined", 
+				nameId.len, nameId.base);
+			ps.resMap[nameId] = buf;
 		}
 		else if (structureId == "Dispatch")
 		{
 			Dispatch* dc = ConsumeDispatchDef(b, ps);
 			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.dcMap.find(nameId) == ps.dcMap.end(), "%.*s already defined", 
+			ParserAssert(ps.dcMap.count(nameId) == 0, "Dispatch %.*s already defined", 
 				nameId.len, nameId.base);
 			ps.dcMap[nameId] = dc;
 		}

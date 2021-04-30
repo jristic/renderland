@@ -43,8 +43,6 @@ bool StartupComplete = false;
 rlf::RenderDescription* CurrentRenderDesc;
 
 // Forward declarations of helper functions
-bool CreateDeviceD3D(HWND hWnd);
-void CleanupDeviceD3D();
 void CreateRenderTarget();
 void CleanupRenderTarget();
 void CreateShader();

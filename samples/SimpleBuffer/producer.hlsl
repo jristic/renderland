@@ -15,10 +15,10 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 	if (all(pt == 0))
 	{
 		// setup random velocity
-		uint random = DTid.x * 3973217;
-		pt.z = (random % 256) / 255.0;
-		pt.w = ((random / 256) % 256) / 255.0;
-		pt.zw *= (random / 65536) % 5;
+		uint random = DTid.x * 3973217.0;
+		pt.z = (random % 256.0) / 255.0;
+		pt.w = ((random / 256.0) % 256.0) / 255.0;
+		pt.zw *= (random / 65536.0) % 5.0;
 	}
 
 	pt.xy += pt.zw;

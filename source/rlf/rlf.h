@@ -9,9 +9,26 @@ namespace rlf
 		ID3D11ShaderReflection* Reflector;
 		uint3 ThreadGroupSize;
 	};
-	enum class SystemValue {
+	enum class BindType
+	{
+		Invalid,
+		SystemValue,
+		Buffer,
+		Texture,
+	};
+	enum class SystemValue
+	{
 		Invalid,
 		BackBuffer,
+	};
+	struct Buffer
+	{
+		u32 ElementSize;
+		u32 ElementCount;
+		bool InitToZero;
+		ID3D11Buffer* BufferObject;
+		ID3D11ShaderResourceView* SRV;
+		ID3D11UnorderedAccessView* UAV;
 	};
 	struct Bind
 	{
@@ -19,7 +36,7 @@ namespace rlf
 		bool IsSystemValue;
 		union {
 			SystemValue SystemBind;
-			const char* TextureBind;
+			Buffer* BufferBind;
 		};
 		bool IsOutput;
 		u32 BindIndex;
@@ -37,5 +54,6 @@ namespace rlf
 		std::vector<Dispatch*> Dispatches;
 		std::vector<ComputeShader*> Shaders;
 		std::set<std::string> Strings;
+		std::vector<Buffer*> Buffers;
 	};
 }

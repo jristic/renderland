@@ -1,16 +1,13 @@
 
 Buffer {
-	Type = BufferDesc {
-		ElementType = float4;
-		ElementCount = 32;
-	};
+	ElementSize = 16;
+	ElementCount = 32;
 	InitToZero = true;
 } Points
 
 ComputeShader {
 	ShaderPath = "producer.hlsl";
 	EntryPoint = "CSMain";
-	OutputBuffer <float4> Points;
 } producer
 
 Dispatch {
@@ -22,7 +19,6 @@ Dispatch {
 ComputeShader {
 	ShaderPath = "consumer.hlsl";
 	EntryPoint = "CSMain";
-	InputBuffer <float4> Points;
 } consumer
 
 Dispatch {
