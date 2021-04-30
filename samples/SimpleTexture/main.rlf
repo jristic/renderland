@@ -1,0 +1,33 @@
+
+Texture {
+	Size = {256,256};
+	InitToZero = false;
+} Tex
+
+ComputeShader {
+	ShaderPath = "producer.hlsl";
+	EntryPoint = "CSMain";
+} producer
+
+Dispatch {
+	Shader = producer;
+	Groups = { 32, 32, 1 };
+	Bind OutTexture = Tex;
+} producerDispatch
+
+ComputeShader {
+	ShaderPath = "consumer.hlsl";
+	EntryPoint = "CSMain";
+} consumer
+
+Dispatch {
+	Shader = consumer;
+	ThreadPerPixel = true;
+	Bind OutTexture = @BackBuffer;
+	Bind InTexture=Tex;
+} consumerDispatch
+
+Passes {
+	producerDispatch,
+	consumerDispatch
+}
