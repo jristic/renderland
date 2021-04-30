@@ -2,7 +2,6 @@
 	* Declaration for buffers and textures -> format, usage, etc.
 	* Specify input and output resources for dispatches
 	* Special value texture for backbuffer?
-* Allow underscore in identifiers.
 * Add a SimpleTexture sample. 
 * Specify shader parameters in the RLF and allow tuning via the imgui display.
 	* Should I fill a constant buffer declared in the shader using reflection info? or generate a global / per-dispatch constant buffer for shaders?

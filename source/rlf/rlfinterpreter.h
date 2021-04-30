@@ -16,8 +16,16 @@ namespace rlf
 	void ReleaseD3D(
 		RenderDescription* rd);
 
+	struct ExecuteContext
+	{
+		ID3D11DeviceContext* D3dCtx;
+		ID3D11RenderTargetView* MainRtv;
+		ID3D11UnorderedAccessView* MainRtUav;
+		ID3D11Buffer* GlobalConstantBuffer;
+		float Time;
+	};
+
 	void Execute(
-		ID3D11DeviceContext* ctx,
-		RenderDescription* rd,
-		float time);
+		ExecuteContext* context,
+		RenderDescription* rd);
 }

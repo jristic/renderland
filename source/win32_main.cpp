@@ -229,7 +229,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		// Dispatch our shader
 		if (RlfCompileSuccess)
 		{
-			rlf::Execute(g_pd3dDeviceContext, CurrentRenderDesc, time);
+			rlf::ExecuteContext ctx = {};
+			ctx.D3dCtx = g_pd3dDeviceContext;
+			ctx.MainRtv = g_mainRenderTargetView;
+			ctx.MainRtUav = g_mainRenderTargetUav;
+			ctx.GlobalConstantBuffer = g_pConstantBuffer;
+			ctx.Time = time;
+			rlf::Execute(&ctx, CurrentRenderDesc);
 		}
 
 		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());

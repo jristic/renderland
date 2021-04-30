@@ -167,10 +167,12 @@ void ReleaseD3D(
 }
 
 void Execute(
-	ID3D11DeviceContext* ctx,
-	RenderDescription* rd,
-	float time)
+	ExecuteContext* context,
+	RenderDescription* rd)
 {
+	ID3D11DeviceContext* ctx = context->D3dCtx;
+	float time = context->Time;
+
 	ImGuiIO& io = ImGui::GetIO();
 
 	// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously.
@@ -187,29 +189,30 @@ void Execute(
 	};
 
 	// Update constant buffer
+	ID3D11Buffer* constBuffer = context->GlobalConstantBuffer;
 	{
 		D3D11_MAPPED_SUBRESOURCE mapped_resource;
-		HRESULT hr = ctx->Map(g_pConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 
+		HRESULT hr = ctx->Map(constBuffer, 0, D3D11_MAP_WRITE_DISCARD, 
 			0, &mapped_resource);
 		Assert(hr == S_OK, "failed to map CB hr=%x", hr);
 		ConstantBuffer* cb = (ConstantBuffer*)mapped_resource.pData;
 		cb->DisplaySizeX = io.DisplaySize.x;
 		cb->DisplaySizeY = io.DisplaySize.y;
 		cb->Time = time;
-		ctx->Unmap(g_pConstantBuffer, 0);
+		ctx->Unmap(constBuffer, 0);
 	}
 
 	UINT initialCount = (UINT)-1;
 	for (Dispatch* dc : rd->Passes)
 	{
 		ctx->CSSetShader(dc->Shader->ShaderObject, nullptr, 0);
-		ctx->CSSetConstantBuffers(0, 1, &g_pConstantBuffer);
+		ctx->CSSetConstantBuffers(0, 1, &constBuffer);
 		for (Bind& bind : dc->Binds)
 		{
 			if (bind.IsSystemValue)
 			{
 				if (bind.SystemBind == SystemValue::BackBuffer)
-					ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &g_mainRenderTargetUav, 
+					ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &context->MainRtUav, 
 						&initialCount);
 				else
 					Assert(false, "unhandled");
@@ -240,7 +243,7 @@ void Execute(
 	//	Swap back to RT for drawing. 
 	ID3D11UnorderedAccessView* emptyUAV = nullptr;
 	ctx->CSSetUnorderedAccessViews(0, 1, &emptyUAV, &initialCount);
-	ctx->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
+	ctx->OMSetRenderTargets(1, &context->MainRtv, nullptr);
 }
 
 } // namespace rlf
