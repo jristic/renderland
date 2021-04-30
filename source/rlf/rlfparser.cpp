@@ -108,7 +108,11 @@ struct ParseState
 	RenderDescription* rd;
 	std::unordered_map<BufferString, Dispatch*, BufferStringHash> dcMap;
 	std::unordered_map<BufferString, ComputeShader*, BufferStringHash> shaderMap;
-	std::unordered_map<BufferString, Buffer*, BufferStringHash> resMap;
+	struct Resource {
+		bool isTexture;
+		void* m;
+	};
+	std::unordered_map<BufferString, Resource, BufferStringHash> resMap;
 	ParseErrorState* es;
 
 	const char* filename;
@@ -500,6 +504,50 @@ Buffer* ConsumeBufferDef(
 	return buf;
 }
 
+Texture* ConsumeTextureDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	RenderDescription* rd = ps.rd;
+
+	ConsumeToken(TOKEN_LBRACE, b);
+
+	Texture* tex = new Texture();
+	rd->Textures.push_back(tex);
+
+	while (true)
+	{
+		BufferString fieldId = ConsumeIdentifier(b);
+		if (fieldId == "Size")
+		{
+			ConsumeToken(TOKEN_EQUALS, b);
+			ConsumeToken(TOKEN_LBRACE, b);
+			tex->Size.x = ConsumeUintLiteral(b);
+			ConsumeToken(TOKEN_COMMA, b);
+			tex->Size.y = ConsumeUintLiteral(b);
+			ConsumeToken(TOKEN_RBRACE, b);
+		}
+		else if (fieldId == "InitToZero")
+		{
+			ConsumeToken(TOKEN_EQUALS, b);
+			tex->InitToZero = ConsumeBool(b);
+		}
+		else
+		{
+			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+		}
+
+		ConsumeToken(TOKEN_SEMICOLON, b);
+
+		if (TryConsumeToken(TOKEN_RBRACE, b))
+		{
+			break;
+		}
+	}
+
+	return tex;
+}
+
 Dispatch* ConsumeDispatchDef(
 	BufferIter& b,
 	ParseState& ps)
@@ -544,16 +592,17 @@ Dispatch* ConsumeDispatchDef(
 			bind.BindTarget = AddStringToDescriptionData(bindName, rd);
 			if (TryConsumeToken(TOKEN_AT, b))
 			{
-				bind.IsSystemValue = true;
+				bind.Type = BindType::SystemValue;
 				bind.SystemBind = ConsumeSystemValue(b);
 			}
 			else
 			{
-				bind.IsSystemValue = false;
 				BufferString id = ConsumeIdentifier(b);
-				ParserAssert(ps.resMap.count(id) != 0, "couldn't find resource %.*s", 
+				ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
 					id.len, id.base);
-				bind.BufferBind = ps.resMap[id];
+				ParseState::Resource& res = ps.resMap[id];
+				bind.Type = res.isTexture ? BindType::Texture : BindType::Buffer;
+				bind.BufferBind = reinterpret_cast<Buffer*>(res.m);
 			}
 			dc->Binds.push_back(bind);
 		}
@@ -612,9 +661,21 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 		{
 			Buffer* buf = ConsumeBufferDef(b, ps);
 			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.resMap.count(nameId) == 0,  "Buffer %.*s already defined", 
+			ParserAssert(ps.resMap.count(nameId) == 0,  "Resource %.*s already defined", 
 				nameId.len, nameId.base);
-			ps.resMap[nameId] = buf;
+			ParseState::Resource& res = ps.resMap[nameId];
+			res.isTexture = false;
+			res.m = buf;
+		}
+		else if (structureId == "Texture")
+		{
+			Texture* tex = ConsumeTextureDef(b,ps);
+			BufferString nameId = ConsumeIdentifier(b);
+			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %.*s already defined",
+				nameId.len, nameId.base);
+			ParseState::Resource& res = ps.resMap[nameId];
+			res.isTexture = true;
+			res.m = tex;
 		}
 		else if (structureId == "Dispatch")
 		{
@@ -712,13 +773,13 @@ void ReleaseData(RenderDescription* data)
 	Assert(data, "Invalid pointer.");
 
 	for (Dispatch* dc : data->Dispatches)
-	{
 		delete dc;
-	}
 	for (ComputeShader* cs : data->Shaders)
-	{
 		delete cs;
-	}
+	for (Buffer* buf : data->Buffers)
+		delete buf;
+	for (Texture* tex : data->Textures)
+		delete tex;
 	delete data;
 }
 

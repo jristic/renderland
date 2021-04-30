@@ -30,13 +30,22 @@ namespace rlf
 		ID3D11ShaderResourceView* SRV;
 		ID3D11UnorderedAccessView* UAV;
 	};
+	struct Texture
+	{
+		uint2 Size;
+		bool InitToZero;
+		ID3D11Texture2D* TextureObject;
+		ID3D11ShaderResourceView* SRV;
+		ID3D11UnorderedAccessView* UAV;
+	};
 	struct Bind
 	{
 		const char* BindTarget;
-		bool IsSystemValue;
+		BindType Type;
 		union {
 			SystemValue SystemBind;
 			Buffer* BufferBind;
+			Texture* TextureBind;
 		};
 		bool IsOutput;
 		u32 BindIndex;
@@ -55,5 +64,6 @@ namespace rlf
 		std::vector<ComputeShader*> Shaders;
 		std::set<std::string> Strings;
 		std::vector<Buffer*> Buffers;
+		std::vector<Texture*> Textures;
 	};
 }

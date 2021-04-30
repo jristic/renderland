@@ -91,6 +91,7 @@ void InitD3D(
 			bind.BindIndex = desc.BindPoint;
 			switch (desc.Type)
 			{
+			case D3D_SIT_TEXTURE:
 			case D3D_SIT_STRUCTURED:
 				bind.IsOutput = false;
 				break;
@@ -105,7 +106,6 @@ void InitD3D(
 			case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
 			case D3D_SIT_CBUFFER:
 			case D3D_SIT_TBUFFER:
-			case D3D_SIT_TEXTURE:
 			case D3D_SIT_SAMPLER:
 			default:
 				Assert(false, "Unhandled type %d", desc.Type);
@@ -147,6 +147,33 @@ void InitD3D(
 		if (buf->InitToZero)
 			free(zeroMem);
 	}
+
+	for (Texture* tex : rd->Textures)
+	{
+		Assert(tex->InitToZero == false, "unimplemented");
+
+		D3D11_TEXTURE2D_DESC desc;
+		desc.Width = tex->Size.x;
+		desc.Height = tex->Size.y;
+		desc.MipLevels = 1;
+		desc.ArraySize = 1;
+		desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT; // TODO: format support
+		desc.SampleDesc.Count = 1;
+		desc.SampleDesc.Quality = 0;
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = 0;
+
+		HRESULT hr = device->CreateTexture2D(&desc, nullptr, &tex->TextureObject);
+		Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
+
+		hr = device->CreateShaderResourceView(tex->TextureObject, nullptr, &tex->SRV);
+		Assert(hr == S_OK, "failed to create SRV, hr=%x", hr);
+
+		hr = device->CreateUnorderedAccessView(tex->TextureObject, nullptr, &tex->UAV);
+		Assert(hr == S_OK, "failed to create UAV, hr=%x", hr);
+	}
 }
 
 void ReleaseD3D(
@@ -163,6 +190,13 @@ void ReleaseD3D(
 		SafeRelease(buf->UAV);
 		SafeRelease(buf->SRV);
 		SafeRelease(buf->BufferObject);
+	}
+
+	for (Texture* tex : rd->Textures)
+	{
+		SafeRelease(tex->UAV);
+		SafeRelease(tex->SRV);
+		SafeRelease(tex->TextureObject);
 	}
 }
 
@@ -209,7 +243,7 @@ void Execute(
 		ctx->CSSetConstantBuffers(0, 1, &constBuffer);
 		for (Bind& bind : dc->Binds)
 		{
-			if (bind.IsSystemValue)
+			if (bind.Type == BindType::SystemValue)
 			{
 				if (bind.SystemBind == SystemValue::BackBuffer)
 					ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &context->MainRtUav, 
@@ -217,14 +251,33 @@ void Execute(
 				else
 					Assert(false, "unhandled");
 			}
-			else if (bind.IsOutput)
+			else if (bind.Type == BindType::Buffer)
 			{
-				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &bind.BufferBind->UAV, 
-					&initialCount);
+				if (bind.IsOutput)
+				{
+					ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &bind.BufferBind->UAV, 
+						&initialCount);
+				}
+				else
+				{
+					ctx->CSSetShaderResources(bind.BindIndex, 1, &bind.BufferBind->SRV);
+				}
+			}
+			else if (bind.Type == BindType::Texture)
+			{
+				if (bind.IsOutput)
+				{
+					ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &bind.TextureBind->UAV, 
+						&initialCount);
+				}
+				else
+				{
+					ctx->CSSetShaderResources(bind.BindIndex, 1, &bind.TextureBind->SRV);
+				}
 			}
 			else
 			{
-				ctx->CSSetShaderResources(bind.BindIndex, 1, &bind.BufferBind->SRV);
+				Unimplemented();
 			}
 		}
 		uint3 groups = dc->Groups;
