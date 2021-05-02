@@ -1,4 +1,9 @@
 
+Sampler {
+	Filter = Point;
+	AddressMode = Clamp;
+} PointSampler
+
 Texture {
 	Size = {256,256};
 	InitToZero = false;
@@ -25,6 +30,7 @@ Dispatch {
 	ThreadPerPixel = true;
 	Bind OutTexture = @BackBuffer;
 	Bind InTexture=Tex;
+	Bind Sampler= PointSampler;
 } consumerDispatch
 
 Passes {

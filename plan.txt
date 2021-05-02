@@ -1,5 +1,7 @@
+* Add Sampler sample.
 * Specify shader parameters in the RLF and allow tuning via the imgui display.
 	* Should I fill a constant buffer declared in the shader using reflection info? or generate a global / per-dispatch constant buffer for shaders?
+* Speedup parsing with hash table lookups. All string compares must go!
 * Allow populating texture from file (DDS).
 * Defines that are usable within the RLF and shader. 
 * Implement the include handler for shader compilation. 

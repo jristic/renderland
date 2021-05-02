@@ -1,6 +1,7 @@
 
 Texture2D<float4> InTexture : register(t0);
 RWTexture2D<float4> OutTexture : register(u0);
+SamplerState Sampler : register(s0);
 
 cbuffer ConstantBuffer : register(b0)
 {
@@ -21,7 +22,7 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 	if (coords.y > 255)
 		coords.y = 511 - coords.y;
 
-	float4 val = InTexture.Load(uint3(coords,0));
+	float4 val = InTexture.SampleLevel(Sampler, coords/255.0,0);
 
 	OutTexture[DTid.xy] = val;
 }

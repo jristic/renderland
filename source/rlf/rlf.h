@@ -1,6 +1,32 @@
 
 namespace rlf
 {
+	enum class BindType
+	{
+		Invalid,
+		SystemValue,
+		Buffer,
+		Texture,
+		Sampler,
+	};
+	enum class SystemValue
+	{
+		Invalid,
+		BackBuffer,
+	};
+	enum class FilterMode
+	{
+		Invalid,
+		Point,
+		Linear,
+	};
+	enum class AddressMode
+	{
+		Invalid,
+		Wrap,
+		Mirror,
+		Clamp,
+	};
 	struct ComputeShader
 	{
 		const char* ShaderPath;
@@ -8,18 +34,6 @@ namespace rlf
 		ID3D11ComputeShader* ShaderObject;
 		ID3D11ShaderReflection* Reflector;
 		uint3 ThreadGroupSize;
-	};
-	enum class BindType
-	{
-		Invalid,
-		SystemValue,
-		Buffer,
-		Texture,
-	};
-	enum class SystemValue
-	{
-		Invalid,
-		BackBuffer,
 	};
 	struct Buffer
 	{
@@ -38,6 +52,12 @@ namespace rlf
 		ID3D11ShaderResourceView* SRV;
 		ID3D11UnorderedAccessView* UAV;
 	};
+	struct Sampler
+	{
+		FilterMode Filter;
+		AddressMode Address;
+		ID3D11SamplerState* SamplerObject;
+	};
 	struct Bind
 	{
 		const char* BindTarget;
@@ -46,6 +66,7 @@ namespace rlf
 			SystemValue SystemBind;
 			Buffer* BufferBind;
 			Texture* TextureBind;
+			Sampler* SamplerBind;
 		};
 		bool IsOutput;
 		u32 BindIndex;
@@ -65,5 +86,6 @@ namespace rlf
 		std::set<std::string> Strings;
 		std::vector<Buffer*> Buffers;
 		std::vector<Texture*> Textures;
+		std::vector<Sampler*> Samplers;
 	};
 }

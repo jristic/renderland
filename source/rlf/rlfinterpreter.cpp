@@ -92,6 +92,7 @@ void InitD3D(
 			switch (desc.Type)
 			{
 			case D3D_SIT_TEXTURE:
+			case D3D_SIT_SAMPLER:
 			case D3D_SIT_STRUCTURED:
 				bind.IsOutput = false;
 				break;
@@ -106,7 +107,6 @@ void InitD3D(
 			case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
 			case D3D_SIT_CBUFFER:
 			case D3D_SIT_TBUFFER:
-			case D3D_SIT_SAMPLER:
 			default:
 				Assert(false, "Unhandled type %d", desc.Type);
 				break;
@@ -157,7 +157,7 @@ void InitD3D(
 		desc.Height = tex->Size.y;
 		desc.MipLevels = 1;
 		desc.ArraySize = 1;
-		desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT; // TODO: format support
+		desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // TODO: format support
 		desc.SampleDesc.Count = 1;
 		desc.SampleDesc.Quality = 0;
 		desc.Usage = D3D11_USAGE_DEFAULT;
@@ -173,6 +173,48 @@ void InitD3D(
 
 		hr = device->CreateUnorderedAccessView(tex->TextureObject, nullptr, &tex->UAV);
 		Assert(hr == S_OK, "failed to create UAV, hr=%x", hr);
+	}
+
+	for (Sampler* s : rd->Samplers)
+	{
+		D3D11_SAMPLER_DESC desc = {};
+		switch(s->Filter)
+		{
+		case FilterMode::Point:
+			desc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
+			break;
+		case FilterMode::Linear:
+			desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+			break;
+		default:
+			Unimplemented();
+		}
+		D3D11_TEXTURE_ADDRESS_MODE address = D3D11_TEXTURE_ADDRESS_WRAP;
+		switch(s->Address)
+		{
+		case AddressMode::Wrap:
+			address = D3D11_TEXTURE_ADDRESS_WRAP;
+			break;
+		case AddressMode::Mirror:
+			address = D3D11_TEXTURE_ADDRESS_MIRROR;
+			break;
+		case AddressMode::Clamp:
+			address = D3D11_TEXTURE_ADDRESS_CLAMP;
+			break;
+		default:
+			Unimplemented();
+		}
+		desc.AddressU = desc.AddressV = desc.AddressW = address;
+		desc.MipLODBias = 0;
+		desc.MaxAnisotropy = 1;
+		desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+		desc.BorderColor[0] = desc.BorderColor[1] = desc.BorderColor[2] = 
+			desc.BorderColor[3] = 1.f;
+		desc.MinLOD = 0;
+		desc.MaxLOD = D3D11_FLOAT32_MAX;
+
+		HRESULT hr = device->CreateSamplerState(&desc, &s->SamplerObject);
+		Assert(hr == S_OK, "failed to create sampler, hr=%x", hr);
 	}
 }
 
@@ -197,6 +239,11 @@ void ReleaseD3D(
 		SafeRelease(tex->UAV);
 		SafeRelease(tex->SRV);
 		SafeRelease(tex->TextureObject);
+	}
+
+	for (Sampler* s : rd->Samplers)
+	{
+		SafeRelease(s->SamplerObject);
 	}
 }
 
@@ -243,16 +290,16 @@ void Execute(
 		ctx->CSSetConstantBuffers(0, 1, &constBuffer);
 		for (Bind& bind : dc->Binds)
 		{
-			if (bind.Type == BindType::SystemValue)
+			switch (bind.Type)
 			{
+			case BindType::SystemValue:
 				if (bind.SystemBind == SystemValue::BackBuffer)
 					ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &context->MainRtUav, 
 						&initialCount);
 				else
 					Assert(false, "unhandled");
-			}
-			else if (bind.Type == BindType::Buffer)
-			{
+				break;
+			case BindType::Buffer:
 				if (bind.IsOutput)
 				{
 					ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &bind.BufferBind->UAV, 
@@ -262,9 +309,8 @@ void Execute(
 				{
 					ctx->CSSetShaderResources(bind.BindIndex, 1, &bind.BufferBind->SRV);
 				}
-			}
-			else if (bind.Type == BindType::Texture)
-			{
+				break;
+			case BindType::Texture:
 				if (bind.IsOutput)
 				{
 					ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &bind.TextureBind->UAV, 
@@ -274,10 +320,12 @@ void Execute(
 				{
 					ctx->CSSetShaderResources(bind.BindIndex, 1, &bind.TextureBind->SRV);
 				}
-			}
-			else
-			{
-				Unimplemented();
+				break;
+			case BindType::Sampler:
+				ctx->CSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->SamplerObject);
+				break;
+			default:
+				Assert(false, "invalid type %d", bind.Type);
 			}
 		}
 		uint3 groups = dc->Groups;

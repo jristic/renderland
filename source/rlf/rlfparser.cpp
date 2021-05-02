@@ -109,7 +109,7 @@ struct ParseState
 	std::unordered_map<BufferString, Dispatch*, BufferStringHash> dcMap;
 	std::unordered_map<BufferString, ComputeShader*, BufferStringHash> shaderMap;
 	struct Resource {
-		bool isTexture;
+		BindType type;
 		void* m;
 	};
 	std::unordered_map<BufferString, Resource, BufferStringHash> resMap;
@@ -548,6 +548,74 @@ Texture* ConsumeTextureDef(
 	return tex;
 }
 
+Sampler* ConsumeSamplerDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	RenderDescription* rd = ps.rd;
+
+	ConsumeToken(TOKEN_LBRACE, b);
+
+	Sampler* s = new Sampler();
+	rd->Samplers.push_back(s);
+
+	while (true)
+	{
+		BufferString fieldId = ConsumeIdentifier(b);
+		if (fieldId == "Filter")
+		{
+			ConsumeToken(TOKEN_EQUALS, b);
+			BufferString filterId = ConsumeIdentifier(b);
+			if (filterId == "Point")
+			{
+				s->Filter = FilterMode::Point;
+			}
+			else if (filterId == "Linear")
+			{
+				s->Filter = FilterMode::Linear;
+			}
+			else
+			{
+				ParserError("unexpected filter %.*s", fieldId.len, fieldId.base);
+			}
+		}
+		else if (fieldId == "AddressMode")
+		{
+			ConsumeToken(TOKEN_EQUALS, b);
+			BufferString modeId = ConsumeIdentifier(b);
+			if (modeId == "Wrap")
+			{
+				s->Address = AddressMode::Wrap;
+			}
+			else if (modeId == "Mirror")
+			{
+				s->Address = AddressMode::Mirror;
+			}
+			else if (modeId == "Clamp")
+			{
+				s->Address = AddressMode::Clamp;
+			}
+			else
+			{
+				ParserError("unexpected address mode %.*s", fieldId.len, fieldId.base);
+			}
+		}
+		else
+		{
+			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+		}
+
+		ConsumeToken(TOKEN_SEMICOLON, b);
+
+		if (TryConsumeToken(TOKEN_RBRACE, b))
+		{
+			break;
+		}
+	}
+
+	return s;
+}
+
 Dispatch* ConsumeDispatchDef(
 	BufferIter& b,
 	ParseState& ps)
@@ -601,7 +669,7 @@ Dispatch* ConsumeDispatchDef(
 				ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
 					id.len, id.base);
 				ParseState::Resource& res = ps.resMap[id];
-				bind.Type = res.isTexture ? BindType::Texture : BindType::Buffer;
+				bind.Type = res.type;
 				bind.BufferBind = reinterpret_cast<Buffer*>(res.m);
 			}
 			dc->Binds.push_back(bind);
@@ -664,7 +732,7 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 			ParserAssert(ps.resMap.count(nameId) == 0,  "Resource %.*s already defined", 
 				nameId.len, nameId.base);
 			ParseState::Resource& res = ps.resMap[nameId];
-			res.isTexture = false;
+			res.type = BindType::Buffer;
 			res.m = buf;
 		}
 		else if (structureId == "Texture")
@@ -674,8 +742,18 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %.*s already defined",
 				nameId.len, nameId.base);
 			ParseState::Resource& res = ps.resMap[nameId];
-			res.isTexture = true;
+			res.type = BindType::Texture;
 			res.m = tex;
+		}
+		else if (structureId == "Sampler")
+		{
+			Sampler* s = ConsumeSamplerDef(b,ps);
+			BufferString nameId = ConsumeIdentifier(b);
+			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %.*s already defined",
+				nameId.len, nameId.base);
+			ParseState::Resource& res = ps.resMap[nameId];
+			res.type = BindType::Sampler;
+			res.m = s;
 		}
 		else if (structureId == "Dispatch")
 		{
@@ -780,6 +858,8 @@ void ReleaseData(RenderDescription* data)
 		delete buf;
 	for (Texture* tex : data->Textures)
 		delete tex;
+	for (Sampler* s : data->Samplers)
+		delete s;
 	delete data;
 }
 
