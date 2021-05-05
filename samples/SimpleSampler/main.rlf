@@ -1,0 +1,41 @@
+
+Sampler {
+	Filter = Point;
+	AddressMode = Clamp;
+} PointSampler
+
+Sampler {
+	Filter = Linear;
+	AddressMode = Clamp;
+} LinearSampler
+
+Texture {
+	Size = {128,128};
+	InitToZero = false;
+} Tex
+
+Dispatch {
+	Shader = ComputeShader {
+		ShaderPath = "producer.hlsl";
+		EntryPoint = "CSMain";
+	};
+	Groups = { 16, 16, 1 };
+	Bind OutTexture = Tex;
+} producerDispatch
+
+Dispatch {
+	Shader = ComputeShader {
+		ShaderPath = "consumer.hlsl";
+		EntryPoint = "CSMain";
+	};
+	ThreadPerPixel = true;
+	Bind OutTexture = @BackBuffer;
+	Bind InTexture = Tex;
+	Bind PointSampler = PointSampler;
+	Bind LinearSampler = LinearSampler;
+} consumerDispatch
+
+Passes {
+	producerDispatch,
+	consumerDispatch
+}
