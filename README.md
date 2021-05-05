@@ -2,7 +2,7 @@
 
 RenderLand is a Windows program for dynamically specifying D3D11/HLSL routines via a description format (RLF) that is live-editable. 
 
-Dep works by having you pass the command you want executed through it, which it creates for you while injecting a DLL into the created process that tracks all files used as input to and output from the process. If the outputs are already up-to-date given the current state of the inputs, Dep skips invoking the command. 
+RenderLand's goal is to allow one to experiment and prototype graphics techniques without having to write all the associated code to glue the shaders together. Where possible it will ingest normal HLSL shader files with the instructions specified in the RLF file on how to glue it all together. 
 
 ## Status
 RenderLand is an early work in progress. Currently only the compute path is supported, and RLF doesn't allow specifying all the possibilities one would expect. 
