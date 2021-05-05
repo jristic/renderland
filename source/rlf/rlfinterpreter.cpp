@@ -256,10 +256,9 @@ void Execute(
 
 	ImGuiIO& io = ImGui::GetIO();
 
-	// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously.
-	//	Swap to UAV for compute shader. 
-	ID3D11RenderTargetView* emptyRT = nullptr;
-	ctx->OMSetRenderTargets(1, &emptyRT, nullptr);
+	// Clear state so we don't polluted by previous program drawing or previous 
+	//	execution. 
+	ctx->ClearState();
 
 	// TODO: duplicated definition
 	struct ConstantBuffer
@@ -340,11 +339,8 @@ void Execute(
 		ctx->Dispatch(groups.x, groups.y, groups.z);
 	}
 
-	// D3D11 on PC doesn't like same resource being bound as RT and UAV simultaneously.
-	//	Swap back to RT for drawing. 
-	ID3D11UnorderedAccessView* emptyUAV = nullptr;
-	ctx->CSSetUnorderedAccessViews(0, 1, &emptyUAV, &initialCount);
-	ctx->OMSetRenderTargets(1, &context->MainRtv, nullptr);
+	// Clear state after execution so we don't pollute the rest of program drawing. 
+	ctx->ClearState();
 }
 
 } // namespace rlf
