@@ -192,14 +192,12 @@ void InitD3D(
 
 	for (Texture* tex : rd->Textures)
 	{
-		Assert(tex->InitToZero == false, "unimplemented");
-
 		D3D11_TEXTURE2D_DESC desc;
 		desc.Width = tex->Size.x;
 		desc.Height = tex->Size.y;
 		desc.MipLevels = 1;
 		desc.ArraySize = 1;
-		desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // TODO: format support
+		desc.Format = D3DTextureFormat[(u32)tex->Format];
 		desc.SampleDesc.Count = 1;
 		desc.SampleDesc.Quality = 0;
 		desc.Usage = D3D11_USAGE_DEFAULT;
@@ -277,7 +275,7 @@ void Execute(
 
 	ImGuiIO& io = ImGui::GetIO();
 
-	// Clear state so we don't polluted by previous program drawing or previous 
+	// Clear state so we aren't polluted by previous program drawing or previous 
 	//	execution. 
 	ctx->ClearState();
 

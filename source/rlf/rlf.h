@@ -1,4 +1,6 @@
 
+#include "rlf/textureformat.h"
+
 namespace rlf
 {
 	enum class BindType
@@ -58,7 +60,7 @@ namespace rlf
 	struct Texture
 	{
 		uint2 Size;
-		bool InitToZero;
+		TextureFormat Format;
 		ID3D11Texture2D* TextureObject;
 		ID3D11ShaderResourceView* SRV;
 		ID3D11UnorderedAccessView* UAV;

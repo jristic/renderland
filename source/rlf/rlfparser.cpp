@@ -116,6 +116,7 @@ struct ParseState
 		void* m;
 	};
 	std::unordered_map<BufferString, Resource, BufferStringHash> resMap;
+	std::unordered_map<BufferString, TextureFormat, BufferStringHash> fmtMap;
 	ParseErrorState* es;
 
 	const char* filename;
@@ -210,6 +211,15 @@ void ParseStateInit(ParseState* ps)
 			fcLUT[fc] = TOKEN_INTEGER_LITERAL;
 	} 
 	fcLUT['_'] = TOKEN_IDENTIFIER;
+
+	for (u32 i = 0 ; i < (u32)TextureFormat::_Count ; ++i)
+	{
+		TextureFormat fmt = (TextureFormat)i;
+		const char* str = TextureFormatName[i];
+		BufferString bstr = { str, strlen(str) };
+		Assert(ps->fmtMap.count(bstr) == 0, "hash collision");
+		ps->fmtMap[bstr] = fmt;
+	}
 }
 
 Token PeekNextToken(
@@ -666,6 +676,9 @@ Texture* ConsumeTextureDef(
 	Texture* tex = new Texture();
 	rd->Textures.push_back(tex);
 
+	// non-zero defaults
+	tex->Format = TextureFormat::R8G8B8A8_UNORM;
+
 	while (true)
 	{
 		BufferString fieldId = ConsumeIdentifier(b);
@@ -678,10 +691,13 @@ Texture* ConsumeTextureDef(
 			tex->Size.y = ConsumeUintLiteral(b);
 			ConsumeToken(TOKEN_RBRACE, b);
 		}
-		else if (fieldId == "InitToZero")
+		else if (fieldId == "Format")
 		{
 			ConsumeToken(TOKEN_EQUALS, b);
-			tex->InitToZero = ConsumeBool(b);
+			BufferString formatId = ConsumeIdentifier(b);
+			ParserAssert(ps.fmtMap.count(formatId) != 0, "Couldn't find format %.*s", 
+				formatId.len, formatId.base);
+			tex->Format = ps.fmtMap[formatId];
 		}
 		else
 		{
@@ -691,9 +707,7 @@ Texture* ConsumeTextureDef(
 		ConsumeToken(TOKEN_SEMICOLON, b);
 
 		if (TryConsumeToken(TOKEN_RBRACE, b))
-		{
 			break;
-		}
 	}
 
 	return tex;
@@ -844,9 +858,7 @@ Dispatch* ConsumeDispatchDef(
 		ConsumeToken(TOKEN_SEMICOLON, b);
 
 		if (TryConsumeToken(TOKEN_RBRACE, b))
-		{
 			break;
-		}
 	}
 
 	return dc;

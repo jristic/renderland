@@ -1,4 +1,3 @@
-* Expand texture format support. 
 * Speedup parsing with hash table lookups. All string compares must go!
 * Ignore case on keyword identifiers
 	-> convert all keyword identifiers to lowercase before comparison
@@ -23,9 +22,10 @@
 
 * Instancing for draws.
 
-* Indirect dispatch and draws
-	* will need to implment append and consume buffers as well
+* Indirect dispatch and draws.
+	* will need to implment append and consume buffers as well.
 
+* MSAA support.
 
 * Sample: Compute-generated vertex buffer for a draw
 * Sample: Shadow-sampling methods comparison. 
