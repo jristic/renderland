@@ -21,28 +21,21 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 	float top = 0.1;
 	float bottom = 0.9;
 
-	if (coords.y >= top && coords.y <= bottom)
+	coords.y = (coords.y - top) / (bottom - top);
+
+	float left = 0.3 + 0.2*sin(Time + coords.y*3.14);
+	float right = 0.7 - 0.2*sin(Time + coords.y*3.14);
+
+	coords.x = (coords.x - left) / (right - left);
+	float4 val = 0;
+	if (coords.x < 0.5)
 	{
-		coords.y = (coords.y - top) / (bottom - top);
-
-		float left = 0.3 + 0.2*sin(Time + coords.y*3.14);
-		float right = 0.7 - 0.2*sin(Time + coords.y*3.14);
-
-		if (coords.x >= left && coords.x <= right)
-		{
-			coords.x = (coords.x - left) / (right - left);
-			float4 val = 0;
-			if (coords.x < 0.5)
-			{
-				val = InTexture.SampleLevel(PointSampler, coords,0);
-			}
-			else
-			{
-				val = InTexture.SampleLevel(LinearSampler, coords,0);
-			}
-
-			OutTexture[DTid.xy] = val;
-		}
+		val = InTexture.SampleLevel(PointSampler, coords,0);
+	}
+	else
+	{
+		val = InTexture.SampleLevel(LinearSampler, coords,0);
 	}
 
+	OutTexture[DTid.xy] = val;
 }

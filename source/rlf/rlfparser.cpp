@@ -30,6 +30,7 @@ enum Token
 	TOKEN_SEMICOLON,
 	TOKEN_AT,
 	TOKEN_INTEGER_LITERAL,
+	TOKEN_FLOAT_LITERAL,
 	TOKEN_IDENTIFIER,
 	TOKEN_STRING,
 };
@@ -45,7 +46,9 @@ const char* TokenNames[] =
 	"equals",
 	"minus",
 	"semicolon",
+	"at-sign",
 	"integer literal",
+	"float literal",
 	"identifier",
 	"string",
 };
@@ -235,6 +238,14 @@ Token PeekNextToken(
 		while(b.next < b.end && isdigit(*b.next)) {
 			++b.next;
 		}
+		if (b.next < b.end && *b.next == '.')
+		{
+			tok = TOKEN_FLOAT_LITERAL;
+			++b.next;
+			while(b.next < b.end && isdigit(*b.next)) {
+				++b.next;
+			}
+		}
 		break;
 	case TOKEN_IDENTIFIER:
 		// identifiers have to start with a letter, but can contain numbers
@@ -382,6 +393,49 @@ u32 ConsumeUintLiteral(
 	return val;
 }
 
+float ConsumeFloatLiteral(
+	BufferIter& b)
+{
+	SkipWhitespace(b);
+	bool negative = false;
+	if (TryConsumeToken(TOKEN_MINUS, b))
+	{
+		negative = true;
+		SkipWhitespace(b);
+	}
+	BufferIter nb = b;
+	Token tok = PeekNextToken(b);
+	ParserAssert(tok == TOKEN_INTEGER_LITERAL || tok == TOKEN_FLOAT_LITERAL, 
+		"unexpected %s (wanted float literal)", TokenNames[tok]);
+
+	bool fracPart = (tok == TOKEN_FLOAT_LITERAL);
+
+	double val = 0;
+	do 
+	{
+		val *= 10;
+		val += (*nb.next - '0');
+		++nb.next;
+	} while (nb.next < b.next && *nb.next != '.');
+
+	if (fracPart)
+	{
+		Assert(nb.next < b.next && *nb.next == '.', "something went wrong, char=%c", 
+			*nb.next);
+		++nb.next;
+
+		double sub = 0.1;
+		while (nb.next < b.next) 
+		{
+			val += (*nb.next - '0') * sub;
+			sub *= 0.1;
+			++nb.next;
+		}
+	}
+
+	return (float)(negative ? -val : val);
+}
+
 const char* AddStringToDescriptionData(BufferString str, RenderDescription* rd)
 {
 	auto pair = rd->Strings.insert(std::string(str.base, str.len));
@@ -398,6 +452,103 @@ SystemValue ConsumeSystemValue(BufferIter& b)
 	}
 	ParserError("Invalid system value: %.*s", sysId.len, sysId.base);
 	return SystemValue::Invalid;
+}
+
+Filter ConsumeFilter(BufferIter& b)
+{
+	Filter f = Filter::Point;
+	BufferString filterId = ConsumeIdentifier(b);
+	if (filterId == "Point")
+		f = Filter::Point;
+	else if (filterId == "Linear")
+		f = Filter::Linear;
+	else if (filterId == "Aniso")
+		f = Filter::Aniso;
+	else
+		ParserError("unexpected filter %.*s", filterId.len, filterId.base);
+	return f;
+}
+
+FilterMode ConsumeFilterMode(BufferIter& b)
+{
+	FilterMode fm = {};
+	ConsumeToken(TOKEN_LBRACE, b);
+	while (true)
+	{
+		BufferString fieldId = ConsumeIdentifier(b);
+		ConsumeToken(TOKEN_EQUALS, b);
+		if (fieldId == "All")
+			fm.Min = fm.Mag = fm.Mip = ConsumeFilter(b);
+		else if (fieldId == "Min")
+			fm.Min = ConsumeFilter(b);
+		else if (fieldId == "Mag")
+			fm.Mag = ConsumeFilter(b);
+		else if (fieldId == "Mip")
+			fm.Mip = ConsumeFilter(b);
+		else
+			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+
+		if (TryConsumeToken(TOKEN_RBRACE, b))
+			break;
+		else 
+			ConsumeToken(TOKEN_COMMA, b);
+	}
+	return fm;
+}
+
+AddressMode ConsumeAddressMode(BufferIter& b)
+{
+	AddressMode addr = AddressMode::Wrap;
+	BufferString adrId = ConsumeIdentifier(b);
+	if (adrId == "Wrap")
+		addr = AddressMode::Wrap;
+	else if (adrId == "Mirror")
+		addr = AddressMode::Mirror;
+	else if (adrId == "MirrorOnce")
+		addr = AddressMode::MirrorOnce;
+	else if (adrId == "Clamp")
+		addr = AddressMode::Clamp;
+	else if (adrId == "Border")
+		addr = AddressMode::Border;
+	else
+		ParserError("unexpected address mode %.*s", adrId.len, adrId.base);
+	return addr;
+}
+
+AddressModeUVW ConsumeAddressModeUVW(BufferIter& b)
+{
+	AddressModeUVW addr = {};
+	ConsumeToken(TOKEN_LBRACE,b);
+	while (true)
+	{
+		BufferString fieldId = ConsumeIdentifier(b);
+		ConsumeToken(TOKEN_EQUALS, b);
+		AddressMode mode = ConsumeAddressMode(b);
+
+		ParserAssert(fieldId.len <= 3, "Invalid [U?V?W?], %.*s", fieldId.len, 
+			fieldId.base);
+
+		const char* curr = fieldId.base;
+		const char* end = fieldId.base + fieldId.len;
+		while (curr < end)
+		{
+			if (*curr == 'U')
+				addr.U = mode;
+			else if (*curr == 'V')
+				addr.V = mode;
+			else if (*curr == 'W')
+				addr.W = mode;
+			else
+				ParserError("unexpected %c, wanted [U|V|W]", *curr);
+			++curr;
+		}
+
+		if (TryConsumeToken(TOKEN_RBRACE, b))
+			break;
+		else 
+			ConsumeToken(TOKEN_COMMA, b);
+	}
+	return addr;
 }
 
 ComputeShader* ConsumeComputeShaderDef(
@@ -559,46 +710,57 @@ Sampler* ConsumeSamplerDef(
 	Sampler* s = new Sampler();
 	rd->Samplers.push_back(s);
 
+	// non-zero defaults
+	s->MinLOD = -FLT_MAX;
+	s->MaxLOD = FLT_MAX;
+	s->MaxAnisotropy = 1;
+	s->BorderColor = {1,1,1,1};
+
 	while (true)
 	{
 		BufferString fieldId = ConsumeIdentifier(b);
 		if (fieldId == "Filter")
 		{
 			ConsumeToken(TOKEN_EQUALS, b);
-			BufferString filterId = ConsumeIdentifier(b);
-			if (filterId == "Point")
-			{
-				s->Filter = FilterMode::Point;
-			}
-			else if (filterId == "Linear")
-			{
-				s->Filter = FilterMode::Linear;
-			}
-			else
-			{
-				ParserError("unexpected filter %.*s", fieldId.len, fieldId.base);
-			}
+			s->Filter = ConsumeFilterMode(b);
 		}
 		else if (fieldId == "AddressMode")
 		{
 			ConsumeToken(TOKEN_EQUALS, b);
-			BufferString modeId = ConsumeIdentifier(b);
-			if (modeId == "Wrap")
-			{
-				s->Address = AddressMode::Wrap;
-			}
-			else if (modeId == "Mirror")
-			{
-				s->Address = AddressMode::Mirror;
-			}
-			else if (modeId == "Clamp")
-			{
-				s->Address = AddressMode::Clamp;
-			}
-			else
-			{
-				ParserError("unexpected address mode %.*s", fieldId.len, fieldId.base);
-			}
+			s->Address = ConsumeAddressModeUVW(b);
+		}
+		else if (fieldId == "MipLODBias")
+		{
+			ConsumeToken(TOKEN_EQUALS, b);
+			s->MipLODBias = ConsumeFloatLiteral(b);
+		}
+		else if (fieldId == "MaxAnisotropy")
+		{
+			ConsumeToken(TOKEN_EQUALS, b);
+			s->MaxAnisotropy = ConsumeUintLiteral(b);
+		}
+		else if (fieldId == "BorderColor")
+		{
+			ConsumeToken(TOKEN_EQUALS, b);
+			ConsumeToken(TOKEN_LBRACE, b);
+			s->BorderColor.x = ConsumeFloatLiteral(b);
+			ConsumeToken(TOKEN_COMMA, b);
+			s->BorderColor.y = ConsumeFloatLiteral(b);
+			ConsumeToken(TOKEN_COMMA, b);
+			s->BorderColor.z = ConsumeFloatLiteral(b);
+			ConsumeToken(TOKEN_COMMA, b);
+			s->BorderColor.w = ConsumeFloatLiteral(b);
+			ConsumeToken(TOKEN_RBRACE, b);
+		}
+		else if (fieldId == "MinLOD")
+		{
+			ConsumeToken(TOKEN_EQUALS, b);
+			s->MinLOD = ConsumeFloatLiteral(b);
+		}
+		else if (fieldId == "MaxLOD")
+		{
+			ConsumeToken(TOKEN_EQUALS, b);
+			s->MaxLOD = ConsumeFloatLiteral(b);
 		}
 		else
 		{

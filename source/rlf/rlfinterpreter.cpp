@@ -2,6 +2,48 @@
 namespace rlf
 {
 
+D3D11_FILTER RlfToD3d(FilterMode fm)
+{
+	if (fm.Min == Filter::Aniso || fm.Mag == Filter::Aniso ||
+		fm.Mip == Filter::Aniso)
+	{
+		return D3D11_FILTER_ANISOTROPIC;
+	}
+
+	static D3D11_FILTER filters[] = {
+		D3D11_FILTER_MIN_MAG_MIP_POINT,
+        D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR,
+        D3D11_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT,
+        D3D11_FILTER_MIN_POINT_MAG_MIP_LINEAR,
+        D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT,
+        D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR,
+        D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT,
+        D3D11_FILTER_MIN_MAG_MIP_LINEAR,
+    };
+
+	u32 i = 0;
+	if (fm.Min == Filter::Linear)
+		i += 4;
+	if (fm.Mag == Filter::Linear)
+		i += 2;
+	if (fm.Mip == Filter::Linear)
+		i += 1;
+	
+	return filters[i];
+}
+
+D3D11_TEXTURE_ADDRESS_MODE RlfToD3d(AddressMode m)
+{
+	static D3D11_TEXTURE_ADDRESS_MODE modes[] = {
+		D3D11_TEXTURE_ADDRESS_WRAP,
+		D3D11_TEXTURE_ADDRESS_MIRROR,
+		D3D11_TEXTURE_ADDRESS_MIRROR_ONCE,
+		D3D11_TEXTURE_ADDRESS_CLAMP,
+		D3D11_TEXTURE_ADDRESS_BORDER,
+	};
+	return modes[(u32)m];
+}
+
 void InitD3D(
 	ID3D11Device* device,
 	RenderDescription* rd,
@@ -178,40 +220,19 @@ void InitD3D(
 	for (Sampler* s : rd->Samplers)
 	{
 		D3D11_SAMPLER_DESC desc = {};
-		switch(s->Filter)
-		{
-		case FilterMode::Point:
-			desc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
-			break;
-		case FilterMode::Linear:
-			desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-			break;
-		default:
-			Unimplemented();
-		}
-		D3D11_TEXTURE_ADDRESS_MODE address = D3D11_TEXTURE_ADDRESS_WRAP;
-		switch(s->Address)
-		{
-		case AddressMode::Wrap:
-			address = D3D11_TEXTURE_ADDRESS_WRAP;
-			break;
-		case AddressMode::Mirror:
-			address = D3D11_TEXTURE_ADDRESS_MIRROR;
-			break;
-		case AddressMode::Clamp:
-			address = D3D11_TEXTURE_ADDRESS_CLAMP;
-			break;
-		default:
-			Unimplemented();
-		}
-		desc.AddressU = desc.AddressV = desc.AddressW = address;
-		desc.MipLODBias = 0;
-		desc.MaxAnisotropy = 1;
+		desc.Filter = RlfToD3d(s->Filter);
+		desc.AddressU = RlfToD3d(s->Address.U);
+		desc.AddressV = RlfToD3d(s->Address.V);
+		desc.AddressW = RlfToD3d(s->Address.W);
+		desc.MipLODBias = s->MipLODBias;
+		desc.MaxAnisotropy = s->MaxAnisotropy;
 		desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-		desc.BorderColor[0] = desc.BorderColor[1] = desc.BorderColor[2] = 
-			desc.BorderColor[3] = 1.f;
-		desc.MinLOD = 0;
-		desc.MaxLOD = D3D11_FLOAT32_MAX;
+		desc.BorderColor[0] = s->BorderColor.x;
+		desc.BorderColor[1] = s->BorderColor.y;
+		desc.BorderColor[2] = s->BorderColor.z;
+		desc.BorderColor[3] = s->BorderColor.w;
+		desc.MinLOD = s->MinLOD;
+		desc.MaxLOD = s->MaxLOD;
 
 		HRESULT hr = device->CreateSamplerState(&desc, &s->SamplerObject);
 		Assert(hr == S_OK, "failed to create sampler, hr=%x", hr);

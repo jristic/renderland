@@ -1,3 +1,4 @@
+* Expand texture format support. 
 * Specify shader parameters in the RLF and allow tuning via the imgui display.
 	* Should I fill a constant buffer declared in the shader using reflection info? or generate a global / per-dispatch constant buffer for shaders?
 * Speedup parsing with hash table lookups. All string compares must go!
@@ -9,8 +10,14 @@
 * Better way to size structured buffers.
 	* right now you have to figure out manually how big a struct would be and enter that as the ElementSize field.
 * Integrate RenderDoc capture?
-* Expand to the draw pipeline.
+**** Expand to the draw pipeline.
 * Investigate automatically reloading any time a file is updated.
 * Dynamic flow control? 
 	* Some way to only run a pass on the first frame for instance. 
 	* Some way to choose which shader to run based on some condition. 
+
+* Ignore case on keyword identifiers
+	-> convert all keyword identifiers to lowercase before comparison
+
+* Sample: Compute-generated vertex buffer for a draw
+* Sample: Shadow-sampling methods comparison. 

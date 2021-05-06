@@ -1,12 +1,14 @@
 
 Sampler {
-	Filter = Point;
-	AddressMode = Clamp;
+	Filter = { All = Point };
+	AddressMode = { U=Border, V=Mirror, W=Clamp };
+	BorderColor = { 0, 0.75, 0.5, 1 };
 } PointSampler
 
 Sampler {
-	Filter = Linear;
-	AddressMode = Clamp;
+	Filter = { Min = Linear, Mag = Linear, Mip=Linear};
+	AddressMode = { UV=Border };
+	BorderColor = { 0.8, 0.2, 0, 1 };
 } LinearSampler
 
 Texture {

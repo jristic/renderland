@@ -14,18 +14,29 @@ namespace rlf
 		Invalid,
 		BackBuffer,
 	};
-	enum class FilterMode
+	enum class Filter
 	{
-		Invalid,
 		Point,
 		Linear,
+		Aniso,
+	};
+	struct FilterMode
+	{
+		Filter Min;
+		Filter Mag;
+		Filter Mip;
 	};
 	enum class AddressMode
 	{
-		Invalid,
 		Wrap,
 		Mirror,
+		MirrorOnce,
 		Clamp,
+		Border,
+	};
+	struct AddressModeUVW
+	{
+		AddressMode U,V,W;
 	};
 	struct ComputeShader
 	{
@@ -55,7 +66,12 @@ namespace rlf
 	struct Sampler
 	{
 		FilterMode Filter;
-		AddressMode Address;
+		AddressModeUVW Address;
+		float MipLODBias;
+		u32 MaxAnisotropy;
+		float4 BorderColor;
+		float MinLOD;
+		float MaxLOD;
 		ID3D11SamplerState* SamplerObject;
 	};
 	struct Bind

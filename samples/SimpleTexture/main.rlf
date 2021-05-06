@@ -1,7 +1,7 @@
 
 Sampler {
-	Filter = Point;
-	AddressMode = Clamp;
+	Filter = { All = Point };
+	AddressMode = { UVW=Clamp };
 } PointSampler
 
 Texture {

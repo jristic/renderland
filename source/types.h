@@ -10,3 +10,7 @@ struct uint2 {
 struct uint3 {
 	u32 x,y,z;
 };
+
+struct float4 {
+	float x,y,z,w;
+};
