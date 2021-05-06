@@ -6,7 +6,6 @@ Sampler {
 
 Texture {
 	Size = {256,256};
-	InitToZero = false;
 } Tex
 
 ComputeShader {
