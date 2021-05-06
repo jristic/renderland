@@ -17,41 +17,37 @@ namespace rlf
 	orphan what it thinks is a still-existing iterator. 
 *******************************************************************************/
 
-enum Token
-{
-	TOKEN_INVALID,
-	TOKEN_LPAREN,
-	TOKEN_RPAREN,
-	TOKEN_LBRACE,
-	TOKEN_RBRACE,
-	TOKEN_COMMA,
-	TOKEN_EQUALS,
-	TOKEN_MINUS,
-	TOKEN_SEMICOLON,
-	TOKEN_AT,
-	TOKEN_INTEGER_LITERAL,
-	TOKEN_FLOAT_LITERAL,
-	TOKEN_IDENTIFIER,
-	TOKEN_STRING,
-};
+#define RLF_TOKEN_TUPLE \
+	RLF_TOKEN_ENTRY(Invalid) \
+	RLF_TOKEN_ENTRY(LParen) \
+	RLF_TOKEN_ENTRY(RParen) \
+	RLF_TOKEN_ENTRY(LBrace) \
+	RLF_TOKEN_ENTRY(RBrace) \
+	RLF_TOKEN_ENTRY(Comma) \
+	RLF_TOKEN_ENTRY(Equals) \
+	RLF_TOKEN_ENTRY(Minus) \
+	RLF_TOKEN_ENTRY(Semicolon) \
+	RLF_TOKEN_ENTRY(At) \
+	RLF_TOKEN_ENTRY(IntegerLiteral) \
+	RLF_TOKEN_ENTRY(FloatLiteral) \
+	RLF_TOKEN_ENTRY(Identifier) \
+	RLF_TOKEN_ENTRY(String) \
 
+#define RLF_TOKEN_ENTRY(name) name,
+enum class Token
+{
+	RLF_TOKEN_TUPLE
+};
+#undef RLF_TOKEN_ENTRY
+
+#define RLF_TOKEN_ENTRY(name) #name,
 const char* TokenNames[] =
 {
-	"invalid",
-	"lparen",
-	"rparen",
-	"lbrace",
-	"rbrace",
-	"comma",
-	"equals",
-	"minus",
-	"semicolon",
-	"at-sign",
-	"integer literal",
-	"float literal",
-	"identifier",
-	"string",
+	RLF_TOKEN_TUPLE
 };
+#undef RLF_TOKEN_ENTRY
+
+#undef RLF_TOKEN_TUPLE
 
 struct BufferString
 {
@@ -192,25 +188,25 @@ void ParseStateInit(ParseState* ps)
 {
 	Token* fcLUT = ps->fcLUT;
 	for (u32 fc = 0 ; fc < 128 ; ++fc)
-		fcLUT[fc] = TOKEN_INVALID;
-	fcLUT['('] = TOKEN_LPAREN;
-	fcLUT[')'] = TOKEN_RPAREN;
-	fcLUT['{'] = TOKEN_LBRACE;
-	fcLUT['}'] = TOKEN_RBRACE;
-	fcLUT[','] = TOKEN_COMMA;
-	fcLUT['='] = TOKEN_EQUALS;
-	fcLUT['-'] = TOKEN_MINUS;
-	fcLUT[';'] = TOKEN_SEMICOLON;
-	fcLUT['@'] = TOKEN_AT;
-	fcLUT['"'] = TOKEN_STRING;
+		fcLUT[fc] = Token::Invalid;
+	fcLUT['('] = Token::LParen;
+	fcLUT[')'] = Token::RParen;
+	fcLUT['{'] = Token::LBrace;
+	fcLUT['}'] = Token::RBrace;
+	fcLUT[','] = Token::Comma;
+	fcLUT['='] = Token::Equals;
+	fcLUT['-'] = Token::Minus;
+	fcLUT[';'] = Token::Semicolon;
+	fcLUT['@'] = Token::At;
+	fcLUT['"'] = Token::String;
 	for (u32 fc = 0 ; fc < 128 ; ++fc)
 	{
 		if (isalpha(fc))
-			fcLUT[fc] = TOKEN_IDENTIFIER;
+			fcLUT[fc] = Token::Identifier;
 		else if (isdigit(fc))
-			fcLUT[fc] = TOKEN_INTEGER_LITERAL;
+			fcLUT[fc] = Token::IntegerLiteral;
 	} 
-	fcLUT['_'] = TOKEN_IDENTIFIER;
+	fcLUT['_'] = Token::Identifier;
 
 	for (u32 i = 0 ; i < (u32)TextureFormat::_Count ; ++i)
 	{
@@ -234,30 +230,30 @@ Token PeekNextToken(
 
 	switch (tok)
 	{
-	case TOKEN_LPAREN:
-	case TOKEN_RPAREN:
-	case TOKEN_LBRACE:
-	case TOKEN_RBRACE:
-	case TOKEN_COMMA:
-	case TOKEN_EQUALS:
-	case TOKEN_MINUS:
-	case TOKEN_SEMICOLON:
-	case TOKEN_AT:
+	case Token::LParen:
+	case Token::RParen:
+	case Token::LBrace:
+	case Token::RBrace:
+	case Token::Comma:
+	case Token::Equals:
+	case Token::Minus:
+	case Token::Semicolon:
+	case Token::At:
 		break;
-	case TOKEN_INTEGER_LITERAL:
+	case Token::IntegerLiteral:
 		while(b.next < b.end && isdigit(*b.next)) {
 			++b.next;
 		}
 		if (b.next < b.end && *b.next == '.')
 		{
-			tok = TOKEN_FLOAT_LITERAL;
+			tok = Token::FloatLiteral;
 			++b.next;
 			while(b.next < b.end && isdigit(*b.next)) {
 				++b.next;
 			}
 		}
 		break;
-	case TOKEN_IDENTIFIER:
+	case Token::Identifier:
 		// identifiers have to start with a letter, but can contain numbers
 		while (b.next < b.end && (isalpha(*b.next) || isdigit(*b.next) || 
 			*b.next == '_')) 
@@ -265,14 +261,14 @@ Token PeekNextToken(
 			++b.next;
 		}
 		break;
-	case TOKEN_STRING:
+	case Token::String:
 		while (b.next < b.end && *b.next != '"') {
 			++b.next;
 		}
 		ParserAssert(b.next < b.end, "End-of-buffer before closing parenthesis.");
 		++b.next; // pass the closing quotes
 		break;
-	case TOKEN_INVALID:
+	case Token::Invalid:
 	default:
 		ParserError("unexpected character when parsing token: %c", firstChar);
 		break;
@@ -289,7 +285,7 @@ void ConsumeToken(
 	Token foundTok;
 	foundTok = PeekNextToken(b);
 	ParserAssert(foundTok == tok, "unexpected token, expected %s but found %s",
-		TokenNames[tok], TokenNames[foundTok]);
+		TokenNames[(u32)tok], TokenNames[(u32)foundTok]);
 }
 
 bool TryConsumeToken(
@@ -314,8 +310,8 @@ BufferString ConsumeIdentifier(
 	SkipWhitespace(b);
 	BufferIter start = b; 
 	Token tok = PeekNextToken(b);
-	ParserAssert(tok == TOKEN_IDENTIFIER, "unexpected %s (wanted identifier)", 
-		TokenNames[tok]);
+	ParserAssert(tok == Token::Identifier, "unexpected %s (wanted identifier)", 
+		TokenNames[(u32)tok]);
 
 	BufferString id;
 	id.base = start.next;
@@ -330,8 +326,8 @@ BufferString ConsumeString(
 	SkipWhitespace(b);
 	BufferIter start = b;
 	Token tok = PeekNextToken(b);
-	ParserAssert(tok == TOKEN_STRING, "unexpected %s (wanted string)", 
-		TokenNames[tok]);
+	ParserAssert(tok == Token::String, "unexpected %s (wanted string)", 
+		TokenNames[(u32)tok]);
 
 	BufferString str;
 	str.base = start.next + 1;
@@ -358,15 +354,15 @@ i32 ConsumeIntLiteral(
 {
 	SkipWhitespace(b);
 	bool negative = false;
-	if (TryConsumeToken(TOKEN_MINUS, b))
+	if (TryConsumeToken(Token::Minus, b))
 	{
 		negative = true;
 		SkipWhitespace(b);
 	}
 	BufferIter nb = b;
 	Token tok = PeekNextToken(b);
-	ParserAssert(tok == TOKEN_INTEGER_LITERAL, "unexpected %s (wanted integer literal)",
-		TokenNames[tok]);
+	ParserAssert(tok == Token::IntegerLiteral, "unexpected %s (wanted integer literal)",
+		TokenNames[(u32)tok]);
 
 	i32 val = 0;
 	do 
@@ -383,14 +379,14 @@ u32 ConsumeUintLiteral(
 	BufferIter& b)
 {
 	SkipWhitespace(b);
-	if (TryConsumeToken(TOKEN_MINUS, b))
+	if (TryConsumeToken(Token::Minus, b))
 	{
 		ParserError("Unsigned int expected, '-' invalid here");
 	}
 	BufferIter nb = b;
 	Token tok = PeekNextToken(b);
-	ParserAssert(tok == TOKEN_INTEGER_LITERAL, "unexpected %s (wanted integer literal)",
-		TokenNames[tok]);
+	ParserAssert(tok == Token::IntegerLiteral, "unexpected %s (wanted integer literal)",
+		TokenNames[(u32)tok]);
 
 	u32 val = 0;
 	do 
@@ -408,17 +404,17 @@ float ConsumeFloatLiteral(
 {
 	SkipWhitespace(b);
 	bool negative = false;
-	if (TryConsumeToken(TOKEN_MINUS, b))
+	if (TryConsumeToken(Token::Minus, b))
 	{
 		negative = true;
 		SkipWhitespace(b);
 	}
 	BufferIter nb = b;
 	Token tok = PeekNextToken(b);
-	ParserAssert(tok == TOKEN_INTEGER_LITERAL || tok == TOKEN_FLOAT_LITERAL, 
-		"unexpected %s (wanted float literal)", TokenNames[tok]);
+	ParserAssert(tok == Token::IntegerLiteral || tok == Token::FloatLiteral, 
+		"unexpected %s (wanted float literal)", TokenNames[(u32)tok]);
 
-	bool fracPart = (tok == TOKEN_FLOAT_LITERAL);
+	bool fracPart = (tok == Token::FloatLiteral);
 
 	double val = 0;
 	do 
@@ -482,11 +478,11 @@ Filter ConsumeFilter(BufferIter& b)
 FilterMode ConsumeFilterMode(BufferIter& b)
 {
 	FilterMode fm = {};
-	ConsumeToken(TOKEN_LBRACE, b);
+	ConsumeToken(Token::LBrace, b);
 	while (true)
 	{
 		BufferString fieldId = ConsumeIdentifier(b);
-		ConsumeToken(TOKEN_EQUALS, b);
+		ConsumeToken(Token::Equals, b);
 		if (fieldId == "All")
 			fm.Min = fm.Mag = fm.Mip = ConsumeFilter(b);
 		else if (fieldId == "Min")
@@ -498,10 +494,10 @@ FilterMode ConsumeFilterMode(BufferIter& b)
 		else
 			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
 
-		if (TryConsumeToken(TOKEN_RBRACE, b))
+		if (TryConsumeToken(Token::RBrace, b))
 			break;
 		else 
-			ConsumeToken(TOKEN_COMMA, b);
+			ConsumeToken(Token::Comma, b);
 	}
 	return fm;
 }
@@ -528,11 +524,11 @@ AddressMode ConsumeAddressMode(BufferIter& b)
 AddressModeUVW ConsumeAddressModeUVW(BufferIter& b)
 {
 	AddressModeUVW addr = {};
-	ConsumeToken(TOKEN_LBRACE,b);
+	ConsumeToken(Token::LBrace,b);
 	while (true)
 	{
 		BufferString fieldId = ConsumeIdentifier(b);
-		ConsumeToken(TOKEN_EQUALS, b);
+		ConsumeToken(Token::Equals, b);
 		AddressMode mode = ConsumeAddressMode(b);
 
 		ParserAssert(fieldId.len <= 3, "Invalid [U?V?W?], %.*s", fieldId.len, 
@@ -553,10 +549,10 @@ AddressModeUVW ConsumeAddressModeUVW(BufferIter& b)
 			++curr;
 		}
 
-		if (TryConsumeToken(TOKEN_RBRACE, b))
+		if (TryConsumeToken(Token::RBrace, b))
 			break;
 		else 
-			ConsumeToken(TOKEN_COMMA, b);
+			ConsumeToken(Token::Comma, b);
 	}
 	return addr;
 }
@@ -567,7 +563,7 @@ ComputeShader* ConsumeComputeShaderDef(
 {
 	RenderDescription* rd = ps.rd;
 
-	ConsumeToken(TOKEN_LBRACE, b);
+	ConsumeToken(Token::LBrace, b);
 
 	ComputeShader* cs = new ComputeShader();
 	rd->Shaders.push_back(cs);
@@ -577,13 +573,13 @@ ComputeShader* ConsumeComputeShaderDef(
 		BufferString fieldId = ConsumeIdentifier(b);
 		if (fieldId == "ShaderPath")
 		{
-			ConsumeToken(TOKEN_EQUALS, b);
+			ConsumeToken(Token::Equals, b);
 			BufferString value = ConsumeString(b);
 			cs->ShaderPath = AddStringToDescriptionData(value, rd);
 		}
 		else if (fieldId == "EntryPoint")
 		{
-			ConsumeToken(TOKEN_EQUALS, b);
+			ConsumeToken(Token::Equals, b);
 			BufferString value = ConsumeString(b);
 			cs->EntryPoint = AddStringToDescriptionData(value, rd);
 		}
@@ -592,12 +588,10 @@ ComputeShader* ConsumeComputeShaderDef(
 			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
 		}
 
-		ConsumeToken(TOKEN_SEMICOLON, b);
+		ConsumeToken(Token::Semicolon, b);
 
-		if (TryConsumeToken(TOKEN_RBRACE, b))
-		{
+		if (TryConsumeToken(Token::RBrace, b))
 			break;
-		}
 	}
 
 	return cs;
@@ -626,7 +620,7 @@ Buffer* ConsumeBufferDef(
 {
 	RenderDescription* rd = ps.rd;
 
-	ConsumeToken(TOKEN_LBRACE, b);
+	ConsumeToken(Token::LBrace, b);
 
 	Buffer* buf = new Buffer();
 	rd->Buffers.push_back(buf);
@@ -636,17 +630,17 @@ Buffer* ConsumeBufferDef(
 		BufferString fieldId = ConsumeIdentifier(b);
 		if (fieldId == "ElementSize")
 		{
-			ConsumeToken(TOKEN_EQUALS, b);
+			ConsumeToken(Token::Equals, b);
 			buf->ElementSize = ConsumeUintLiteral(b);
 		}
 		else if (fieldId == "ElementCount")
 		{
-			ConsumeToken(TOKEN_EQUALS, b);
+			ConsumeToken(Token::Equals, b);
 			buf->ElementCount = ConsumeUintLiteral(b);
 		}
 		else if (fieldId == "InitToZero")
 		{
-			ConsumeToken(TOKEN_EQUALS, b);
+			ConsumeToken(Token::Equals, b);
 			buf->InitToZero = ConsumeBool(b);
 		}
 		else
@@ -654,12 +648,10 @@ Buffer* ConsumeBufferDef(
 			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
 		}
 
-		ConsumeToken(TOKEN_SEMICOLON, b);
+		ConsumeToken(Token::Semicolon, b);
 
-		if (TryConsumeToken(TOKEN_RBRACE, b))
-		{
+		if (TryConsumeToken(Token::RBrace, b))
 			break;
-		}
 	}
 
 	return buf;
@@ -671,7 +663,7 @@ Texture* ConsumeTextureDef(
 {
 	RenderDescription* rd = ps.rd;
 
-	ConsumeToken(TOKEN_LBRACE, b);
+	ConsumeToken(Token::LBrace, b);
 
 	Texture* tex = new Texture();
 	rd->Textures.push_back(tex);
@@ -684,16 +676,16 @@ Texture* ConsumeTextureDef(
 		BufferString fieldId = ConsumeIdentifier(b);
 		if (fieldId == "Size")
 		{
-			ConsumeToken(TOKEN_EQUALS, b);
-			ConsumeToken(TOKEN_LBRACE, b);
+			ConsumeToken(Token::Equals, b);
+			ConsumeToken(Token::LBrace, b);
 			tex->Size.x = ConsumeUintLiteral(b);
-			ConsumeToken(TOKEN_COMMA, b);
+			ConsumeToken(Token::Comma, b);
 			tex->Size.y = ConsumeUintLiteral(b);
-			ConsumeToken(TOKEN_RBRACE, b);
+			ConsumeToken(Token::RBrace, b);
 		}
 		else if (fieldId == "Format")
 		{
-			ConsumeToken(TOKEN_EQUALS, b);
+			ConsumeToken(Token::Equals, b);
 			BufferString formatId = ConsumeIdentifier(b);
 			ParserAssert(ps.fmtMap.count(formatId) != 0, "Couldn't find format %.*s", 
 				formatId.len, formatId.base);
@@ -704,9 +696,9 @@ Texture* ConsumeTextureDef(
 			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
 		}
 
-		ConsumeToken(TOKEN_SEMICOLON, b);
+		ConsumeToken(Token::Semicolon, b);
 
-		if (TryConsumeToken(TOKEN_RBRACE, b))
+		if (TryConsumeToken(Token::RBrace, b))
 			break;
 	}
 
@@ -719,7 +711,7 @@ Sampler* ConsumeSamplerDef(
 {
 	RenderDescription* rd = ps.rd;
 
-	ConsumeToken(TOKEN_LBRACE, b);
+	ConsumeToken(Token::LBrace, b);
 
 	Sampler* s = new Sampler();
 	rd->Samplers.push_back(s);
@@ -735,45 +727,45 @@ Sampler* ConsumeSamplerDef(
 		BufferString fieldId = ConsumeIdentifier(b);
 		if (fieldId == "Filter")
 		{
-			ConsumeToken(TOKEN_EQUALS, b);
+			ConsumeToken(Token::Equals, b);
 			s->Filter = ConsumeFilterMode(b);
 		}
 		else if (fieldId == "AddressMode")
 		{
-			ConsumeToken(TOKEN_EQUALS, b);
+			ConsumeToken(Token::Equals, b);
 			s->Address = ConsumeAddressModeUVW(b);
 		}
 		else if (fieldId == "MipLODBias")
 		{
-			ConsumeToken(TOKEN_EQUALS, b);
+			ConsumeToken(Token::Equals, b);
 			s->MipLODBias = ConsumeFloatLiteral(b);
 		}
 		else if (fieldId == "MaxAnisotropy")
 		{
-			ConsumeToken(TOKEN_EQUALS, b);
+			ConsumeToken(Token::Equals, b);
 			s->MaxAnisotropy = ConsumeUintLiteral(b);
 		}
 		else if (fieldId == "BorderColor")
 		{
-			ConsumeToken(TOKEN_EQUALS, b);
-			ConsumeToken(TOKEN_LBRACE, b);
+			ConsumeToken(Token::Equals, b);
+			ConsumeToken(Token::LBrace, b);
 			s->BorderColor.x = ConsumeFloatLiteral(b);
-			ConsumeToken(TOKEN_COMMA, b);
+			ConsumeToken(Token::Comma, b);
 			s->BorderColor.y = ConsumeFloatLiteral(b);
-			ConsumeToken(TOKEN_COMMA, b);
+			ConsumeToken(Token::Comma, b);
 			s->BorderColor.z = ConsumeFloatLiteral(b);
-			ConsumeToken(TOKEN_COMMA, b);
+			ConsumeToken(Token::Comma, b);
 			s->BorderColor.w = ConsumeFloatLiteral(b);
-			ConsumeToken(TOKEN_RBRACE, b);
+			ConsumeToken(Token::RBrace, b);
 		}
 		else if (fieldId == "MinLOD")
 		{
-			ConsumeToken(TOKEN_EQUALS, b);
+			ConsumeToken(Token::Equals, b);
 			s->MinLOD = ConsumeFloatLiteral(b);
 		}
 		else if (fieldId == "MaxLOD")
 		{
-			ConsumeToken(TOKEN_EQUALS, b);
+			ConsumeToken(Token::Equals, b);
 			s->MaxLOD = ConsumeFloatLiteral(b);
 		}
 		else
@@ -781,12 +773,10 @@ Sampler* ConsumeSamplerDef(
 			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
 		}
 
-		ConsumeToken(TOKEN_SEMICOLON, b);
+		ConsumeToken(Token::Semicolon, b);
 
-		if (TryConsumeToken(TOKEN_RBRACE, b))
-		{
+		if (TryConsumeToken(Token::RBrace, b))
 			break;
-		}
 	}
 
 	return s;
@@ -798,7 +788,7 @@ Dispatch* ConsumeDispatchDef(
 {
 	RenderDescription* rd = ps.rd;
 
-	ConsumeToken(TOKEN_LBRACE, b);
+	ConsumeToken(Token::LBrace, b);
 
 	Dispatch* dc = new Dispatch();
 	rd->Dispatches.push_back(dc);
@@ -808,33 +798,33 @@ Dispatch* ConsumeDispatchDef(
 		BufferString fieldId = ConsumeIdentifier(b);
 		if (fieldId == "Shader")
 		{
-			ConsumeToken(TOKEN_EQUALS, b);
+			ConsumeToken(Token::Equals, b);
 			ComputeShader* cs = ConsumeComputeShaderRefOrDef(b, ps);
 			dc->Shader = cs;
 		}
 		else if (fieldId == "ThreadPerPixel")
 		{
-			ConsumeToken(TOKEN_EQUALS, b);
+			ConsumeToken(Token::Equals, b);
 			dc->ThreadPerPixel = ConsumeBool(b);
 		}
 		else if (fieldId == "Groups")
 		{
-			ConsumeToken(TOKEN_EQUALS, b);
-			ConsumeToken(TOKEN_LBRACE, b);
+			ConsumeToken(Token::Equals, b);
+			ConsumeToken(Token::LBrace, b);
 			dc->Groups.x = ConsumeUintLiteral(b);
-			ConsumeToken(TOKEN_COMMA, b);
+			ConsumeToken(Token::Comma, b);
 			dc->Groups.y = ConsumeUintLiteral(b);
-			ConsumeToken(TOKEN_COMMA, b);
+			ConsumeToken(Token::Comma, b);
 			dc->Groups.z = ConsumeUintLiteral(b);
-			ConsumeToken(TOKEN_RBRACE, b);
+			ConsumeToken(Token::RBrace, b);
 		}
 		else if (fieldId == "Bind")
 		{
 			BufferString bindName = ConsumeIdentifier(b);
-			ConsumeToken(TOKEN_EQUALS, b);
+			ConsumeToken(Token::Equals, b);
 			Bind bind;
 			bind.BindTarget = AddStringToDescriptionData(bindName, rd);
-			if (TryConsumeToken(TOKEN_AT, b))
+			if (TryConsumeToken(Token::At, b))
 			{
 				bind.Type = BindType::SystemValue;
 				bind.SystemBind = ConsumeSystemValue(b);
@@ -855,9 +845,9 @@ Dispatch* ConsumeDispatchDef(
 			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
 		}
 
-		ConsumeToken(TOKEN_SEMICOLON, b);
+		ConsumeToken(Token::Semicolon, b);
 
-		if (TryConsumeToken(TOKEN_RBRACE, b))
+		if (TryConsumeToken(Token::RBrace, b))
 			break;
 	}
 
@@ -939,20 +929,18 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 		}
 		else if (structureId == "Passes")
 		{
-			ConsumeToken(TOKEN_LBRACE, b);
+			ConsumeToken(Token::LBrace, b);
 
 			while (true)
 			{
 				Dispatch* dc = ConsumeDispatchRefOrDef(b, ps);
 				rd->Passes.push_back(dc);
 
-				if (!TryConsumeToken(TOKEN_COMMA, b))
-				{
+				if (!TryConsumeToken(Token::Comma, b))
 					break;
-				}
 			}
 
-			ConsumeToken(TOKEN_RBRACE, b);
+			ConsumeToken(Token::RBrace, b);
 		}
 		else
 		{
