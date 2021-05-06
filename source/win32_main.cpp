@@ -186,7 +186,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			ImGui::Text("DisplaySize = %u / %u", (u32)io.DisplaySize.x, (u32)io.DisplaySize.y);
 			ImGui::Text("Time = %f", time);
 			ImGui::InputText("Rlf path", Cfg.FilePath, IM_ARRAYSIZE(Cfg.FilePath));
-			if (ImGui::Button("Reload shader") || ImGui::IsKeyDown(VK_F5))
+			bool reload = ImGui::IsItemDeactivatedAfterEdit();
+			reload = ImGui::Button("Reload shader") || reload;
+			reload = ImGui::IsKeyDown(VK_F5) || reload;
+			if (reload)
 			{
 				time = 0;
 				CleanupShader();
