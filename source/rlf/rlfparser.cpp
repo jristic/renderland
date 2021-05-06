@@ -71,14 +71,11 @@ struct BufferStringHash
 {
 	size_t operator()(const BufferString& s) const
 	{
-		unsigned long h;
-		unsigned const char* us;
-		us = (unsigned const char *) s.base;
-		unsigned const char* end;
-		end = (unsigned const char *) s.base + s.len;
-		h = 0;
+		unsigned long h = 5381;
+		unsigned const char* us = (unsigned const char *) s.base;
+		unsigned const char* end = (unsigned const char *) s.base + s.len;
 		while(us < end) {
-			h = h * 97 + *us;
+			h = ((h << 5) + h) + *us;
 			us++;
 		}
 		return h; 
