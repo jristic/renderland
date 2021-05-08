@@ -142,6 +142,18 @@ struct BufferStringHash
 	}
 };
 
+u32 LowerHash(const char* str, size_t len)
+{
+	unsigned long h = 5381;
+	unsigned const char* us = (unsigned const char *) str;
+	unsigned const char* end = (unsigned const char *) str + len;
+	while(us < end) {
+		h = ((h << 5) + h) + tolower(*us);
+		us++;
+	}
+	return h; 
+}
+
 struct BufferIter
 {
 	char* next;
@@ -160,7 +172,7 @@ struct ParseState
 	};
 	std::unordered_map<BufferString, Resource, BufferStringHash> resMap;
 	std::unordered_map<BufferString, TextureFormat, BufferStringHash> fmtMap;
-	std::unordered_map<BufferString, Keyword, BufferStringHash> keyMap;
+	std::unordered_map<u32, Keyword> keyMap;
 	ParseErrorState* es;
 
 	const char* filename;
@@ -226,8 +238,9 @@ do {											\
 Keyword LookupKeyword(
 	BufferString id)
 {
-	if (GPS->keyMap.count(id) > 0)
-		return GPS->keyMap[id];
+	u32 hash = LowerHash(id.base, id.len);
+	if (GPS->keyMap.count(hash) > 0)
+		return GPS->keyMap[hash];
 	else
 		return Keyword::Invalid;
 }
@@ -276,9 +289,9 @@ void ParseStateInit(ParseState* ps)
 	{
 		Keyword key = (Keyword)i;
 		const char* str = KeywordString[i];
-		BufferString bstr = { str, strlen(str) };
-		Assert(ps->keyMap.count(bstr) == 0, "hash collision");
-		ps->keyMap[bstr] = key;
+		u32 hash = LowerHash(str, strlen(str));
+		Assert(ps->keyMap.count(hash) == 0, "hash collision");
+		ps->keyMap[hash] = key;
 	}
 }
 

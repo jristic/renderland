@@ -1,5 +1,3 @@
-* Ignore case on keyword identifiers
-	-> convert all keyword identifiers to lowercase before comparison
 * Use linear memory allocator for RenderDescription allocations. 
 
 
