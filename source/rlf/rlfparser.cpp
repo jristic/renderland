@@ -5,7 +5,7 @@ namespace rlf
 /******************************** Parser notes /********************************
 	Parse code happens entirely in a separate thread, so that we can abort at 
 	any time due to parse errors. That means the stack isn't cleaned up in 
-	case of an error, so make sure no dynamic allocations are never contained
+	case of an error, so make sure dynamic allocations are never contained
 	on the stack. Any allocations which are used for the RLF representation 
 	should be immediately recorded in the RenderDescription, which will be 
 	freed in ReleaseData. Immediately in this context means before any further
@@ -49,6 +49,66 @@ const char* TokenNames[] =
 
 #undef RLF_TOKEN_TUPLE
 
+#define RLF_KEYWORD_TUPLE \
+	RLF_KEYWORD_ENTRY(ComputeShader) \
+	RLF_KEYWORD_ENTRY(Buffer) \
+	RLF_KEYWORD_ENTRY(Texture) \
+	RLF_KEYWORD_ENTRY(Sampler) \
+	RLF_KEYWORD_ENTRY(Dispatch) \
+	RLF_KEYWORD_ENTRY(Passes) \
+	RLF_KEYWORD_ENTRY(BackBuffer) \
+	RLF_KEYWORD_ENTRY(Point) \
+	RLF_KEYWORD_ENTRY(Linear) \
+	RLF_KEYWORD_ENTRY(Aniso) \
+	RLF_KEYWORD_ENTRY(All) \
+	RLF_KEYWORD_ENTRY(Min) \
+	RLF_KEYWORD_ENTRY(Mag) \
+	RLF_KEYWORD_ENTRY(Mip) \
+	RLF_KEYWORD_ENTRY(Wrap) \
+	RLF_KEYWORD_ENTRY(Mirror) \
+	RLF_KEYWORD_ENTRY(MirrorOnce) \
+	RLF_KEYWORD_ENTRY(Clamp) \
+	RLF_KEYWORD_ENTRY(Border) \
+	RLF_KEYWORD_ENTRY(ShaderPath) \
+	RLF_KEYWORD_ENTRY(EntryPoint) \
+	RLF_KEYWORD_ENTRY(ElementSize) \
+	RLF_KEYWORD_ENTRY(ElementCount) \
+	RLF_KEYWORD_ENTRY(InitToZero) \
+	RLF_KEYWORD_ENTRY(Size) \
+	RLF_KEYWORD_ENTRY(Format) \
+	RLF_KEYWORD_ENTRY(Filter) \
+	RLF_KEYWORD_ENTRY(AddressMode) \
+	RLF_KEYWORD_ENTRY(MipLODBias) \
+	RLF_KEYWORD_ENTRY(MaxAnisotropy) \
+	RLF_KEYWORD_ENTRY(BorderColor) \
+	RLF_KEYWORD_ENTRY(MinLOD) \
+	RLF_KEYWORD_ENTRY(MaxLOD) \
+	RLF_KEYWORD_ENTRY(Shader) \
+	RLF_KEYWORD_ENTRY(ThreadPerPixel) \
+	RLF_KEYWORD_ENTRY(Groups) \
+	RLF_KEYWORD_ENTRY(Bind) \
+	RLF_KEYWORD_ENTRY(True) \
+	RLF_KEYWORD_ENTRY(False) \
+
+#define RLF_KEYWORD_ENTRY(name) name,
+enum class Keyword
+{
+	Invalid,
+	RLF_KEYWORD_TUPLE
+	_Count
+};
+#undef RLF_KEYWORD_ENTRY
+
+#define RLF_KEYWORD_ENTRY(name) #name,
+const char* KeywordString[] = 
+{
+	"<Invalid>",
+	RLF_KEYWORD_TUPLE
+};
+#undef RLF_KEYWORD_ENTRY
+
+#undef RLF_KEYWORD_TUPLE
+
 struct BufferString
 {
 	const char* base;
@@ -88,16 +148,6 @@ struct BufferIter
 	char* end;
 };
 
-bool operator==(const BufferString id, const char* string)
-{
-	if (id.len != strlen(string))
-		return false;
-	for (int i = 0 ; i < id.len ; ++i)
-		if (id.base[i] != string[i])
-			return false;
-	return true;
-}
-
 struct ParseState 
 {
 	BufferIter b;
@@ -110,6 +160,7 @@ struct ParseState
 	};
 	std::unordered_map<BufferString, Resource, BufferStringHash> resMap;
 	std::unordered_map<BufferString, TextureFormat, BufferStringHash> fmtMap;
+	std::unordered_map<BufferString, Keyword, BufferStringHash> keyMap;
 	ParseErrorState* es;
 
 	const char* filename;
@@ -172,6 +223,14 @@ do {											\
 	}											\
 } while (0);									\
 
+Keyword LookupKeyword(
+	BufferString id)
+{
+	if (GPS->keyMap.count(id) > 0)
+		return GPS->keyMap[id];
+	else
+		return Keyword::Invalid;
+}
 
 void SkipWhitespace(
 	BufferIter& b)
@@ -212,6 +271,14 @@ void ParseStateInit(ParseState* ps)
 		BufferString bstr = { str, strlen(str) };
 		Assert(ps->fmtMap.count(bstr) == 0, "hash collision");
 		ps->fmtMap[bstr] = fmt;
+	}
+	for (u32 i = 0 ; i < (u32)Keyword::_Count ; ++i)
+	{
+		Keyword key = (Keyword)i;
+		const char* str = KeywordString[i];
+		BufferString bstr = { str, strlen(str) };
+		Assert(ps->keyMap.count(bstr) == 0, "hash collision");
+		ps->keyMap[bstr] = key;
 	}
 }
 
@@ -337,9 +404,10 @@ bool ConsumeBool(
 	BufferIter& b)
 {
 	BufferString value = ConsumeIdentifier(b);
-	if (value == "true")
+	Keyword key = LookupKeyword(value);
+	if (key == Keyword::True)
 		return true;
-	else if (value == "false")
+	else if (key == Keyword::False)
 		return false;
 
 	ParserError("expected bool (true/false), got: %.*s", value.len, value.base);
@@ -449,7 +517,7 @@ const char* AddStringToDescriptionData(BufferString str, RenderDescription* rd)
 SystemValue ConsumeSystemValue(BufferIter& b)
 {
 	BufferString sysId = ConsumeIdentifier(b);
-	if (sysId == "BackBuffer")
+	if (LookupKeyword(sysId) == Keyword::BackBuffer)
 	{
 		return SystemValue::BackBuffer;
 	}
@@ -461,14 +529,21 @@ Filter ConsumeFilter(BufferIter& b)
 {
 	Filter f = Filter::Point;
 	BufferString filterId = ConsumeIdentifier(b);
-	if (filterId == "Point")
+	Keyword key = LookupKeyword(filterId);
+	switch (key)
+	{
+	case Keyword::Point:
 		f = Filter::Point;
-	else if (filterId == "Linear")
+		break;
+	case Keyword::Linear:
 		f = Filter::Linear;
-	else if (filterId == "Aniso")
+		break;
+	case Keyword::Aniso:
 		f = Filter::Aniso;
-	else
+		break;
+	default:
 		ParserError("unexpected filter %.*s", filterId.len, filterId.base);
+	}
 	return f;
 }
 
@@ -480,16 +555,24 @@ FilterMode ConsumeFilterMode(BufferIter& b)
 	{
 		BufferString fieldId = ConsumeIdentifier(b);
 		ConsumeToken(Token::Equals, b);
-		if (fieldId == "All")
+		Keyword key = LookupKeyword(fieldId);
+		switch (key)
+		{
+		case Keyword::All:
 			fm.Min = fm.Mag = fm.Mip = ConsumeFilter(b);
-		else if (fieldId == "Min")
+			break;
+		case Keyword::Min:
 			fm.Min = ConsumeFilter(b);
-		else if (fieldId == "Mag")
+			break;
+		case Keyword::Mag:
 			fm.Mag = ConsumeFilter(b);
-		else if (fieldId == "Mip")
+			break;
+		case Keyword::Mip:
 			fm.Mip = ConsumeFilter(b);
-		else
+			break;
+		default:
 			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+		}
 
 		if (TryConsumeToken(Token::RBrace, b))
 			break;
@@ -503,18 +586,27 @@ AddressMode ConsumeAddressMode(BufferIter& b)
 {
 	AddressMode addr = AddressMode::Wrap;
 	BufferString adrId = ConsumeIdentifier(b);
-	if (adrId == "Wrap")
+	Keyword key = LookupKeyword(adrId);
+	switch (key)
+	{
+	case Keyword::Wrap:
 		addr = AddressMode::Wrap;
-	else if (adrId == "Mirror")
+		break;
+	case Keyword::Mirror:
 		addr = AddressMode::Mirror;
-	else if (adrId == "MirrorOnce")
+		break;
+	case Keyword::MirrorOnce:
 		addr = AddressMode::MirrorOnce;
-	else if (adrId == "Clamp")
+		break;
+	case Keyword::Clamp:
 		addr = AddressMode::Clamp;
-	else if (adrId == "Border")
+		break;
+	case Keyword::Border:
 		addr = AddressMode::Border;
-	else
+		break;
+	default:
 		ParserError("unexpected address mode %.*s", adrId.len, adrId.base);
+	}
 	return addr;
 }
 
@@ -568,13 +660,14 @@ ComputeShader* ConsumeComputeShaderDef(
 	while (true)
 	{
 		BufferString fieldId = ConsumeIdentifier(b);
-		if (fieldId == "ShaderPath")
+		Keyword key = LookupKeyword(fieldId);
+		if (key == Keyword::ShaderPath)
 		{
 			ConsumeToken(Token::Equals, b);
 			BufferString value = ConsumeString(b);
 			cs->ShaderPath = AddStringToDescriptionData(value, rd);
 		}
-		else if (fieldId == "EntryPoint")
+		else if (key == Keyword::EntryPoint)
 		{
 			ConsumeToken(Token::Equals, b);
 			BufferString value = ConsumeString(b);
@@ -599,7 +692,8 @@ ComputeShader* ConsumeComputeShaderRefOrDef(
 	ParseState& ps)
 {
 	BufferString id = ConsumeIdentifier(b);
-	if (id == "ComputeShader")
+	Keyword key = LookupKeyword(id);
+	if (key == Keyword::ComputeShader)
 	{
 		return ConsumeComputeShaderDef(b, ps);
 	}
@@ -625,23 +719,28 @@ Buffer* ConsumeBufferDef(
 	while (true)
 	{
 		BufferString fieldId = ConsumeIdentifier(b);
-		if (fieldId == "ElementSize")
+		Keyword key = LookupKeyword(fieldId);
+		switch (key)
+		{
+		case Keyword::ElementSize:
 		{
 			ConsumeToken(Token::Equals, b);
 			buf->ElementSize = ConsumeUintLiteral(b);
+			break;
 		}
-		else if (fieldId == "ElementCount")
+		case Keyword::ElementCount:
 		{
 			ConsumeToken(Token::Equals, b);
 			buf->ElementCount = ConsumeUintLiteral(b);
+			break;
 		}
-		else if (fieldId == "InitToZero")
+		case Keyword::InitToZero:
 		{
 			ConsumeToken(Token::Equals, b);
 			buf->InitToZero = ConsumeBool(b);
+			break;
 		}
-		else
-		{
+		default:
 			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
 		}
 
@@ -671,7 +770,10 @@ Texture* ConsumeTextureDef(
 	while (true)
 	{
 		BufferString fieldId = ConsumeIdentifier(b);
-		if (fieldId == "Size")
+		Keyword key = LookupKeyword(fieldId);
+		switch (key)
+		{
+		case Keyword::Size:
 		{
 			ConsumeToken(Token::Equals, b);
 			ConsumeToken(Token::LBrace, b);
@@ -679,17 +781,18 @@ Texture* ConsumeTextureDef(
 			ConsumeToken(Token::Comma, b);
 			tex->Size.y = ConsumeUintLiteral(b);
 			ConsumeToken(Token::RBrace, b);
+			break;
 		}
-		else if (fieldId == "Format")
+		case Keyword::Format:
 		{
 			ConsumeToken(Token::Equals, b);
 			BufferString formatId = ConsumeIdentifier(b);
 			ParserAssert(ps.fmtMap.count(formatId) != 0, "Couldn't find format %.*s", 
 				formatId.len, formatId.base);
 			tex->Format = ps.fmtMap[formatId];
+			break;
 		}
-		else
-		{
+		default:
 			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
 		}
 
@@ -722,27 +825,34 @@ Sampler* ConsumeSamplerDef(
 	while (true)
 	{
 		BufferString fieldId = ConsumeIdentifier(b);
-		if (fieldId == "Filter")
+		Keyword key = LookupKeyword(fieldId);
+		switch (key)
+		{
+		case Keyword::Filter:
 		{
 			ConsumeToken(Token::Equals, b);
 			s->Filter = ConsumeFilterMode(b);
+			break;
 		}
-		else if (fieldId == "AddressMode")
+		case Keyword::AddressMode:
 		{
 			ConsumeToken(Token::Equals, b);
 			s->Address = ConsumeAddressModeUVW(b);
+			break;
 		}
-		else if (fieldId == "MipLODBias")
+		case Keyword::MipLODBias:
 		{
 			ConsumeToken(Token::Equals, b);
 			s->MipLODBias = ConsumeFloatLiteral(b);
+			break;
 		}
-		else if (fieldId == "MaxAnisotropy")
+		case Keyword::MaxAnisotropy:
 		{
 			ConsumeToken(Token::Equals, b);
 			s->MaxAnisotropy = ConsumeUintLiteral(b);
+			break;
 		}
-		else if (fieldId == "BorderColor")
+		case Keyword::BorderColor:
 		{
 			ConsumeToken(Token::Equals, b);
 			ConsumeToken(Token::LBrace, b);
@@ -754,19 +864,21 @@ Sampler* ConsumeSamplerDef(
 			ConsumeToken(Token::Comma, b);
 			s->BorderColor.w = ConsumeFloatLiteral(b);
 			ConsumeToken(Token::RBrace, b);
+			break;
 		}
-		else if (fieldId == "MinLOD")
+		case Keyword::MinLOD:
 		{
 			ConsumeToken(Token::Equals, b);
 			s->MinLOD = ConsumeFloatLiteral(b);
+			break;
 		}
-		else if (fieldId == "MaxLOD")
+		case Keyword::MaxLOD:
 		{
 			ConsumeToken(Token::Equals, b);
 			s->MaxLOD = ConsumeFloatLiteral(b);
+			break;
 		}
-		else
-		{
+		default:
 			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
 		}
 
@@ -793,18 +905,22 @@ Dispatch* ConsumeDispatchDef(
 	while (true)
 	{
 		BufferString fieldId = ConsumeIdentifier(b);
-		if (fieldId == "Shader")
+		switch (LookupKeyword(fieldId))
+		{
+		case Keyword::Shader:
 		{
 			ConsumeToken(Token::Equals, b);
 			ComputeShader* cs = ConsumeComputeShaderRefOrDef(b, ps);
 			dc->Shader = cs;
+			break;
 		}
-		else if (fieldId == "ThreadPerPixel")
+		case Keyword::ThreadPerPixel:
 		{
 			ConsumeToken(Token::Equals, b);
 			dc->ThreadPerPixel = ConsumeBool(b);
+			break;
 		}
-		else if (fieldId == "Groups")
+		case Keyword::Groups:
 		{
 			ConsumeToken(Token::Equals, b);
 			ConsumeToken(Token::LBrace, b);
@@ -814,8 +930,9 @@ Dispatch* ConsumeDispatchDef(
 			ConsumeToken(Token::Comma, b);
 			dc->Groups.z = ConsumeUintLiteral(b);
 			ConsumeToken(Token::RBrace, b);
+			break;
 		}
-		else if (fieldId == "Bind")
+		case Keyword::Bind:
 		{
 			BufferString bindName = ConsumeIdentifier(b);
 			ConsumeToken(Token::Equals, b);
@@ -836,9 +953,9 @@ Dispatch* ConsumeDispatchDef(
 				bind.BufferBind = reinterpret_cast<Buffer*>(res.m);
 			}
 			dc->Binds.push_back(bind);
+			break;
 		}
-		else
-		{
+		default:
 			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
 		}
 
@@ -856,7 +973,8 @@ Dispatch* ConsumeDispatchRefOrDef(
 	ParseState& ps)
 {
 	BufferString id = ConsumeIdentifier(b);
-	if (id == "Dispatch")
+	Keyword key = LookupKeyword(id);
+	if (key == Keyword::Dispatch)
 	{
 		return ConsumeDispatchDef(b, ps);
 	}
@@ -876,17 +994,21 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 
 	while (b.next != b.end)
 	{
-		BufferString structureId = ConsumeIdentifier(b);
+		BufferString id = ConsumeIdentifier(b);
+		Keyword key = LookupKeyword(id);
 
-		if (structureId == "ComputeShader")
+		switch (key)
+		{
+		case Keyword::ComputeShader:
 		{
 			ComputeShader* cs = ConsumeComputeShaderDef(b, ps);
 			BufferString nameId = ConsumeIdentifier(b);
 			ParserAssert(ps.shaderMap.count(nameId) == 0, "Shader %.*s already defined", 
 				nameId.len, nameId.base);
 			ps.shaderMap[nameId] = cs;
+			break;
 		}
-		else if (structureId == "Buffer")
+		case Keyword::Buffer:
 		{
 			Buffer* buf = ConsumeBufferDef(b, ps);
 			BufferString nameId = ConsumeIdentifier(b);
@@ -895,8 +1017,9 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 			ParseState::Resource& res = ps.resMap[nameId];
 			res.type = BindType::Buffer;
 			res.m = buf;
+			break;
 		}
-		else if (structureId == "Texture")
+		case Keyword::Texture:
 		{
 			Texture* tex = ConsumeTextureDef(b,ps);
 			BufferString nameId = ConsumeIdentifier(b);
@@ -905,8 +1028,9 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 			ParseState::Resource& res = ps.resMap[nameId];
 			res.type = BindType::Texture;
 			res.m = tex;
+			break;
 		}
-		else if (structureId == "Sampler")
+		case Keyword::Sampler:
 		{
 			Sampler* s = ConsumeSamplerDef(b,ps);
 			BufferString nameId = ConsumeIdentifier(b);
@@ -915,16 +1039,18 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 			ParseState::Resource& res = ps.resMap[nameId];
 			res.type = BindType::Sampler;
 			res.m = s;
+			break;
 		}
-		else if (structureId == "Dispatch")
+		case Keyword::Dispatch:
 		{
 			Dispatch* dc = ConsumeDispatchDef(b, ps);
 			BufferString nameId = ConsumeIdentifier(b);
 			ParserAssert(ps.dcMap.count(nameId) == 0, "Dispatch %.*s already defined", 
 				nameId.len, nameId.base);
 			ps.dcMap[nameId] = dc;
+			break;
 		}
-		else if (structureId == "Passes")
+		case Keyword::Passes:
 		{
 			ConsumeToken(Token::LBrace, b);
 
@@ -938,11 +1064,10 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 			}
 
 			ConsumeToken(Token::RBrace, b);
+			break;
 		}
-		else
-		{
-			ParserError("Unexpected structure: %.*s", structureId.len, 
-				structureId.base);
+		default:
+			ParserError("Unexpected structure: %.*s", id.len, id.base);
 		}
 
 		// Skip trailing whitespace so we don't miss the exit condition for this loop. 

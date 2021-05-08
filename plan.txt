@@ -1,8 +1,6 @@
-* Speedup parsing with hash table lookups. All string compares must go!
 * Ignore case on keyword identifiers
 	-> convert all keyword identifiers to lowercase before comparison
 * Use linear memory allocator for RenderDescription allocations. 
-* Implement the include handler for shader compilation. 
 
 
 * Defines that are usable within the RLF and shader. 
@@ -30,3 +28,4 @@
 * Sample: Compute-generated vertex buffer for a draw
 * Sample: Shadow-sampling methods comparison. 
 * Sample: Clustered lighting.
+* Sample: Compute-based culling with draw-indirect.
