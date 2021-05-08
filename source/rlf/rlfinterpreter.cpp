@@ -78,7 +78,8 @@ void InitD3D(
 		ID3DBlob* shaderBlob;
 		ID3DBlob* errorBlob;
 		HRESULT hr = D3DCompile(shaderBuffer, shaderSize, shaderPath.c_str(), NULL,
-			NULL, cs->EntryPoint, "cs_5_0", D3DCOMPILE_DEBUG, 0, &shaderBlob, &errorBlob);
+			D3D_COMPILE_STANDARD_FILE_INCLUDE, cs->EntryPoint, "cs_5_0", D3DCOMPILE_DEBUG, 
+			0, &shaderBlob, &errorBlob);
 		Assert(hr == S_OK || hr == E_FAIL, "failed to compile shader hr=%x", hr);
 
 		free(shaderBuffer);
