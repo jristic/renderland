@@ -44,6 +44,57 @@ D3D11_TEXTURE_ADDRESS_MODE RlfToD3d(AddressMode m)
 	return modes[(u32)m];
 }
 
+ID3DBlob* CommonCompileShader(const char* path, const char* profile, 
+	const char * entry, InitErrorState* errorState)
+{
+	HANDLE shader = fileio::OpenFileOptional(path, GENERIC_READ);
+
+	if (shader == INVALID_HANDLE_VALUE) // file not found
+	{
+		errorState->InitSuccess = false;
+		errorState->ErrorMessage = std::string("Couldn't find shader file: ") + 
+			path;
+		return nullptr;
+	}
+
+	u32 shaderSize = fileio::GetFileSize(shader);
+
+	char* shaderBuffer = (char*)malloc(shaderSize);
+	Assert(shaderBuffer != nullptr, "failed to alloc");
+
+	fileio::ReadFile(shader, shaderBuffer, shaderSize);
+
+	CloseHandle(shader);
+
+	ID3DBlob* shaderBlob;
+	ID3DBlob* errorBlob;
+	HRESULT hr = D3DCompile(shaderBuffer, shaderSize, path, NULL,
+		D3D_COMPILE_STANDARD_FILE_INCLUDE, entry, profile, D3DCOMPILE_DEBUG, 
+		0, &shaderBlob, &errorBlob);
+	Assert(hr == S_OK || hr == E_FAIL, "failed to compile shader hr=%x", hr);
+
+	free(shaderBuffer);
+
+	errorState->InitSuccess = (hr == S_OK);
+
+	if (!errorState->InitSuccess)
+	{
+		Assert(errorBlob != nullptr, "no error info given");
+		char* errorText = (char*)errorBlob->GetBufferPointer();
+		errorState->ErrorMessage = std::string("Failed to compile shader:\n") +
+			errorText;
+
+		Assert(shaderBlob == nullptr, "leak");
+
+		SafeRelease(errorBlob);
+
+		return nullptr;
+	}
+
+	Assert(errorBlob == nullptr, "leak");
+	return shaderBlob;
+}
+
 void InitD3D(
 	ID3D11Device* device,
 	RenderDescription* rd,
@@ -51,69 +102,80 @@ void InitD3D(
 	InitErrorState* errorState)
 {
 	std::string dirPath = workingDirectory;
+	errorState->InitSuccess = true;
 
-	for (ComputeShader* cs : rd->Shaders)
+	for (ComputeShader* cs : rd->CShaders)
 	{
 		std::string shaderPath = dirPath + cs->ShaderPath;
+		ID3DBlob* shaderBlob = CommonCompileShader(shaderPath.c_str(), "cs_5_0", 
+			cs->EntryPoint, errorState);
 
-		HANDLE shader = fileio::OpenFileOptional(shaderPath.c_str(), GENERIC_READ);
-
-		if (shader == INVALID_HANDLE_VALUE) // file not found
+		if (errorState->InitSuccess == false)
 		{
-			errorState->InitSuccess = false;
-			errorState->ErrorMessage = std::string("Couldn't find shader file: ") + 
-				shaderPath.c_str();
-			return;
-		}
-
-		u32 shaderSize = fileio::GetFileSize(shader);
-
-		char* shaderBuffer = (char*)malloc(shaderSize);
-		Assert(shaderBuffer != nullptr, "failed to alloc");
-
-		fileio::ReadFile(shader, shaderBuffer, shaderSize);
-
-		CloseHandle(shader);
-
-		ID3DBlob* shaderBlob;
-		ID3DBlob* errorBlob;
-		HRESULT hr = D3DCompile(shaderBuffer, shaderSize, shaderPath.c_str(), NULL,
-			D3D_COMPILE_STANDARD_FILE_INCLUDE, cs->EntryPoint, "cs_5_0", D3DCOMPILE_DEBUG, 
-			0, &shaderBlob, &errorBlob);
-		Assert(hr == S_OK || hr == E_FAIL, "failed to compile shader hr=%x", hr);
-
-		free(shaderBuffer);
-
-		errorState->InitSuccess = (hr == S_OK);
-
-		if (!errorState->InitSuccess)
-		{
-			Assert(errorBlob != nullptr, "no error info given");
-			char* errorText = (char*)errorBlob->GetBufferPointer();
-			errorState->ErrorMessage = std::string("Failed to compile shader:\n") +
-				errorText;
-
 			Assert(shaderBlob == nullptr, "leak");
-
-			SafeRelease(errorBlob);
-
 			return;
 		}
 
-		hr = device->CreateComputeShader(shaderBlob->GetBufferPointer(), 
+		HRESULT hr = device->CreateComputeShader(shaderBlob->GetBufferPointer(), 
 			shaderBlob->GetBufferSize(), NULL, &cs->ShaderObject);
 		Assert(hr == S_OK, "Failed to create shader, hr=%x", hr);
 
 		hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
-            IID_ID3D11ShaderReflection, (void**) &cs->Reflector);
+			IID_ID3D11ShaderReflection, (void**) &cs->Reflector);
 		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
 
 		cs->Reflector->GetThreadGroupSize(&cs->ThreadGroupSize.x, &cs->ThreadGroupSize.y,
 			&cs->ThreadGroupSize.z);
 
 		SafeRelease(shaderBlob);
-		SafeRelease(errorBlob);
 	}
+
+	for (VertexShader* vs : rd->VShaders)
+	{
+		std::string shaderPath = dirPath + vs->ShaderPath;
+		ID3DBlob* shaderBlob = CommonCompileShader(shaderPath.c_str(), "vs_5_0", 
+			vs->EntryPoint, errorState);
+
+		if (errorState->InitSuccess == false)
+		{
+			Assert(shaderBlob == nullptr, "leak");
+			return;
+		}
+
+		HRESULT hr = device->CreateVertexShader(shaderBlob->GetBufferPointer(), 
+			shaderBlob->GetBufferSize(), NULL, &vs->ShaderObject);
+		Assert(hr == S_OK, "Failed to create shader, hr=%x", hr);
+
+		hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
+			IID_ID3D11ShaderReflection, (void**) &vs->Reflector);
+		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
+
+		SafeRelease(shaderBlob);
+	}
+
+	for (PixelShader* ps : rd->PShaders)
+	{
+		std::string shaderPath = dirPath + ps->ShaderPath;
+		ID3DBlob* shaderBlob = CommonCompileShader(shaderPath.c_str(), "ps_5_0", 
+			ps->EntryPoint, errorState);
+
+		if (errorState->InitSuccess == false)
+		{
+			Assert(shaderBlob == nullptr, "leak");
+			return;
+		}
+
+		HRESULT hr = device->CreatePixelShader(shaderBlob->GetBufferPointer(), 
+			shaderBlob->GetBufferSize(), NULL, &ps->ShaderObject);
+		Assert(hr == S_OK, "Failed to create shader, hr=%x", hr);
+
+		hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
+			IID_ID3D11ShaderReflection, (void**) &ps->Reflector);
+		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
+
+		SafeRelease(shaderBlob);
+	}
+
 
 	for (Dispatch* dc : rd->Dispatches)
 	{
@@ -241,10 +303,20 @@ void InitD3D(
 void ReleaseD3D(
 	RenderDescription* rd)
 {
-	for (ComputeShader* cs : rd->Shaders)
+	for (ComputeShader* cs : rd->CShaders)
 	{
 		SafeRelease(cs->ShaderObject);
 		SafeRelease(cs->Reflector);
+	}
+	for (VertexShader* vs : rd->VShaders)
+	{
+		SafeRelease(vs->ShaderObject);
+		SafeRelease(vs->Reflector);
+	}
+	for (PixelShader* ps : rd->PShaders)
+	{
+		SafeRelease(ps->ShaderObject);
+		SafeRelease(ps->Reflector);
 	}
 
 	for (Buffer* buf : rd->Buffers)
@@ -267,14 +339,90 @@ void ReleaseD3D(
 	}
 }
 
+void ExecuteDispatch(
+	Dispatch* dc,
+	ExecuteContext* ec)
+{
+	ID3D11DeviceContext* ctx = ec->D3dCtx;
+	UINT initialCount = (UINT)-1;
+	ctx->CSSetShader(dc->Shader->ShaderObject, nullptr, 0);
+	ctx->CSSetConstantBuffers(0, 1, &ec->GlobalConstantBuffer);
+	for (Bind& bind : dc->Binds)
+	{
+		switch (bind.Type)
+		{
+		case BindType::SystemValue:
+			if (bind.SystemBind == SystemValue::BackBuffer)
+				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &ec->MainRtUav, 
+					&initialCount);
+			else
+				Assert(false, "unhandled");
+			break;
+		case BindType::Buffer:
+			if (bind.IsOutput)
+				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &bind.BufferBind->UAV, 
+					&initialCount);
+			else
+				ctx->CSSetShaderResources(bind.BindIndex, 1, &bind.BufferBind->SRV);
+			break;
+		case BindType::Texture:
+			if (bind.IsOutput)
+				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &bind.TextureBind->UAV, 
+					&initialCount);
+			else
+				ctx->CSSetShaderResources(bind.BindIndex, 1, &bind.TextureBind->SRV);
+			break;
+		case BindType::Sampler:
+			ctx->CSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->SamplerObject);
+			break;
+		default:
+			Assert(false, "invalid type %d", bind.Type);
+		}
+	}
+	uint3 groups = dc->Groups;
+	if (dc->ThreadPerPixel)
+	{
+		uint3 tgs = dc->Shader->ThreadGroupSize;
+		groups.x = (u32)((ec->DisplaySize.x - 1) / tgs.x) + 1;
+		groups.y = (u32)((ec->DisplaySize.y - 1) / tgs.y) + 1;
+		groups.z = 1;
+	}
+
+	ctx->Dispatch(groups.x, groups.y, groups.z);
+}
+
+void ExecuteDraw(
+	Draw* draw,
+	ExecuteContext* ec)
+{
+	ID3D11DeviceContext* ctx = ec->D3dCtx;
+	ctx->VSSetShader(draw->VShader->ShaderObject, nullptr, 0);
+	ctx->PSSetShader(draw->PShader->ShaderObject, nullptr, 0);
+	ctx->VSSetConstantBuffers(0, 1, &ec->GlobalConstantBuffer);
+	ctx->PSSetConstantBuffers(0, 1, &ec->GlobalConstantBuffer);
+	ID3D11RenderTargetView* rtViews[8] = {};
+	if (draw->RenderTarget == SystemValue::BackBuffer)
+		rtViews[0] = ec->MainRtv;
+	else 
+		Unimplemented();
+	ctx->OMSetRenderTargets(8, rtViews, nullptr);
+	ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    D3D11_VIEWPORT vp = {};
+    vp.Width = (float)ec->DisplaySize.x;
+    vp.Height = (float)ec->DisplaySize.y;
+    vp.MinDepth = 0.0f;
+    vp.MaxDepth = 1.0f;
+    vp.TopLeftX = vp.TopLeftY = 0;
+    ctx->RSSetViewports(1, &vp);
+	ctx->Draw(draw->VertexCount, 0);
+}
+
 void Execute(
-	ExecuteContext* context,
+	ExecuteContext* ec,
 	RenderDescription* rd)
 {
-	ID3D11DeviceContext* ctx = context->D3dCtx;
-	float time = context->Time;
-
-	ImGuiIO& io = ImGui::GetIO();
+	ID3D11DeviceContext* ctx = ec->D3dCtx;
+	float time = ec->Time;
 
 	// Clear state so we aren't polluted by previous program drawing or previous 
 	//	execution. 
@@ -289,74 +437,32 @@ void Execute(
 	};
 
 	// Update constant buffer
-	ID3D11Buffer* constBuffer = context->GlobalConstantBuffer;
 	{
 		D3D11_MAPPED_SUBRESOURCE mapped_resource;
-		HRESULT hr = ctx->Map(constBuffer, 0, D3D11_MAP_WRITE_DISCARD, 
+		HRESULT hr = ctx->Map(ec->GlobalConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 
 			0, &mapped_resource);
 		Assert(hr == S_OK, "failed to map CB hr=%x", hr);
 		ConstantBuffer* cb = (ConstantBuffer*)mapped_resource.pData;
-		cb->DisplaySizeX = io.DisplaySize.x;
-		cb->DisplaySizeY = io.DisplaySize.y;
+		cb->DisplaySizeX = (float)ec->DisplaySize.x;
+		cb->DisplaySizeY = (float)ec->DisplaySize.y;
 		cb->Time = time;
-		ctx->Unmap(constBuffer, 0);
+		ctx->Unmap(ec->GlobalConstantBuffer, 0);
 	}
 
-	UINT initialCount = (UINT)-1;
-	for (Dispatch* dc : rd->Passes)
+	for (Pass pass : rd->Passes)
 	{
-		ctx->CSSetShader(dc->Shader->ShaderObject, nullptr, 0);
-		ctx->CSSetConstantBuffers(0, 1, &constBuffer);
-		for (Bind& bind : dc->Binds)
+		if (pass.Type == PassType::Dispatch)
 		{
-			switch (bind.Type)
-			{
-			case BindType::SystemValue:
-				if (bind.SystemBind == SystemValue::BackBuffer)
-					ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &context->MainRtUav, 
-						&initialCount);
-				else
-					Assert(false, "unhandled");
-				break;
-			case BindType::Buffer:
-				if (bind.IsOutput)
-				{
-					ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &bind.BufferBind->UAV, 
-						&initialCount);
-				}
-				else
-				{
-					ctx->CSSetShaderResources(bind.BindIndex, 1, &bind.BufferBind->SRV);
-				}
-				break;
-			case BindType::Texture:
-				if (bind.IsOutput)
-				{
-					ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &bind.TextureBind->UAV, 
-						&initialCount);
-				}
-				else
-				{
-					ctx->CSSetShaderResources(bind.BindIndex, 1, &bind.TextureBind->SRV);
-				}
-				break;
-			case BindType::Sampler:
-				ctx->CSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->SamplerObject);
-				break;
-			default:
-				Assert(false, "invalid type %d", bind.Type);
-			}
+			ExecuteDispatch(pass.Dispatch, ec);
 		}
-		uint3 groups = dc->Groups;
-		if (dc->ThreadPerPixel)
+		else if (pass.Type == PassType::Draw)
 		{
-			uint3 tgs = dc->Shader->ThreadGroupSize;
-			groups.x = (u32)((io.DisplaySize.x - 1) / tgs.x) + 1;
-			groups.y = (u32)((io.DisplaySize.y - 1) / tgs.y) + 1;
-			groups.z = 1;
+			ExecuteDraw(pass.Draw, ec);
 		}
-
-		ctx->Dispatch(groups.x, groups.y, groups.z);
+		else
+		{
+			Unimplemented();
+		}
 	}
 
 	// Clear state after execution so we don't pollute the rest of program drawing. 

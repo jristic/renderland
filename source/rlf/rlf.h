@@ -11,6 +11,11 @@ namespace rlf
 		Texture,
 		Sampler,
 	};
+	enum class PassType
+	{
+		Draw,
+		Dispatch,
+	};
 	enum class SystemValue
 	{
 		Invalid,
@@ -47,6 +52,20 @@ namespace rlf
 		ID3D11ComputeShader* ShaderObject;
 		ID3D11ShaderReflection* Reflector;
 		uint3 ThreadGroupSize;
+	};
+	struct VertexShader
+	{
+		const char* ShaderPath;
+		const char* EntryPoint;
+		ID3D11VertexShader* ShaderObject;
+		ID3D11ShaderReflection* Reflector;
+	};
+	struct PixelShader
+	{
+		const char* ShaderPath;
+		const char* EntryPoint;
+		ID3D11PixelShader* ShaderObject;
+		ID3D11ShaderReflection* Reflector;
 	};
 	struct Buffer
 	{
@@ -96,11 +115,29 @@ namespace rlf
 		uint3 Groups;
 		std::vector<Bind> Binds;
 	};
+	struct Draw
+	{
+		VertexShader* VShader;
+		PixelShader* PShader;
+		u32 VertexCount;
+		SystemValue RenderTarget;
+	};
+	struct Pass
+	{
+		PassType Type;
+		union {
+			Dispatch* Dispatch;
+			Draw* Draw;
+		};
+	};
 	struct RenderDescription
 	{
-		std::vector<Dispatch*> Passes;
+		std::vector<Pass> Passes;
 		std::vector<Dispatch*> Dispatches;
-		std::vector<ComputeShader*> Shaders;
+		std::vector<Draw*> Draws;
+		std::vector<ComputeShader*> CShaders;
+		std::vector<VertexShader*> VShaders;
+		std::vector<PixelShader*> PShaders;
 		std::set<std::string> Strings;
 		std::vector<Buffer*> Buffers;
 		std::vector<Texture*> Textures;

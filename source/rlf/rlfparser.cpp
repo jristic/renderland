@@ -51,10 +51,13 @@ const char* TokenNames[] =
 
 #define RLF_KEYWORD_TUPLE \
 	RLF_KEYWORD_ENTRY(ComputeShader) \
+	RLF_KEYWORD_ENTRY(VertexShader) \
+	RLF_KEYWORD_ENTRY(PixelShader) \
 	RLF_KEYWORD_ENTRY(Buffer) \
 	RLF_KEYWORD_ENTRY(Texture) \
 	RLF_KEYWORD_ENTRY(Sampler) \
 	RLF_KEYWORD_ENTRY(Dispatch) \
+	RLF_KEYWORD_ENTRY(Draw) \
 	RLF_KEYWORD_ENTRY(Passes) \
 	RLF_KEYWORD_ENTRY(BackBuffer) \
 	RLF_KEYWORD_ENTRY(Point) \
@@ -87,6 +90,10 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(ThreadPerPixel) \
 	RLF_KEYWORD_ENTRY(Groups) \
 	RLF_KEYWORD_ENTRY(Bind) \
+	RLF_KEYWORD_ENTRY(VShader) \
+	RLF_KEYWORD_ENTRY(PShader) \
+	RLF_KEYWORD_ENTRY(VertexCount) \
+	RLF_KEYWORD_ENTRY(RenderTarget) \
 	RLF_KEYWORD_ENTRY(True) \
 	RLF_KEYWORD_ENTRY(False) \
 
@@ -164,8 +171,10 @@ struct ParseState
 {
 	BufferIter b;
 	RenderDescription* rd;
-	std::unordered_map<BufferString, Dispatch*, BufferStringHash> dcMap;
-	std::unordered_map<BufferString, ComputeShader*, BufferStringHash> shaderMap;
+	std::unordered_map<BufferString, Pass, BufferStringHash> passMap;
+	std::unordered_map<BufferString, ComputeShader*, BufferStringHash> csMap;
+	std::unordered_map<BufferString, VertexShader*, BufferStringHash> vsMap;
+	std::unordered_map<BufferString, PixelShader*, BufferStringHash> psMap;
 	struct Resource {
 		BindType type;
 		void* m;
@@ -568,8 +577,7 @@ FilterMode ConsumeFilterMode(BufferIter& b)
 	{
 		BufferString fieldId = ConsumeIdentifier(b);
 		ConsumeToken(Token::Equals, b);
-		Keyword key = LookupKeyword(fieldId);
-		switch (key)
+		switch (LookupKeyword(fieldId))
 		{
 		case Keyword::All:
 			fm.Min = fm.Mag = fm.Mip = ConsumeFilter(b);
@@ -599,8 +607,7 @@ AddressMode ConsumeAddressMode(BufferIter& b)
 {
 	AddressMode addr = AddressMode::Wrap;
 	BufferString adrId = ConsumeIdentifier(b);
-	Keyword key = LookupKeyword(adrId);
-	switch (key)
+	switch (LookupKeyword(adrId))
 	{
 	case Keyword::Wrap:
 		addr = AddressMode::Wrap;
@@ -668,7 +675,7 @@ ComputeShader* ConsumeComputeShaderDef(
 	ConsumeToken(Token::LBrace, b);
 
 	ComputeShader* cs = new ComputeShader();
-	rd->Shaders.push_back(cs);
+	rd->CShaders.push_back(cs);
 
 	while (true)
 	{
@@ -712,11 +719,130 @@ ComputeShader* ConsumeComputeShaderRefOrDef(
 	}
 	else
 	{
-		ParserAssert(ps.shaderMap.count(id) != 0, "couldn't find shader %.*s", 
+		ParserAssert(ps.csMap.count(id) != 0, "couldn't find shader %.*s", 
 			id.len, id.base);
-		return ps.shaderMap[id];
+		return ps.csMap[id];
 	}
 }
+
+VertexShader* ConsumeVertexShaderDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	RenderDescription* rd = ps.rd;
+
+	ConsumeToken(Token::LBrace, b);
+
+	VertexShader* vs = new VertexShader();
+	rd->VShaders.push_back(vs);
+
+	while (true)
+	{
+		BufferString fieldId = ConsumeIdentifier(b);
+		Keyword key = LookupKeyword(fieldId);
+		if (key == Keyword::ShaderPath)
+		{
+			ConsumeToken(Token::Equals, b);
+			BufferString value = ConsumeString(b);
+			vs->ShaderPath = AddStringToDescriptionData(value, rd);
+		}
+		else if (key == Keyword::EntryPoint)
+		{
+			ConsumeToken(Token::Equals, b);
+			BufferString value = ConsumeString(b);
+			vs->EntryPoint = AddStringToDescriptionData(value, rd);
+		}
+		else
+		{
+			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+		}
+
+		ConsumeToken(Token::Semicolon, b);
+
+		if (TryConsumeToken(Token::RBrace, b))
+			break;
+	}
+
+	return vs;
+}
+
+VertexShader* ConsumeVertexShaderRefOrDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	BufferString id = ConsumeIdentifier(b);
+	Keyword key = LookupKeyword(id);
+	if (key == Keyword::VertexShader)
+	{
+		return ConsumeVertexShaderDef(b, ps);
+	}
+	else
+	{
+		ParserAssert(ps.vsMap.count(id) != 0, "couldn't find shader %.*s", 
+			id.len, id.base);
+		return ps.vsMap[id];
+	}
+}
+
+PixelShader* ConsumePixelShaderDef(
+	BufferIter& b,
+	ParseState& state)
+{
+	RenderDescription* rd = state.rd;
+
+	ConsumeToken(Token::LBrace, b);
+
+	PixelShader* ps = new PixelShader();
+	rd->PShaders.push_back(ps);
+
+	while (true)
+	{
+		BufferString fieldId = ConsumeIdentifier(b);
+		Keyword key = LookupKeyword(fieldId);
+		if (key == Keyword::ShaderPath)
+		{
+			ConsumeToken(Token::Equals, b);
+			BufferString value = ConsumeString(b);
+			ps->ShaderPath = AddStringToDescriptionData(value, rd);
+		}
+		else if (key == Keyword::EntryPoint)
+		{
+			ConsumeToken(Token::Equals, b);
+			BufferString value = ConsumeString(b);
+			ps->EntryPoint = AddStringToDescriptionData(value, rd);
+		}
+		else
+		{
+			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+		}
+
+		ConsumeToken(Token::Semicolon, b);
+
+		if (TryConsumeToken(Token::RBrace, b))
+			break;
+	}
+
+	return ps;
+}
+
+PixelShader* ConsumePixelShaderRefOrDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	BufferString id = ConsumeIdentifier(b);
+	Keyword key = LookupKeyword(id);
+	if (key == Keyword::PixelShader)
+	{
+		return ConsumePixelShaderDef(b, ps);
+	}
+	else
+	{
+		ParserAssert(ps.psMap.count(id) != 0, "couldn't find shader %.*s", 
+			id.len, id.base);
+		return ps.psMap[id];
+	}
+}
+
 
 Buffer* ConsumeBufferDef(
 	BufferIter& b,
@@ -732,8 +858,7 @@ Buffer* ConsumeBufferDef(
 	while (true)
 	{
 		BufferString fieldId = ConsumeIdentifier(b);
-		Keyword key = LookupKeyword(fieldId);
-		switch (key)
+		switch (LookupKeyword(fieldId))
 		{
 		case Keyword::ElementSize:
 		{
@@ -783,8 +908,7 @@ Texture* ConsumeTextureDef(
 	while (true)
 	{
 		BufferString fieldId = ConsumeIdentifier(b);
-		Keyword key = LookupKeyword(fieldId);
-		switch (key)
+		switch (LookupKeyword(fieldId))
 		{
 		case Keyword::Size:
 		{
@@ -838,8 +962,7 @@ Sampler* ConsumeSamplerDef(
 	while (true)
 	{
 		BufferString fieldId = ConsumeIdentifier(b);
-		Keyword key = LookupKeyword(fieldId);
-		switch (key)
+		switch (LookupKeyword(fieldId))
 		{
 		case Keyword::Filter:
 		{
@@ -981,22 +1104,91 @@ Dispatch* ConsumeDispatchDef(
 	return dc;
 }
 
-Dispatch* ConsumeDispatchRefOrDef(
+Draw* ConsumeDrawDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	RenderDescription* rd = ps.rd;
+
+	ConsumeToken(Token::LBrace, b);
+
+	Draw* draw = new Draw();
+	rd->Draws.push_back(draw);
+
+	while (true)
+	{
+		BufferString fieldId = ConsumeIdentifier(b);
+		switch (LookupKeyword(fieldId))
+		{
+		case Keyword::VShader:
+		{
+			ConsumeToken(Token::Equals, b);
+			draw->VShader = ConsumeVertexShaderRefOrDef(b, ps);
+			break;
+		}
+		case Keyword::PShader:
+		{
+			ConsumeToken(Token::Equals, b);
+			draw->PShader = ConsumePixelShaderRefOrDef(b, ps);
+			break;
+		}
+		case Keyword::VertexCount:
+		{
+			ConsumeToken(Token::Equals, b);
+			draw->VertexCount = ConsumeUintLiteral(b);
+			break;
+		}
+		case Keyword::RenderTarget:
+		{
+			ConsumeToken(Token::Equals, b);
+			if (TryConsumeToken(Token::At, b))
+			{
+				draw->RenderTarget = ConsumeSystemValue(b);
+			}
+			else
+			{
+				Unimplemented();
+			}
+			break;
+		}
+		default:
+			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+		}
+
+		ConsumeToken(Token::Semicolon, b);
+
+		if (TryConsumeToken(Token::RBrace, b))
+			break;
+	}
+
+	return draw;
+}
+
+
+Pass ConsumePassRefOrDef(
 	BufferIter& b,
 	ParseState& ps)
 {
 	BufferString id = ConsumeIdentifier(b);
 	Keyword key = LookupKeyword(id);
+	Pass pass;
 	if (key == Keyword::Dispatch)
 	{
-		return ConsumeDispatchDef(b, ps);
+		pass.Type = PassType::Dispatch;
+		pass.Dispatch = ConsumeDispatchDef(b, ps);
+	}
+	else if (key == Keyword::Draw)
+	{
+		pass.Type = PassType::Draw;
+		pass.Draw = ConsumeDrawDef(b, ps);
 	}
 	else
 	{
-		ParserAssert(ps.dcMap.count(id) != 0, "couldn't find dispatch %.*s", 
+		ParserAssert(ps.passMap.count(id) != 0, "couldn't find pass %.*s", 
 			id.len, id.base);
-		return ps.dcMap[id];
+		pass = ps.passMap[id];
 	}
+	return pass;
 }
 
 DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
@@ -1008,17 +1200,33 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 	while (b.next != b.end)
 	{
 		BufferString id = ConsumeIdentifier(b);
-		Keyword key = LookupKeyword(id);
-
-		switch (key)
+		switch (LookupKeyword(id))
 		{
 		case Keyword::ComputeShader:
 		{
 			ComputeShader* cs = ConsumeComputeShaderDef(b, ps);
 			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.shaderMap.count(nameId) == 0, "Shader %.*s already defined", 
+			ParserAssert(ps.csMap.count(nameId) == 0, "Shader %.*s already defined", 
 				nameId.len, nameId.base);
-			ps.shaderMap[nameId] = cs;
+			ps.csMap[nameId] = cs;
+			break;
+		}
+		case Keyword::VertexShader:
+		{
+			VertexShader* vs = ConsumeVertexShaderDef(b, ps);
+			BufferString nameId = ConsumeIdentifier(b);
+			ParserAssert(ps.vsMap.count(nameId) == 0, "Shader %.*s already defined", 
+				nameId.len, nameId.base);
+			ps.vsMap[nameId] = vs;
+			break;
+		}
+		case Keyword::PixelShader:
+		{
+			PixelShader* pis = ConsumePixelShaderDef(b, ps);
+			BufferString nameId = ConsumeIdentifier(b);
+			ParserAssert(ps.psMap.count(nameId) == 0, "Shader %.*s already defined", 
+				nameId.len, nameId.base);
+			ps.psMap[nameId] = pis;
 			break;
 		}
 		case Keyword::Buffer:
@@ -1058,9 +1266,24 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 		{
 			Dispatch* dc = ConsumeDispatchDef(b, ps);
 			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.dcMap.count(nameId) == 0, "Dispatch %.*s already defined", 
+			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %.*s already defined", 
 				nameId.len, nameId.base);
-			ps.dcMap[nameId] = dc;
+			Pass pass;
+			pass.Type = PassType::Dispatch;
+			pass.Dispatch = dc;
+			ps.passMap[nameId] = pass;
+			break;
+		}
+		case Keyword::Draw:
+		{
+			Draw* draw = ConsumeDrawDef(b, ps);
+			BufferString nameId = ConsumeIdentifier(b);
+			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %.*s already defined", 
+				nameId.len, nameId.base);
+			Pass pass;
+			pass.Type = PassType::Draw;
+			pass.Draw = draw;
+			ps.passMap[nameId] = pass;
 			break;
 		}
 		case Keyword::Passes:
@@ -1069,8 +1292,8 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 
 			while (true)
 			{
-				Dispatch* dc = ConsumeDispatchRefOrDef(b, ps);
-				rd->Passes.push_back(dc);
+				Pass pass = ConsumePassRefOrDef(b, ps);
+				rd->Passes.push_back(pass);
 
 				if (!TryConsumeToken(Token::Comma, b))
 					break;
@@ -1149,8 +1372,14 @@ void ReleaseData(RenderDescription* data)
 
 	for (Dispatch* dc : data->Dispatches)
 		delete dc;
-	for (ComputeShader* cs : data->Shaders)
+	for (Draw* draw : data->Draws)
+		delete draw;
+	for (ComputeShader* cs : data->CShaders)
 		delete cs;
+	for (VertexShader* vs : data->VShaders)
+		delete vs;
+	for (PixelShader* ps : data->PShaders)
+		delete ps;
 	for (Buffer* buf : data->Buffers)
 		delete buf;
 	for (Texture* tex : data->Textures)

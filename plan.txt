@@ -15,13 +15,15 @@
 	* Some way to choose which shader to run based on some condition. 
 
 **** Expand to the draw pipeline.
-
-* Instancing for draws.
-
-* Indirect dispatch and draws.
-	* will need to implment append and consume buffers as well.
-
-* MSAA support.
+	* Rasterizer state.
+	* Viewport.
+	* Blend state.
+	* IA stage -> vertex buffers, index buffers, input layouts.
+	* Multiple RT support. 
+	* Instancing for draws.
+	* Indirect dispatch and draws.
+		* will need to implment append and consume buffers as well.
+	* MSAA support.
 
 * Sample: Compute-generated vertex buffer for a draw
 * Sample: Shadow-sampling methods comparison. 

@@ -238,6 +238,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			ctx.MainRtv = g_mainRenderTargetView;
 			ctx.MainRtUav = g_mainRenderTargetUav;
 			ctx.GlobalConstantBuffer = g_pConstantBuffer;
+			ctx.DisplaySize.x = (u32)io.DisplaySize.x;
+			ctx.DisplaySize.y = (u32)io.DisplaySize.y;
 			ctx.Time = time;
 			rlf::Execute(&ctx, CurrentRenderDesc);
 		}

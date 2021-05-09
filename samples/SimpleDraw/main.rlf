@@ -1,0 +1,17 @@
+
+Draw {
+	VShader = VertexShader {
+		ShaderPath = "vertex.hlsl";
+		EntryPoint = "VSMain";
+	};
+	PShader = PixelShader {
+		ShaderPath = "pixel.hlsl";
+		EntryPoint = "PSMain";
+	};
+	VertexCount = 3;
+	RenderTarget = @BackBuffer;
+} simpleDraw
+
+Passes {
+	simpleDraw
+}
