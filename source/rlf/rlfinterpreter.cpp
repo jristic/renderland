@@ -91,7 +91,7 @@ ID3DBlob* CommonCompileShader(const char* path, const char* profile,
 		return nullptr;
 	}
 
-	Assert(errorBlob == nullptr, "leak");
+	SafeRelease(errorBlob);
 	return shaderBlob;
 }
 
