@@ -71,7 +71,6 @@ ID3DBlob* CommonCompileShader(const char* path, const char* profile,
 	HRESULT hr = D3DCompile(shaderBuffer, shaderSize, path, NULL,
 		D3D_COMPILE_STANDARD_FILE_INCLUDE, entry, profile, D3DCOMPILE_DEBUG, 
 		0, &shaderBlob, &errorBlob);
-	Assert(hr == S_OK || hr == E_FAIL, "failed to compile shader hr=%x", hr);
 
 	free(shaderBuffer);
 
@@ -79,7 +78,7 @@ ID3DBlob* CommonCompileShader(const char* path, const char* profile,
 
 	if (!errorState->InitSuccess)
 	{
-		Assert(errorBlob != nullptr, "no error info given");
+		Assert(errorBlob != nullptr, "No error info given for shader compile fail.");
 		char* errorText = (char*)errorBlob->GetBufferPointer();
 		errorState->ErrorMessage = std::string("Failed to compile shader:\n") +
 			errorText;
