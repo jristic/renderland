@@ -94,6 +94,8 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(PShader) \
 	RLF_KEYWORD_ENTRY(VertexCount) \
 	RLF_KEYWORD_ENTRY(RenderTarget) \
+	RLF_KEYWORD_ENTRY(BindVS) \
+	RLF_KEYWORD_ENTRY(BindPS) \
 	RLF_KEYWORD_ENTRY(True) \
 	RLF_KEYWORD_ENTRY(False) \
 
@@ -666,6 +668,29 @@ AddressModeUVW ConsumeAddressModeUVW(BufferIter& b)
 	return addr;
 }
 
+Bind ConsumeBind(BufferIter& b, ParseState& ps)
+{
+	BufferString bindName = ConsumeIdentifier(b);
+	ConsumeToken(Token::Equals, b);
+	Bind bind;
+	bind.BindTarget = AddStringToDescriptionData(bindName, ps.rd);
+	if (TryConsumeToken(Token::At, b))
+	{
+		bind.Type = BindType::SystemValue;
+		bind.SystemBind = ConsumeSystemValue(b);
+	}
+	else
+	{
+		BufferString id = ConsumeIdentifier(b);
+		ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
+			id.len, id.base);
+		ParseState::Resource& res = ps.resMap[id];
+		bind.Type = res.type;
+		bind.BufferBind = reinterpret_cast<Buffer*>(res.m);
+	}
+	return bind;
+}
+
 ComputeShader* ConsumeComputeShaderDef(
 	BufferIter& b,
 	ParseState& ps)
@@ -1070,24 +1095,7 @@ Dispatch* ConsumeDispatchDef(
 		}
 		case Keyword::Bind:
 		{
-			BufferString bindName = ConsumeIdentifier(b);
-			ConsumeToken(Token::Equals, b);
-			Bind bind;
-			bind.BindTarget = AddStringToDescriptionData(bindName, rd);
-			if (TryConsumeToken(Token::At, b))
-			{
-				bind.Type = BindType::SystemValue;
-				bind.SystemBind = ConsumeSystemValue(b);
-			}
-			else
-			{
-				BufferString id = ConsumeIdentifier(b);
-				ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
-					id.len, id.base);
-				ParseState::Resource& res = ps.resMap[id];
-				bind.Type = res.type;
-				bind.BufferBind = reinterpret_cast<Buffer*>(res.m);
-			}
+			Bind bind = ConsumeBind(b, ps);
 			dc->Binds.push_back(bind);
 			break;
 		}
@@ -1149,6 +1157,18 @@ Draw* ConsumeDrawDef(
 			{
 				Unimplemented();
 			}
+			break;
+		}
+		case Keyword::BindVS:
+		{
+			Bind bind = ConsumeBind(b, ps);
+			draw->VSBinds.push_back(bind);
+			break;
+		}
+		case Keyword::BindPS:
+		{
+			Bind bind = ConsumeBind(b, ps);
+			draw->PSBinds.push_back(bind);
 			break;
 		}
 		default:

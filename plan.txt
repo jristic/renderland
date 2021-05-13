@@ -14,7 +14,7 @@
 	* Some way to only run a pass on the first frame, for instance. 
 	* Some way to choose which shader to run based on some condition. 
 
-**** Expand to the draw pipeline.
+**** Expand draw pipeline support.
 	* Rasterizer state.
 	* Viewport.
 	* Blend state.

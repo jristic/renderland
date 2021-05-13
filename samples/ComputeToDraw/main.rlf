@@ -1,0 +1,39 @@
+
+Texture {
+	Size = {128,128};
+	Format = R8G8B8A8_UNORM;
+} Tex
+
+Sampler {
+	Filter = { Min = Linear, Mag = Linear, Mip=Linear};
+	AddressMode = { UV=Border };
+	BorderColor = { 0.8, 0.2, 0, 1 };
+} LinearSampler
+
+Dispatch {
+	Shader = ComputeShader {
+		ShaderPath = "producer.hlsl";
+		EntryPoint = "CSMain";
+	};
+	Groups = { 16, 16, 1 };
+	Bind OutTexture = Tex;
+} producer
+
+Draw {
+	VShader = VertexShader {
+		ShaderPath = "vertex.hlsl";
+		EntryPoint = "VSMain";
+	};
+	PShader = PixelShader {
+		ShaderPath = "pixel.hlsl";
+		EntryPoint = "PSMain";
+	};
+	VertexCount = 3;
+	RenderTarget = @BackBuffer;
+	BindPS InTexture = Tex;
+	BindPS Sampler = LinearSampler;
+} simpleDraw
+
+Passes {
+	producer, simpleDraw
+}

@@ -285,7 +285,7 @@ void CreateRenderTarget()
 	// rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 	// g_pd3dDevice->CreateRenderTargetView(pBackBuffer, &rtvDesc, &g_mainRenderTargetView);
 	g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_mainRenderTargetView);
-	g_pd3dDevice->CreateUnorderedAccessView(pBackBuffer, NULL, &g_mainRenderTargetUav);
+	g_pd3dDevice->CreateUnorderedAccessView(pBackBuffer, nullptr, &g_mainRenderTargetUav);
 	pBackBuffer->Release();
 }
 

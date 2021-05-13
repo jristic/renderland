@@ -94,6 +94,44 @@ ID3DBlob* CommonCompileShader(const char* path, const char* profile,
 	return shaderBlob;
 }
 
+void ResolveBind(Bind& bind, ID3D11ShaderReflection* reflector, const char* path,
+	InitErrorState* errorState)
+{
+	D3D11_SHADER_INPUT_BIND_DESC desc;
+	HRESULT hr = reflector->GetResourceBindingDescByName(bind.BindTarget, 
+		&desc);
+	Assert(hr == S_OK || hr == E_INVALIDARG, "unhandled error, hr=%x", hr);
+	if (hr == E_INVALIDARG)
+	{
+		errorState->InitSuccess = false;
+		errorState->ErrorMessage = std::string("Could not find resource ") +
+			bind.BindTarget + " in shader " + path;
+		return;
+	}
+	bind.BindIndex = desc.BindPoint;
+	switch (desc.Type)
+	{
+	case D3D_SIT_TEXTURE:
+	case D3D_SIT_SAMPLER:
+	case D3D_SIT_STRUCTURED:
+		bind.IsOutput = false;
+		break;
+	case D3D_SIT_UAV_RWTYPED:
+	case D3D_SIT_UAV_RWSTRUCTURED:
+		bind.IsOutput = true;
+		break;
+	case D3D_SIT_BYTEADDRESS:
+	case D3D_SIT_UAV_RWBYTEADDRESS:
+	case D3D_SIT_UAV_APPEND_STRUCTURED:
+	case D3D_SIT_UAV_CONSUME_STRUCTURED:
+	case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
+	case D3D_SIT_CBUFFER:
+	case D3D_SIT_TBUFFER:
+	default:
+		Assert(false, "Unhandled type %d", desc.Type);
+	}
+}
+
 void InitD3D(
 	ID3D11Device* device,
 	RenderDescription* rd,
@@ -181,39 +219,32 @@ void InitD3D(
 		ID3D11ShaderReflection* reflector = dc->Shader->Reflector;
 		for (Bind& bind : dc->Binds)
 		{
-			D3D11_SHADER_INPUT_BIND_DESC desc;
-			HRESULT hr = reflector->GetResourceBindingDescByName(bind.BindTarget, 
-				&desc);
-			Assert(hr == S_OK || hr == E_INVALIDARG, "unhandled error, hr=%x", hr);
-			if (hr == E_INVALIDARG)
+			ResolveBind(bind, reflector, dc->Shader->ShaderPath, errorState);
+			if (errorState->InitSuccess == false)
 			{
-				errorState->InitSuccess = false;
-				errorState->ErrorMessage = std::string("Could not find resource ") +
-					bind.BindTarget + " in shader " + dc->Shader->ShaderPath;
 				return;
 			}
-			bind.BindIndex = desc.BindPoint;
-			switch (desc.Type)
+		}
+	}
+
+	for (Draw* draw : rd->Draws)
+	{
+		ID3D11ShaderReflection* reflector = draw->VShader->Reflector;
+		for (Bind& bind : draw->VSBinds)
+		{
+			ResolveBind(bind, reflector, draw->VShader->ShaderPath, errorState);
+			if (errorState->InitSuccess == false)
 			{
-			case D3D_SIT_TEXTURE:
-			case D3D_SIT_SAMPLER:
-			case D3D_SIT_STRUCTURED:
-				bind.IsOutput = false;
-				break;
-			case D3D_SIT_UAV_RWTYPED:
-			case D3D_SIT_UAV_RWSTRUCTURED:
-				bind.IsOutput = true;
-				break;
-			case D3D_SIT_BYTEADDRESS:
-			case D3D_SIT_UAV_RWBYTEADDRESS:
-			case D3D_SIT_UAV_APPEND_STRUCTURED:
-			case D3D_SIT_UAV_CONSUME_STRUCTURED:
-			case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
-			case D3D_SIT_CBUFFER:
-			case D3D_SIT_TBUFFER:
-			default:
-				Assert(false, "Unhandled type %d", desc.Type);
-				break;
+				return;
+			}
+		}
+		reflector = draw->PShader->Reflector;
+		for (Bind& bind : draw->PSBinds)
+		{
+			ResolveBind(bind, reflector, draw->PShader->ShaderPath, errorState);
+			if (errorState->InitSuccess == false)
+			{
+				return;
 			}
 		}
 	}
@@ -399,6 +430,42 @@ void ExecuteDraw(
 	ctx->PSSetShader(draw->PShader->ShaderObject, nullptr, 0);
 	ctx->VSSetConstantBuffers(0, 1, &ec->GlobalConstantBuffer);
 	ctx->PSSetConstantBuffers(0, 1, &ec->GlobalConstantBuffer);
+	for (Bind& bind : draw->VSBinds)
+	{
+		switch (bind.Type)
+		{
+		case BindType::Buffer:
+			ctx->VSSetShaderResources(bind.BindIndex, 1, &bind.BufferBind->SRV);
+			break;
+		case BindType::Texture:
+			ctx->VSSetShaderResources(bind.BindIndex, 1, &bind.TextureBind->SRV);
+			break;
+		case BindType::Sampler:
+			ctx->VSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->SamplerObject);
+			break;
+		case BindType::SystemValue:
+		default:
+			Assert(false, "unhandled type %d", bind.Type);
+		}
+	}
+	for (Bind& bind : draw->PSBinds)
+	{
+		switch (bind.Type)
+		{
+		case BindType::Buffer:
+			ctx->PSSetShaderResources(bind.BindIndex, 1, &bind.BufferBind->SRV);
+			break;
+		case BindType::Texture:
+			ctx->PSSetShaderResources(bind.BindIndex, 1, &bind.TextureBind->SRV);
+			break;
+		case BindType::Sampler:
+			ctx->PSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->SamplerObject);
+			break;
+		case BindType::SystemValue:
+		default:
+			Assert(false, "unhandled type %d", bind.Type);
+		}
+	}
 	ID3D11RenderTargetView* rtViews[8] = {};
 	if (draw->RenderTarget == SystemValue::BackBuffer)
 		rtViews[0] = ec->MainRtv;
@@ -462,10 +529,11 @@ void Execute(
 		{
 			Unimplemented();
 		}
+
+		// Clear state after execution so we don't pollute the rest of program drawing. 
+		ctx->ClearState();
 	}
 
-	// Clear state after execution so we don't pollute the rest of program drawing. 
-	ctx->ClearState();
 }
 
 } // namespace rlf

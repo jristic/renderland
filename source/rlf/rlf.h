@@ -121,6 +121,8 @@ namespace rlf
 		PixelShader* PShader;
 		u32 VertexCount;
 		SystemValue RenderTarget;
+		std::vector<Bind> VSBinds;
+		std::vector<Bind> PSBinds;
 	};
 	struct Pass
 	{
