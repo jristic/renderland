@@ -58,6 +58,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(Sampler) \
 	RLF_KEYWORD_ENTRY(Dispatch) \
 	RLF_KEYWORD_ENTRY(Draw) \
+	RLF_KEYWORD_ENTRY(DrawIndexed) \
 	RLF_KEYWORD_ENTRY(Passes) \
 	RLF_KEYWORD_ENTRY(BackBuffer) \
 	RLF_KEYWORD_ENTRY(Point) \
@@ -76,7 +77,9 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(EntryPoint) \
 	RLF_KEYWORD_ENTRY(ElementSize) \
 	RLF_KEYWORD_ENTRY(ElementCount) \
+	RLF_KEYWORD_ENTRY(Flags) \
 	RLF_KEYWORD_ENTRY(InitToZero) \
+	RLF_KEYWORD_ENTRY(InitData) \
 	RLF_KEYWORD_ENTRY(Size) \
 	RLF_KEYWORD_ENTRY(Format) \
 	RLF_KEYWORD_ENTRY(Filter) \
@@ -90,14 +93,26 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(ThreadPerPixel) \
 	RLF_KEYWORD_ENTRY(Groups) \
 	RLF_KEYWORD_ENTRY(Bind) \
+	RLF_KEYWORD_ENTRY(Topology) \
 	RLF_KEYWORD_ENTRY(VShader) \
 	RLF_KEYWORD_ENTRY(PShader) \
+	RLF_KEYWORD_ENTRY(VertexBuffer) \
+	RLF_KEYWORD_ENTRY(IndexBuffer) \
 	RLF_KEYWORD_ENTRY(VertexCount) \
 	RLF_KEYWORD_ENTRY(RenderTarget) \
 	RLF_KEYWORD_ENTRY(BindVS) \
 	RLF_KEYWORD_ENTRY(BindPS) \
 	RLF_KEYWORD_ENTRY(True) \
 	RLF_KEYWORD_ENTRY(False) \
+	RLF_KEYWORD_ENTRY(Vertex) \
+	RLF_KEYWORD_ENTRY(Index) \
+	RLF_KEYWORD_ENTRY(Float) \
+	RLF_KEYWORD_ENTRY(U16) \
+	RLF_KEYWORD_ENTRY(PointList) \
+	RLF_KEYWORD_ENTRY(LineList) \
+	RLF_KEYWORD_ENTRY(LineStrip) \
+	RLF_KEYWORD_ENTRY(TriList) \
+	RLF_KEYWORD_ENTRY(TriStrip) \
 
 #define RLF_KEYWORD_ENTRY(name) name,
 enum class Keyword
@@ -537,6 +552,10 @@ const char* AddStringToDescriptionData(BufferString str, RenderDescription* rd)
 	return pair.first->c_str();
 }
 
+void AddMemToDescriptionData(void* mem, RenderDescription* rd)
+{
+	rd->Mems.push_back(mem);
+}
 
 SystemValue ConsumeSystemValue(BufferIter& b)
 {
@@ -666,6 +685,62 @@ AddressModeUVW ConsumeAddressModeUVW(BufferIter& b)
 			ConsumeToken(Token::Comma, b);
 	}
 	return addr;
+}
+
+BufferFlags ConsumeBufferFlags(BufferIter& b)
+{
+	ConsumeToken(Token::LBrace, b);
+
+	BufferFlags flags = (BufferFlags)0;
+	while (true)
+	{
+		BufferString id = ConsumeIdentifier(b);
+		switch (LookupKeyword(id))
+		{
+		case Keyword::Vertex:
+			flags = (BufferFlags)(flags | BufferFlags_Vertex);
+			break;
+		case Keyword::Index:
+			flags = (BufferFlags)(flags | BufferFlags_Index);
+			break;
+		default:
+			ParserError("unexpected buffer flag %.*s", id.len, id.base);
+		}
+
+		if (TryConsumeToken(Token::RBrace, b))
+			break;
+		else 
+			ConsumeToken(Token::Comma, b);
+	}
+
+	return flags;
+}
+
+Topology ConsumeTopology(BufferIter& b)
+{
+	Topology topo = Topology::TriList;
+	BufferString id = ConsumeIdentifier(b);
+	switch (LookupKeyword(id))
+	{
+	case Keyword::PointList:
+		topo = Topology::PointList;
+		break;
+	case Keyword::LineList:
+		topo = Topology::LineList;
+		break;
+	case Keyword::LineStrip:
+		topo = Topology::LineStrip;
+		break;
+	case Keyword::TriList:
+		topo = Topology::TriList;
+		break;
+	case Keyword::TriStrip:
+		topo = Topology::TriStrip;
+		break;
+	default:
+		ParserError("unexpected topology %.*s", id.len, id.base);
+	}
+	return topo;
 }
 
 Bind ConsumeBind(BufferIter& b, ParseState& ps)
@@ -897,10 +972,77 @@ Buffer* ConsumeBufferDef(
 			buf->ElementCount = ConsumeUintLiteral(b);
 			break;
 		}
+		case Keyword::Flags:
+		{
+			ConsumeToken(Token::Equals, b);
+			buf->Flags = ConsumeBufferFlags(b);
+			break;
+		}
 		case Keyword::InitToZero:
 		{
 			ConsumeToken(Token::Equals, b);
 			buf->InitToZero = ConsumeBool(b);
+			break;
+		}
+		case Keyword::InitData:
+		{
+			ConsumeToken(Token::Equals, b);
+			BufferString id = ConsumeIdentifier(b);
+			Keyword key = LookupKeyword(id);
+			if (key == Keyword::Float)
+			{
+				ConsumeToken(Token::LBrace, b);
+
+				u32 bufSize = buf->ElementSize * buf->ElementCount;
+				float* data = (float*)malloc(bufSize);
+				AddMemToDescriptionData(data, rd);
+
+				float* next = data;
+				while (true)
+				{
+					ParserAssert((char*)next - (char*)data + sizeof(float) <= bufSize,
+						"Too many elements for buffer size.");
+					float f = ConsumeFloatLiteral(b);
+
+					*next = f;
+					++next;
+
+					if (TryConsumeToken(Token::RBrace, b))
+						break;
+					else 
+						ConsumeToken(Token::Comma, b);
+				}
+				buf->InitData = data;
+			}
+			else if (key == Keyword::U16)
+			{
+				ConsumeToken(Token::LBrace, b);
+
+				u32 bufSize = buf->ElementSize * buf->ElementCount;
+				u16* data = (u16*)malloc(bufSize);
+				AddMemToDescriptionData(data, rd);
+
+				u16* next = data;
+				while (true)
+				{
+					ParserAssert((char*)next - (char*)data + sizeof(u16) <= bufSize,
+						"Too many elements for buffer size.");
+					u16 l = (u16)ConsumeUintLiteral(b);
+
+					*next = l;
+					++next;
+
+					if (TryConsumeToken(Token::RBrace, b))
+						break;
+					else 
+						ConsumeToken(Token::Comma, b);
+				}
+				buf->InitData = data;
+			}
+			else
+			{
+				ParserError("unexpected data type %.*s", id.len, id.base);
+			}
 			break;
 		}
 		default:
@@ -1123,11 +1265,20 @@ Draw* ConsumeDrawDef(
 	Draw* draw = new Draw();
 	rd->Draws.push_back(draw);
 
+	// non-zero defaults
+	draw->Topology = Topology::TriList;
+
 	while (true)
 	{
 		BufferString fieldId = ConsumeIdentifier(b);
 		switch (LookupKeyword(fieldId))
 		{
+		case Keyword::Topology:
+		{
+			ConsumeToken(Token::Equals, b);
+			draw->Topology = ConsumeTopology(b);
+			break;
+		}
 		case Keyword::VShader:
 		{
 			ConsumeToken(Token::Equals, b);
@@ -1138,6 +1289,28 @@ Draw* ConsumeDrawDef(
 		{
 			ConsumeToken(Token::Equals, b);
 			draw->PShader = ConsumePixelShaderRefOrDef(b, ps);
+			break;
+		}
+		case Keyword::VertexBuffer:
+		{
+			ConsumeToken(Token::Equals, b);
+			BufferString id = ConsumeIdentifier(b);
+			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
+				id.len, id.base);
+			ParseState::Resource& res = ps.resMap[id];
+			ParserAssert(res.type == BindType::Buffer, "Resourse must be a buffer");
+			draw->VertexBuffer = reinterpret_cast<Buffer*>(res.m);
+			break;
+		}
+		case Keyword::IndexBuffer:
+		{
+			ConsumeToken(Token::Equals, b);
+			BufferString id = ConsumeIdentifier(b);
+			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
+				id.len, id.base);
+			ParseState::Resource& res = ps.resMap[id];
+			ParserAssert(res.type == BindType::Buffer, "Resourse must be a buffer");
+			draw->IndexBuffer = reinterpret_cast<Buffer*>(res.m);
 			break;
 		}
 		case Keyword::VertexCount:
@@ -1220,7 +1393,8 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 	while (b.next != b.end)
 	{
 		BufferString id = ConsumeIdentifier(b);
-		switch (LookupKeyword(id))
+		Keyword key = LookupKeyword(id);
+		switch (key)
 		{
 		case Keyword::ComputeShader:
 		{
@@ -1253,7 +1427,7 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 		{
 			Buffer* buf = ConsumeBufferDef(b, ps);
 			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.resMap.count(nameId) == 0,  "Resource %.*s already defined", 
+			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %.*s already defined", 
 				nameId.len, nameId.base);
 			ParseState::Resource& res = ps.resMap[nameId];
 			res.type = BindType::Buffer;
@@ -1295,8 +1469,10 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 			break;
 		}
 		case Keyword::Draw:
+		case Keyword::DrawIndexed:
 		{
 			Draw* draw = ConsumeDrawDef(b, ps);
+			draw->Type = (key == Keyword::Draw) ? DrawType::Draw : DrawType::DrawIndexed;
 			BufferString nameId = ConsumeIdentifier(b);
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %.*s already defined", 
 				nameId.len, nameId.base);
@@ -1315,11 +1491,11 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 				Pass pass = ConsumePassRefOrDef(b, ps);
 				rd->Passes.push_back(pass);
 
-				if (!TryConsumeToken(Token::Comma, b))
+				if (TryConsumeToken(Token::RBrace, b))
 					break;
+				else 
+					ConsumeToken(Token::Comma, b);
 			}
-
-			ConsumeToken(Token::RBrace, b);
 			break;
 		}
 		default:
@@ -1406,6 +1582,8 @@ void ReleaseData(RenderDescription* data)
 		delete tex;
 	for (Sampler* s : data->Samplers)
 		delete s;
+	for (void* mem : data->Mems)
+		free(mem);
 	delete data;
 }
 

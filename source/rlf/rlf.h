@@ -45,6 +45,24 @@ namespace rlf
 	{
 		AddressMode U,V,W;
 	};
+	enum class Topology
+	{
+		PointList,
+		LineList,
+		LineStrip,
+		TriList,
+		TriStrip,
+	};
+	enum class DrawType
+	{
+		Draw,
+		DrawIndexed,
+	};
+	enum BufferFlags
+	{
+		BufferFlags_Vertex = 1,
+		BufferFlags_Index = 2,
+	};
 	struct ComputeShader
 	{
 		const char* ShaderPath;
@@ -59,6 +77,7 @@ namespace rlf
 		const char* EntryPoint;
 		ID3D11VertexShader* ShaderObject;
 		ID3D11ShaderReflection* Reflector;
+		ID3D11InputLayout* InputLayout; 
 	};
 	struct PixelShader
 	{
@@ -72,6 +91,8 @@ namespace rlf
 		u32 ElementSize;
 		u32 ElementCount;
 		bool InitToZero;
+		void* InitData;
+		BufferFlags Flags;
 		ID3D11Buffer* BufferObject;
 		ID3D11ShaderResourceView* SRV;
 		ID3D11UnorderedAccessView* UAV;
@@ -117,8 +138,12 @@ namespace rlf
 	};
 	struct Draw
 	{
+		DrawType Type;
+		Topology Topology;
 		VertexShader* VShader;
 		PixelShader* PShader;
+		Buffer* VertexBuffer;
+		Buffer* IndexBuffer;
 		u32 VertexCount;
 		SystemValue RenderTarget;
 		std::vector<Bind> VSBinds;
@@ -140,9 +165,10 @@ namespace rlf
 		std::vector<ComputeShader*> CShaders;
 		std::vector<VertexShader*> VShaders;
 		std::vector<PixelShader*> PShaders;
-		std::set<std::string> Strings;
 		std::vector<Buffer*> Buffers;
 		std::vector<Texture*> Textures;
 		std::vector<Sampler*> Samplers;
+		std::set<std::string> Strings;
+		std::vector<void*> Mems;
 	};
 }

@@ -199,7 +199,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			{
 				ImVec4 color = ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
 				ImGui::PushStyleColor(ImGuiCol_Text, color);
-		        ImGui::PushTextWrapPos(0.f);
+				ImGui::PushTextWrapPos(0.f);
 
 				ImGui::TextUnformatted(RlfCompileErrorMessage.c_str());
 

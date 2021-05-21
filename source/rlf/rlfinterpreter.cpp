@@ -2,6 +2,8 @@
 namespace rlf
 {
 
+static ID3D11RasterizerState*   DefaultRasterizerState = nullptr;
+
 D3D11_FILTER RlfToD3d(FilterMode fm)
 {
 	if (fm.Min == Filter::Aniso || fm.Mag == Filter::Aniso ||
@@ -12,14 +14,14 @@ D3D11_FILTER RlfToD3d(FilterMode fm)
 
 	static D3D11_FILTER filters[] = {
 		D3D11_FILTER_MIN_MAG_MIP_POINT,
-        D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR,
-        D3D11_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT,
-        D3D11_FILTER_MIN_POINT_MAG_MIP_LINEAR,
-        D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT,
-        D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR,
-        D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT,
-        D3D11_FILTER_MIN_MAG_MIP_LINEAR,
-    };
+		D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR,
+		D3D11_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT,
+		D3D11_FILTER_MIN_POINT_MAG_MIP_LINEAR,
+		D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT,
+		D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR,
+		D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT,
+		D3D11_FILTER_MIN_MAG_MIP_LINEAR,
+	};
 
 	u32 i = 0;
 	if (fm.Min == Filter::Linear)
@@ -42,6 +44,28 @@ D3D11_TEXTURE_ADDRESS_MODE RlfToD3d(AddressMode m)
 		D3D11_TEXTURE_ADDRESS_BORDER,
 	};
 	return modes[(u32)m];
+}
+
+D3D11_PRIMITIVE_TOPOLOGY RlfToD3d(Topology topo)
+{
+	static D3D11_PRIMITIVE_TOPOLOGY topos[] = {
+		D3D11_PRIMITIVE_TOPOLOGY_POINTLIST,
+		D3D11_PRIMITIVE_TOPOLOGY_LINELIST,
+		D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP,
+		D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+		D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+	};
+	return topos[(u32)topo];
+}
+
+u32 RlfToD3d(BufferFlags flags)
+{
+	u32 f = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+	if (flags & BufferFlags_Vertex)
+		f |= D3D11_BIND_VERTEX_BUFFER;
+	if (flags & BufferFlags_Index)
+		f |= D3D11_BIND_INDEX_BUFFER;
+	return f;
 }
 
 ID3DBlob* CommonCompileShader(const char* path, const char* profile, 
@@ -94,6 +118,85 @@ ID3DBlob* CommonCompileShader(const char* path, const char* profile,
 	return shaderBlob;
 }
 
+void CreateInputLayout(ID3D11Device* device, VertexShader* shader, ID3DBlob* blob)
+{
+	ID3D11ShaderReflection* reflector = shader->Reflector;
+
+	// Get shader info
+	D3D11_SHADER_DESC shaderDesc;
+	reflector->GetDesc( &shaderDesc );
+
+	// Read input layout description from shader info
+	std::vector<D3D11_INPUT_ELEMENT_DESC> inputLayoutDesc;
+	for ( u32 i = 0 ; i < shaderDesc.InputParameters ; ++i)
+	{
+		D3D11_SIGNATURE_PARAMETER_DESC paramDesc;
+		reflector->GetInputParameterDesc(i, &paramDesc );
+
+		if (paramDesc.SystemValueType != D3D_NAME_UNDEFINED)
+			continue;
+
+		// fill out input element desc
+		D3D11_INPUT_ELEMENT_DESC elementDesc;
+		elementDesc.SemanticName = paramDesc.SemanticName;
+		elementDesc.SemanticIndex = paramDesc.SemanticIndex;
+		elementDesc.InputSlot = 0;
+		elementDesc.AlignedByteOffset = D3D11_APPEND_ALIGNED_ELEMENT;
+		elementDesc.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
+		elementDesc.InstanceDataStepRate = 0;   
+
+		// determine DXGI format
+		if ( paramDesc.Mask == 1 )
+		{
+			if ( paramDesc.ComponentType == D3D_REGISTER_COMPONENT_UINT32 )
+				elementDesc.Format = DXGI_FORMAT_R32_UINT;
+			else if ( paramDesc.ComponentType == D3D_REGISTER_COMPONENT_SINT32 )
+				elementDesc.Format = DXGI_FORMAT_R32_SINT;
+			else if ( paramDesc.ComponentType == D3D_REGISTER_COMPONENT_FLOAT32 )
+				elementDesc.Format = DXGI_FORMAT_R32_FLOAT;
+		}
+		else if ( paramDesc.Mask <= 3 )
+		{
+			if ( paramDesc.ComponentType == D3D_REGISTER_COMPONENT_UINT32 )
+				elementDesc.Format = DXGI_FORMAT_R32G32_UINT;
+			else if ( paramDesc.ComponentType == D3D_REGISTER_COMPONENT_SINT32 )
+				elementDesc.Format = DXGI_FORMAT_R32G32_SINT;
+			else if ( paramDesc.ComponentType == D3D_REGISTER_COMPONENT_FLOAT32 )
+				elementDesc.Format = DXGI_FORMAT_R32G32_FLOAT;
+		}
+		else if ( paramDesc.Mask <= 7 )
+		{
+			if ( paramDesc.ComponentType == D3D_REGISTER_COMPONENT_UINT32 )
+				elementDesc.Format = DXGI_FORMAT_R32G32B32_UINT;
+			else if ( paramDesc.ComponentType == D3D_REGISTER_COMPONENT_SINT32 )
+				elementDesc.Format = DXGI_FORMAT_R32G32B32_SINT;
+			else if ( paramDesc.ComponentType == D3D_REGISTER_COMPONENT_FLOAT32 )
+				elementDesc.Format = DXGI_FORMAT_R32G32B32_FLOAT;
+		}
+		else if ( paramDesc.Mask <= 15 )
+		{
+			if ( paramDesc.ComponentType == D3D_REGISTER_COMPONENT_UINT32 )
+				elementDesc.Format = DXGI_FORMAT_R32G32B32A32_UINT;
+			else if ( paramDesc.ComponentType == D3D_REGISTER_COMPONENT_SINT32 )
+				elementDesc.Format = DXGI_FORMAT_R32G32B32A32_SINT;
+			else if ( paramDesc.ComponentType == D3D_REGISTER_COMPONENT_FLOAT32 )
+				elementDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+		}
+
+		//save element desc
+		inputLayoutDesc.push_back(elementDesc);
+	}
+
+	if (inputLayoutDesc.size())
+	{
+		// Try to create Input Layout
+		HRESULT hr = device->CreateInputLayout(
+			&inputLayoutDesc[0], (u32)inputLayoutDesc.size(), blob->GetBufferPointer(), 
+			blob->GetBufferSize(), &shader->InputLayout);
+		Assert(hr == S_OK, "failed to create input layout, hr=%x", hr);
+	}
+}
+
 void ResolveBind(Bind& bind, ID3D11ShaderReflection* reflector, const char* path,
 	InitErrorState* errorState)
 {
@@ -138,6 +241,16 @@ void InitD3D(
 	const char* workingDirectory,
 	InitErrorState* errorState)
 {
+	if (DefaultRasterizerState == nullptr)
+	{
+		D3D11_RASTERIZER_DESC desc = {};
+		desc.FillMode = D3D11_FILL_SOLID;
+		desc.CullMode = D3D11_CULL_NONE;
+		desc.ScissorEnable = false;
+		desc.DepthClipEnable = false;
+		device->CreateRasterizerState(&desc, &DefaultRasterizerState);
+	}
+	
 	std::string dirPath = workingDirectory;
 	errorState->InitSuccess = true;
 
@@ -186,6 +299,8 @@ void InitD3D(
 		hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
 			IID_ID3D11ShaderReflection, (void**) &vs->Reflector);
 		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
+
+		CreateInputLayout(device, vs, shaderBlob);
 
 		SafeRelease(shaderBlob);
 	}
@@ -254,6 +369,7 @@ void InitD3D(
 		u32 bufSize = buf->ElementSize * buf->ElementCount;
 
 		D3D11_SUBRESOURCE_DATA initData = {};
+		initData.pSysMem = buf->InitData;
 		void* zeroMem = nullptr;
 		if (buf->InitToZero)
 		{
@@ -264,20 +380,23 @@ void InitD3D(
 		D3D11_BUFFER_DESC desc;
 		desc.ByteWidth = bufSize;
 		desc.Usage = D3D11_USAGE_DEFAULT;
-		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+		desc.BindFlags = RlfToD3d(buf->Flags);
 		desc.CPUAccessFlags = 0;
-		desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+		desc.MiscFlags = buf->Flags ? 0 : D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
 		desc.StructureByteStride = buf->ElementSize;
 
-		HRESULT hr = device->CreateBuffer(&desc, buf->InitToZero ? &initData : 0, 
+		HRESULT hr = device->CreateBuffer(&desc, initData.pSysMem ? &initData : 0,
 			&buf->BufferObject);
 		Assert(hr == S_OK, "failed to create buffer, hr=%x", hr);
 
-		hr = device->CreateShaderResourceView(buf->BufferObject, nullptr, &buf->SRV);
-		Assert(hr == S_OK, "failed to create SRV, hr=%x", hr);
+		if (buf->Flags == 0)
+		{
+			hr = device->CreateShaderResourceView(buf->BufferObject, nullptr, &buf->SRV);
+			Assert(hr == S_OK, "failed to create SRV, hr=%x", hr);
 
-		hr = device->CreateUnorderedAccessView(buf->BufferObject, nullptr, &buf->UAV);
-		Assert(hr == S_OK, "failed to create UAV, hr=%x", hr);
+			hr = device->CreateUnorderedAccessView(buf->BufferObject, nullptr, &buf->UAV);
+			Assert(hr == S_OK, "failed to create UAV, hr=%x", hr);
+		}
 
 		if (buf->InitToZero)
 			free(zeroMem);
@@ -342,6 +461,7 @@ void ReleaseD3D(
 	{
 		SafeRelease(vs->ShaderObject);
 		SafeRelease(vs->Reflector);
+		SafeRelease(vs->InputLayout);
 	}
 	for (PixelShader* ps : rd->PShaders)
 	{
@@ -427,6 +547,7 @@ void ExecuteDraw(
 {
 	ID3D11DeviceContext* ctx = ec->D3dCtx;
 	ctx->VSSetShader(draw->VShader->ShaderObject, nullptr, 0);
+	ctx->IASetInputLayout(draw->VShader->InputLayout);
 	ctx->PSSetShader(draw->PShader->ShaderObject, nullptr, 0);
 	ctx->VSSetConstantBuffers(0, 1, &ec->GlobalConstantBuffer);
 	ctx->PSSetConstantBuffers(0, 1, &ec->GlobalConstantBuffer);
@@ -472,15 +593,34 @@ void ExecuteDraw(
 	else 
 		Unimplemented();
 	ctx->OMSetRenderTargets(8, rtViews, nullptr);
-	ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    D3D11_VIEWPORT vp = {};
-    vp.Width = (float)ec->DisplaySize.x;
-    vp.Height = (float)ec->DisplaySize.y;
-    vp.MinDepth = 0.0f;
-    vp.MaxDepth = 1.0f;
-    vp.TopLeftX = vp.TopLeftY = 0;
-    ctx->RSSetViewports(1, &vp);
-	ctx->Draw(draw->VertexCount, 0);
+	ctx->IASetPrimitiveTopology(RlfToD3d(draw->Topology));
+	D3D11_VIEWPORT vp = {};
+	vp.Width = (float)ec->DisplaySize.x;
+	vp.Height = (float)ec->DisplaySize.y;
+	vp.MinDepth = 0.0f;
+	vp.MaxDepth = 1.0f;
+	vp.TopLeftX = vp.TopLeftY = 0;
+	ctx->RSSetViewports(1, &vp);
+	ctx->RSSetState(DefaultRasterizerState);
+	if (draw->Type == DrawType::Draw)
+	{
+		ctx->Draw(draw->VertexCount, 0);
+	}
+	else if (draw->Type == DrawType::DrawIndexed)
+	{
+		Buffer* ib = draw->IndexBuffer;
+		Buffer* vb = draw->VertexBuffer;
+		ctx->IASetIndexBuffer(ib->BufferObject, ib->ElementSize == 2 ? 
+			DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT, 0);
+		u32 offset = 0;
+		ctx->IASetVertexBuffers(0, 1, &vb->BufferObject, &vb->ElementSize, 
+			&offset);
+		ctx->DrawIndexed(ib->ElementCount, 0, 0);
+	}
+	else
+	{
+		Unimplemented();
+	}
 }
 
 void Execute(

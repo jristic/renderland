@@ -1,0 +1,55 @@
+
+Buffer {
+	ElementSize = 20;
+	ElementCount = 7;
+	Flags = { Vertex };
+	InitData = float {
+		-0.000000, -0.800000, 0.000000,
+		0.973682, 0.300036,
+		-0.000000, 0.000000, 0.000000,
+		0.493768, 0.500000,
+		-0.800000, -0.400000, 0.000000,
+		0.493768, 0.000089,
+		-0.800000, 0.400000, 0.000000,
+		0.013854, 0.200054,
+		0.000000, 0.800000, 0.000000,
+		0.013854, 0.699964,
+		0.800000, 0.400000, 0.000000,
+		0.493768, 0.999911,
+		0.800000, -0.400000, 0.000000,
+		0.973682, 0.799946
+	};
+} verts
+
+Buffer {
+	ElementSize = 2;
+	ElementCount = 18;
+	Flags = { Index };
+	InitData = u16 {
+		0, 1, 2,
+		2, 1, 3,
+		3, 1, 4,
+		4, 1, 5,
+		5, 1, 6,
+		1, 0, 6
+	};
+} indices
+
+DrawIndexed {
+	Topology = TriList;
+	VShader = VertexShader {
+		ShaderPath = "vertex.hlsl";
+		EntryPoint = "VSMain";
+	};
+	PShader = PixelShader {
+		ShaderPath = "pixel.hlsl";
+		EntryPoint = "PSMain";
+	};
+	VertexBuffer = verts;
+	IndexBuffer = indices;
+	RenderTarget = @BackBuffer;
+} simpleDraw
+
+Passes {
+	simpleDraw
+}
