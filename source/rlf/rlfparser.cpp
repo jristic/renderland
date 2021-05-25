@@ -206,6 +206,8 @@ struct ParseState
 	Token fcLUT[128];
 } *GPS;
 
+struct ParseException {};
+
 void ParserError(const char* str, ...)
 {
 	char buf[512];
@@ -244,6 +246,7 @@ void ParserError(const char* str, ...)
 
 	sprintf_s(buf, 512, "line: %.*s", (u32)(lineEnd-lineStart), lineStart);
 	ps->es->ErrorMessage += buf;
+	ps->es->ErrorMessage += "\n";
 
 	// This if statement is meaningless (rd will always be non-null here), but
 	//	the compiler doesn't know that. Otherwise it will either generate 
@@ -251,7 +254,7 @@ void ParserError(const char* str, ...)
 	// 	optimized builds, or will generate C4715 (not all paths return value)
 	// 	in non-optimized builds if you remove the unreachable code. 
 	if (GPS->rd) 
-		ExitThread(1);
+		throw ParseException();
 }
 
 #define ParserAssert(expression, message, ...) 	\
@@ -994,15 +997,16 @@ Buffer* ConsumeBufferDef(
 				ConsumeToken(Token::LBrace, b);
 
 				u32 bufSize = buf->ElementSize * buf->ElementCount;
+				ParserAssert(bufSize > 0, "Buffer size must be given before init");
 				float* data = (float*)malloc(bufSize);
 				AddMemToDescriptionData(data, rd);
 
 				float* next = data;
 				while (true)
 				{
+					float f = ConsumeFloatLiteral(b);
 					ParserAssert((char*)next - (char*)data + sizeof(float) <= bufSize,
 						"Too many elements for buffer size.");
-					float f = ConsumeFloatLiteral(b);
 
 					*next = f;
 					++next;
@@ -1019,15 +1023,16 @@ Buffer* ConsumeBufferDef(
 				ConsumeToken(Token::LBrace, b);
 
 				u32 bufSize = buf->ElementSize * buf->ElementCount;
+				ParserAssert(bufSize > 0, "Buffer size must be given before init");
 				u16* data = (u16*)malloc(bufSize);
 				AddMemToDescriptionData(data, rd);
 
 				u16* next = data;
 				while (true)
 				{
+					u16 l = (u16)ConsumeUintLiteral(b);
 					ParserAssert((char*)next - (char*)data + sizeof(u16) <= bufSize,
 						"Too many elements for buffer size.");
-					u16 l = (u16)ConsumeUintLiteral(b);
 
 					*next = l;
 					++next;
@@ -1384,9 +1389,9 @@ Pass ConsumePassRefOrDef(
 	return pass;
 }
 
-DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
+void ParseMain()
 {
-	ParseState& ps = *(ParseState*)lpParameter;
+	ParseState& ps = *GPS;
 	RenderDescription* rd = ps.rd;
 	BufferIter& b = ps.b;
 
@@ -1505,8 +1510,6 @@ DWORD WINAPI ParseMain(_In_ LPVOID lpParameter)
 		// Skip trailing whitespace so we don't miss the exit condition for this loop. 
 		SkipWhitespace(b);
 	}
-
-	return 0;
 }
 
 
@@ -1543,9 +1546,14 @@ RenderDescription* ParseFile(
 	GPS = &ps;
 	errorState->ParseSuccess = true;
 
-	HANDLE parseThread = CreateThread(nullptr, 0, &ParseMain, &ps, 0, nullptr);
-	WaitForSingleObject(parseThread, INFINITE);
-	CloseHandle(parseThread);
+	try {
+		ParseMain();
+	}
+	catch (ParseException pe)
+	{
+		(void)pe;
+		Assert(ps.es->ParseSuccess == false, "Error not set");
+	}
 
 	GPS = nullptr;
 	free(rlfBuffer);

@@ -21,6 +21,11 @@
 **** Expand draw pipeline support.
 	* IA stage -> vertex buffers, index buffers, input layouts.
 		* fix issue where InitData must come after the element size/count
+			* Make InitData use containers and allocate memory after parsing all fields
+			* Size the init buffer properly for full size of buffer rather than how much is given in the initdata
+			* Error if the initdata size and buffer size don't match?
+			* check u16 and float are within storable range for those types
+			* Use a custom allocator to verify that STL containers are being freed on exceptions
 	* Rasterizer state.
 	* Viewport.
 	* Blend state.
@@ -35,3 +40,4 @@
 * Sample: Shadow-sampling methods comparison. 
 * Sample: Clustered lighting.
 * Sample: Compute-based culling with draw-indirect.
+* Sample: Mirror reflection. 
