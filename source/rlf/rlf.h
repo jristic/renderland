@@ -100,6 +100,7 @@ namespace rlf
 	{
 		uint2 Size;
 		TextureFormat Format;
+		const char* DDSPath;
 		ID3D11Texture2D* TextureObject;
 		ID3D11ShaderResourceView* SRV;
 		ID3D11UnorderedAccessView* UAV;

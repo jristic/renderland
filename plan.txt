@@ -1,5 +1,6 @@
-* Allow populating texture from file (DDS).
 * Allow populating vertex/index buffers from OBJ file. 
+
+* Expose D3D debug errors to the user. 
 
 * Use linear memory allocator for RenderDescription allocations. 
 * Defines that are usable within the RLF and shader. 

@@ -78,6 +78,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(InitData) \
 	RLF_KEYWORD_ENTRY(Size) \
 	RLF_KEYWORD_ENTRY(Format) \
+	RLF_KEYWORD_ENTRY(DDSPath) \
 	RLF_KEYWORD_ENTRY(Filter) \
 	RLF_KEYWORD_ENTRY(AddressMode) \
 	RLF_KEYWORD_ENTRY(MipLODBias) \
@@ -1108,6 +1109,13 @@ Texture* ConsumeTextureDef(
 			ParserAssert(ps.fmtMap.count(formatId) != 0, "Couldn't find format %.*s", 
 				formatId.len, formatId.base);
 			tex->Format = ps.fmtMap[formatId];
+			break;
+		}
+		case Keyword::DDSPath:
+		{
+			ConsumeToken(Token::Equals, b);
+			BufferString value = ConsumeString(b);
+			tex->DDSPath = AddStringToDescriptionData(value, rd);
 			break;
 		}
 		default:

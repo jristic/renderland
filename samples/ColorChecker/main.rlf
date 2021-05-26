@@ -1,0 +1,26 @@
+
+Sampler {
+	Filter = { All = Point };
+	AddressMode = { UVW=Clamp };
+} PointSampler
+
+Texture {
+	DDSPath = "ColorChecker.dds";
+} Tex
+
+ComputeShader {
+	ShaderPath = "shader.hlsl";
+	EntryPoint = "CSMain";
+} shader
+
+Dispatch {
+	Shader = shader;
+	ThreadPerPixel = true;
+	Bind OutTexture = @BackBuffer;
+	Bind InTexture=Tex;
+	Bind Sampler= PointSampler;
+} disp
+
+Passes {
+	disp
+}

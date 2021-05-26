@@ -12,6 +12,7 @@
 
 // External headers
 #include "imgui/imgui.h"
+#include "DirectXTex/DirectXTex.h"
 
 // Imgui example backend
 #include "imgui_impl_win32.h"

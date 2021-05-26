@@ -395,27 +395,60 @@ void InitD3D(
 
 	for (Texture* tex : rd->Textures)
 	{
-		D3D11_TEXTURE2D_DESC desc;
-		desc.Width = tex->Size.x;
-		desc.Height = tex->Size.y;
-		desc.MipLevels = 1;
-		desc.ArraySize = 1;
-		desc.Format = D3DTextureFormat[(u32)tex->Format];
-		desc.SampleDesc.Count = 1;
-		desc.SampleDesc.Quality = 0;
-		desc.Usage = D3D11_USAGE_DEFAULT;
-		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-		desc.CPUAccessFlags = 0;
-		desc.MiscFlags = 0;
+		if (tex->DDSPath)
+		{
+			std::string ddsPath = dirPath + tex->DDSPath;
+			HANDLE dds = fileio::OpenFileOptional(ddsPath.c_str(), GENERIC_READ);
 
-		HRESULT hr = device->CreateTexture2D(&desc, nullptr, &tex->TextureObject);
-		Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
+			if (dds == INVALID_HANDLE_VALUE) // file not found
+			{
+				errorState->InitSuccess = false;
+				errorState->ErrorMessage = std::string("Couldn't find dds file: ") + 
+					ddsPath;
+				return;
+			}
 
-		hr = device->CreateShaderResourceView(tex->TextureObject, nullptr, &tex->SRV);
-		Assert(hr == S_OK, "failed to create SRV, hr=%x", hr);
+			u32 ddsSize = fileio::GetFileSize(dds);
+			char* ddsBuffer = (char*)malloc(ddsSize);
+			Assert(ddsBuffer != nullptr, "failed to alloc");
 
-		hr = device->CreateUnorderedAccessView(tex->TextureObject, nullptr, &tex->UAV);
-		Assert(hr == S_OK, "failed to create UAV, hr=%x", hr);
+			fileio::ReadFile(dds, ddsBuffer, ddsSize);
+
+			CloseHandle(dds);
+
+			DirectX::TexMetadata meta;
+			DirectX::ScratchImage scratch;
+			DirectX::LoadFromDDSMemory(ddsBuffer, ddsSize, DirectX::DDS_FLAGS_NONE, 
+				&meta, scratch);
+			HRESULT hr = DirectX::CreateShaderResourceViewEx(device, scratch.GetImages(),
+				scratch.GetImageCount(), meta, D3D11_USAGE_IMMUTABLE, 
+				D3D11_BIND_SHADER_RESOURCE, 0, 0, false, &tex->SRV);
+			Assert(hr == S_OK, "Failed to create SRV, hr=%x", hr);
+		}
+		else
+		{
+			D3D11_TEXTURE2D_DESC desc;
+			desc.Width = tex->Size.x;
+			desc.Height = tex->Size.y;
+			desc.MipLevels = 1;
+			desc.ArraySize = 1;
+			desc.Format = D3DTextureFormat[(u32)tex->Format];
+			desc.SampleDesc.Count = 1;
+			desc.SampleDesc.Quality = 0;
+			desc.Usage = D3D11_USAGE_DEFAULT;
+			desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+			desc.CPUAccessFlags = 0;
+			desc.MiscFlags = 0;
+
+			HRESULT hr = device->CreateTexture2D(&desc, nullptr, &tex->TextureObject);
+			Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
+
+			hr = device->CreateShaderResourceView(tex->TextureObject, nullptr, &tex->SRV);
+			Assert(hr == S_OK, "failed to create SRV, hr=%x", hr);
+
+			hr = device->CreateUnorderedAccessView(tex->TextureObject, nullptr, &tex->UAV);
+			Assert(hr == S_OK, "failed to create UAV, hr=%x", hr);
+		}
 	}
 
 	for (Sampler* s : rd->Samplers)
