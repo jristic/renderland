@@ -5,7 +5,7 @@ RenderLand is a Windows program for dynamically specifying D3D11/HLSL routines v
 RenderLand's goal is to allow one to experiment and prototype graphics techniques without having to write all the associated code to glue the shaders together. Where possible it will ingest normal HLSL shader files with the instructions specified in the RLF file on how to glue it all together. 
 
 ## Status
-RenderLand is an early work in progress. Currently only the compute path is supported, and RLF doesn't allow specifying all the possibilities one would expect. 
+RenderLand is an early work in progress. Currently only the most basic draws are supported, and RLF doesn't allow specifying all the possibilities one would expect. 
 
 ## Usage
 See the samples in `samples/`.

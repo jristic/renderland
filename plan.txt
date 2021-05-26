@@ -1,9 +1,9 @@
+* Allow populating texture from file (DDS).
+* Allow populating vertex/index buffers from OBJ file. 
+
 * Use linear memory allocator for RenderDescription allocations. 
-
-
 * Defines that are usable within the RLF and shader. 
 * Allow #include of other RLF files
-* Allow populating texture from file (DDS).
 * Specify shader parameters in the RLF and allow tuning via the imgui display.
 	* Should I fill a constant buffer declared in the shader using reflection info? or generate a global / per-dispatch constant buffer for shaders?
 * Better way to size structured buffers.
@@ -19,13 +19,6 @@
 	* Camera position/look-at utility
 
 **** Expand draw pipeline support.
-	* IA stage -> vertex buffers, index buffers, input layouts.
-		* fix issue where InitData must come after the element size/count
-			* Make InitData use containers and allocate memory after parsing all fields
-			* Size the init buffer properly for full size of buffer rather than how much is given in the initdata
-			* Error if the initdata size and buffer size don't match?
-			* check u16 and float are within storable range for those types
-			* Use a custom allocator to verify that STL containers are being freed on exceptions
 	* Rasterizer state.
 	* Viewport.
 	* Blend state.

@@ -90,7 +90,6 @@ namespace rlf
 	{
 		u32 ElementSize;
 		u32 ElementCount;
-		bool InitToZero;
 		void* InitData;
 		BufferFlags Flags;
 		ID3D11Buffer* BufferObject;

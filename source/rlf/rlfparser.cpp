@@ -3,18 +3,14 @@ namespace rlf
 {
 
 /******************************** Parser notes /********************************
-	Parse code happens entirely in a separate thread, so that we can abort at 
-	any time due to parse errors. That means the stack isn't cleaned up in 
-	case of an error, so make sure dynamic allocations are never contained
-	on the stack. Any allocations which are used for the RLF representation 
-	should be immediately recorded in the RenderDescription, which will be 
-	freed in ReleaseData. Immediately in this context means before any further
-	parsing occurs. Any STL containers used for intermediate state tracking 
-	should live in the ParseState and not on the stack so that they	are 
-	cleaned up properly. 
-	Also watch out for dangling iterators from STL containers. On destruction
-	of the container you'll likely get an access violation from it trying to 
-	orphan what it thinks is a still-existing iterator. 
+	Parse code can be terminated at any time due to errors. This is done via 
+	exceptions, so the stack is cleaned up, but any dynamic allocations 
+	expecting to be released later in the code may be leaked. For this reason, 
+	any allocations which are used for the RLF representation should be 
+	immediately recorded in the RenderDescription, which will be freed in 
+	ReleaseData. Immediately in this context means before any further parsing 
+	occurs. Any allocations only used for parsing can be recorded in the 
+	ParseState to be cleaned up after parsing completion, regardless of failure. 
 *******************************************************************************/
 
 #define RLF_TOKEN_TUPLE \
@@ -546,7 +542,10 @@ float ConsumeFloatLiteral(
 		}
 	}
 
-	return (float)(negative ? -val : val);
+	double result = negative ? -val : val;
+	ParserAssert(result >= -FLT_MAX && result < FLT_MAX, 
+		"Given literal is outside of representable range.");
+	return (float)(result);
 }
 
 const char* AddStringToDescriptionData(BufferString str, RenderDescription* rd)
@@ -958,6 +957,10 @@ Buffer* ConsumeBufferDef(
 	Buffer* buf = new Buffer();
 	rd->Buffers.push_back(buf);
 
+	std::vector<u16> initDataU16;
+	std::vector<float> initDataFloat;
+	bool initToZero = false;
+
 	while (true)
 	{
 		BufferString fieldId = ConsumeIdentifier(b);
@@ -984,7 +987,7 @@ Buffer* ConsumeBufferDef(
 		case Keyword::InitToZero:
 		{
 			ConsumeToken(Token::Equals, b);
-			buf->InitToZero = ConsumeBool(b);
+			initToZero = ConsumeBool(b);
 			break;
 		}
 		case Keyword::InitData:
@@ -996,53 +999,33 @@ Buffer* ConsumeBufferDef(
 			{
 				ConsumeToken(Token::LBrace, b);
 
-				u32 bufSize = buf->ElementSize * buf->ElementCount;
-				ParserAssert(bufSize > 0, "Buffer size must be given before init");
-				float* data = (float*)malloc(bufSize);
-				AddMemToDescriptionData(data, rd);
-
-				float* next = data;
 				while (true)
 				{
 					float f = ConsumeFloatLiteral(b);
-					ParserAssert((char*)next - (char*)data + sizeof(float) <= bufSize,
-						"Too many elements for buffer size.");
-
-					*next = f;
-					++next;
+					initDataFloat.push_back(f);
 
 					if (TryConsumeToken(Token::RBrace, b))
 						break;
 					else 
 						ConsumeToken(Token::Comma, b);
 				}
-				buf->InitData = data;
 			}
 			else if (key == Keyword::U16)
 			{
 				ConsumeToken(Token::LBrace, b);
 
-				u32 bufSize = buf->ElementSize * buf->ElementCount;
-				ParserAssert(bufSize > 0, "Buffer size must be given before init");
-				u16* data = (u16*)malloc(bufSize);
-				AddMemToDescriptionData(data, rd);
-
-				u16* next = data;
 				while (true)
 				{
-					u16 l = (u16)ConsumeUintLiteral(b);
-					ParserAssert((char*)next - (char*)data + sizeof(u16) <= bufSize,
-						"Too many elements for buffer size.");
-
-					*next = l;
-					++next;
+					u32 val = ConsumeUintLiteral(b);
+					ParserAssert(val < 65536, "Given literal is outside of u16 range.");
+					u16 l = (u16)val;
+					initDataU16.push_back(l);
 
 					if (TryConsumeToken(Token::RBrace, b))
 						break;
 					else 
 						ConsumeToken(Token::Comma, b);
 				}
-				buf->InitData = data;
 			}
 			else
 			{
@@ -1058,6 +1041,32 @@ Buffer* ConsumeBufferDef(
 
 		if (TryConsumeToken(Token::RBrace, b))
 			break;
+	}
+
+	u32 bufSize = buf->ElementSize * buf->ElementCount;
+	ParserAssert(bufSize > 0, "Buffer size not given");
+	if (initToZero || initDataU16.size() > 0 || initDataFloat.size() > 0)
+	{
+		float* data = (float*)malloc(bufSize);
+		AddMemToDescriptionData(data, rd);
+		buf->InitData = data;
+	}
+
+	if (initToZero)
+	{
+		ZeroMemory(buf->InitData, bufSize);
+	}
+	else if (initDataFloat.size() > 0)
+	{
+		ParserAssert(bufSize == initDataFloat.size() * sizeof(float), 
+			"Buffer/init-data size mismatch.");
+		memcpy(buf->InitData, initDataFloat.data(), bufSize);
+	}
+	else if (initDataU16.size() > 0)
+	{
+		ParserAssert(bufSize == initDataU16.size() * sizeof(u16), 
+			"Buffer/init-data size mismatch.");
+		memcpy(buf->InitData, initDataU16.data(), bufSize);
 	}
 
 	return buf;

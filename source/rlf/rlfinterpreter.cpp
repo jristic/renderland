@@ -370,12 +370,6 @@ void InitD3D(
 
 		D3D11_SUBRESOURCE_DATA initData = {};
 		initData.pSysMem = buf->InitData;
-		void* zeroMem = nullptr;
-		if (buf->InitToZero)
-		{
-			initData.pSysMem = zeroMem = malloc(bufSize);
-			ZeroMemory(zeroMem, bufSize);
-		}
 
 		D3D11_BUFFER_DESC desc;
 		desc.ByteWidth = bufSize;
@@ -385,7 +379,7 @@ void InitD3D(
 		desc.MiscFlags = buf->Flags ? 0 : D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
 		desc.StructureByteStride = buf->ElementSize;
 
-		HRESULT hr = device->CreateBuffer(&desc, initData.pSysMem ? &initData : 0,
+		HRESULT hr = device->CreateBuffer(&desc, initData.pSysMem ? &initData : nullptr,
 			&buf->BufferObject);
 		Assert(hr == S_OK, "failed to create buffer, hr=%x", hr);
 
@@ -397,9 +391,6 @@ void InitD3D(
 			hr = device->CreateUnorderedAccessView(buf->BufferObject, nullptr, &buf->UAV);
 			Assert(hr == S_OK, "failed to create UAV, hr=%x", hr);
 		}
-
-		if (buf->InitToZero)
-			free(zeroMem);
 	}
 
 	for (Texture* tex : rd->Textures)
