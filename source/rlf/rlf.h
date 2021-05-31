@@ -63,6 +63,27 @@ namespace rlf
 		BufferFlags_Vertex = 1,
 		BufferFlags_Index = 2,
 	};
+	enum class CullMode
+	{
+		None,
+		Front,
+		Back,
+	};
+	struct RasterizerState 
+	{
+		bool Fill;
+		CullMode CullMode;
+		bool FrontCCW;
+		i32 DepthBias;
+		float SlopeScaledDepthBias;
+		float DepthBiasClamp;
+		bool DepthClipEnable;
+		bool ScissorEnable;
+		// TODO: MSAA support
+		// bool MultisampleEnable;
+		// bool AntialiasedLineEnable;
+		ID3D11RasterizerState* RSObject;
+	};
 	struct ComputeShader
 	{
 		const char* ShaderPath;
@@ -140,6 +161,7 @@ namespace rlf
 	{
 		DrawType Type;
 		Topology Topology;
+		RasterizerState* RState;
 		VertexShader* VShader;
 		PixelShader* PShader;
 		Buffer* VertexBuffer;
@@ -168,6 +190,7 @@ namespace rlf
 		std::vector<Buffer*> Buffers;
 		std::vector<Texture*> Textures;
 		std::vector<Sampler*> Samplers;
+		std::vector<RasterizerState*> RasterizerStates;
 		std::set<std::string> Strings;
 		std::vector<void*> Mems;
 	};

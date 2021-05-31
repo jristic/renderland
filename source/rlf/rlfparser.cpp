@@ -52,6 +52,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(Buffer) \
 	RLF_KEYWORD_ENTRY(Texture) \
 	RLF_KEYWORD_ENTRY(Sampler) \
+	RLF_KEYWORD_ENTRY(RasterizerState) \
 	RLF_KEYWORD_ENTRY(Dispatch) \
 	RLF_KEYWORD_ENTRY(Draw) \
 	RLF_KEYWORD_ENTRY(DrawIndexed) \
@@ -91,6 +92,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(Groups) \
 	RLF_KEYWORD_ENTRY(Bind) \
 	RLF_KEYWORD_ENTRY(Topology) \
+	RLF_KEYWORD_ENTRY(RState) \
 	RLF_KEYWORD_ENTRY(VShader) \
 	RLF_KEYWORD_ENTRY(PShader) \
 	RLF_KEYWORD_ENTRY(VertexBuffer) \
@@ -110,6 +112,17 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(LineStrip) \
 	RLF_KEYWORD_ENTRY(TriList) \
 	RLF_KEYWORD_ENTRY(TriStrip) \
+	RLF_KEYWORD_ENTRY(None) \
+	RLF_KEYWORD_ENTRY(Front) \
+	RLF_KEYWORD_ENTRY(Back) \
+	RLF_KEYWORD_ENTRY(Fill) \
+	RLF_KEYWORD_ENTRY(CullMode) \
+	RLF_KEYWORD_ENTRY(FrontCCW) \
+	RLF_KEYWORD_ENTRY(DepthBias) \
+	RLF_KEYWORD_ENTRY(SlopeScaledDepthBias) \
+	RLF_KEYWORD_ENTRY(DepthBiasClamp) \
+	RLF_KEYWORD_ENTRY(DepthClipEnable) \
+	RLF_KEYWORD_ENTRY(ScissorEnable) \
 
 #define RLF_KEYWORD_ENTRY(name) name,
 enum class Keyword
@@ -195,6 +208,7 @@ struct ParseState
 	};
 	std::unordered_map<BufferString, Resource, BufferStringHash> resMap;
 	std::unordered_map<BufferString, TextureFormat, BufferStringHash> fmtMap;
+	std::unordered_map<BufferString, RasterizerState*, BufferStringHash> rsMap;
 	std::unordered_map<u32, Keyword> keyMap;
 	ParseErrorState* es;
 
@@ -746,6 +760,27 @@ Topology ConsumeTopology(BufferIter& b)
 	return topo;
 }
 
+CullMode ConsumeCullMode(BufferIter& b)
+{
+	CullMode cm = CullMode::Back;
+	BufferString id = ConsumeIdentifier(b);
+	switch (LookupKeyword(id))
+	{
+	case Keyword::None:
+		cm = CullMode::None;
+		break;
+	case Keyword::Front:
+		cm = CullMode::Front;
+		break;
+	case Keyword::Back:
+		cm = CullMode::Back;
+		break;
+	default:
+		ParserError("unexpected topology %.*s", id.len, id.base);
+	}
+	return cm;
+}
+
 Bind ConsumeBind(BufferIter& b, ParseState& ps)
 {
 	BufferString bindName = ConsumeIdentifier(b);
@@ -767,6 +802,91 @@ Bind ConsumeBind(BufferIter& b, ParseState& ps)
 		bind.BufferBind = reinterpret_cast<Buffer*>(res.m);
 	}
 	return bind;
+}
+
+RasterizerState* ConsumeRasterizerStateDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	RenderDescription* rd = ps.rd;
+
+	ConsumeToken(Token::LBrace, b);
+
+	RasterizerState* rs = new RasterizerState();
+	rd->RasterizerStates.push_back(rs);
+
+	// non-zero defaults
+	rs->Fill = true;
+	rs->CullMode = CullMode::None;
+	rs->DepthClipEnable = true;
+
+	while (true)
+	{
+		BufferString fieldId = ConsumeIdentifier(b);
+
+		switch (LookupKeyword(fieldId))
+		{
+		case Keyword::Fill:
+			ConsumeToken(Token::Equals, b);
+			rs->Fill = ConsumeBool(b);
+			break;
+		case Keyword::CullMode:
+			ConsumeToken(Token::Equals, b);
+			rs->CullMode = ConsumeCullMode(b);
+			break;
+		case Keyword::FrontCCW:
+			ConsumeToken(Token::Equals, b);
+			rs->FrontCCW = ConsumeBool(b);
+			break;
+		case Keyword::DepthBias:
+			ConsumeToken(Token::Equals, b);
+			rs->DepthBias = ConsumeIntLiteral(b);
+			break;
+		case Keyword::SlopeScaledDepthBias:
+			ConsumeToken(Token::Equals, b);
+			rs->SlopeScaledDepthBias = ConsumeFloatLiteral(b);
+			break;
+		case Keyword::DepthBiasClamp:
+			ConsumeToken(Token::Equals, b);
+			rs->DepthBiasClamp = ConsumeFloatLiteral(b);
+			break;
+		case Keyword::DepthClipEnable:
+			ConsumeToken(Token::Equals, b);
+			rs->DepthClipEnable = ConsumeBool(b);
+			break;
+		case Keyword::ScissorEnable:
+			ConsumeToken(Token::Equals, b);
+			rs->ScissorEnable = ConsumeBool(b);
+			break;
+		default:
+			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+		}
+
+		ConsumeToken(Token::Semicolon, b);
+
+		if (TryConsumeToken(Token::RBrace, b))
+			break;
+	}
+
+	return rs;
+}
+
+RasterizerState* ConsumeRasterizerStateRefOrDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	BufferString id = ConsumeIdentifier(b);
+	Keyword key = LookupKeyword(id);
+	if (key == Keyword::RasterizerState)
+	{
+		return ConsumeRasterizerStateDef(b,ps);
+	}
+	else
+	{
+		ParserAssert(ps.rsMap.count(id) != 0, "couldn't find rasterizer state %.*s",
+			id.len, id.base);
+		return ps.rsMap[id];
+	}
 }
 
 ComputeShader* ConsumeComputeShaderDef(
@@ -1301,6 +1421,12 @@ Draw* ConsumeDrawDef(
 			draw->Topology = ConsumeTopology(b);
 			break;
 		}
+		case Keyword::RState:
+		{
+			ConsumeToken(Token::Equals, b);
+			draw->RState = ConsumeRasterizerStateRefOrDef(b, ps);
+			break;
+		}
 		case Keyword::VShader:
 		{
 			ConsumeToken(Token::Equals, b);
@@ -1478,6 +1604,15 @@ void ParseMain()
 			res.m = s;
 			break;
 		}
+		case Keyword::RasterizerState:
+		{
+			RasterizerState* rs = ConsumeRasterizerStateDef(b,ps);
+			BufferString nameId = ConsumeIdentifier(b);
+			ParserAssert(ps.rsMap.count(nameId) == 0, "Rasterizer state %.*s already defined",
+				nameId.len, nameId.base);
+			ps.rsMap[nameId] = rs;
+			break;
+		}
 		case Keyword::Dispatch:
 		{
 			Dispatch* dc = ConsumeDispatchDef(b, ps);
@@ -1607,6 +1742,8 @@ void ReleaseData(RenderDescription* data)
 		delete tex;
 	for (Sampler* s : data->Samplers)
 		delete s;
+	for (RasterizerState* rs : data->RasterizerStates)
+		delete rs;
 	for (void* mem : data->Mems)
 		free(mem);
 	delete data;

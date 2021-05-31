@@ -20,7 +20,6 @@
 	* Camera position/look-at utility
 
 **** Expand draw pipeline support.
-	* Rasterizer state.
 	* Viewport.
 	* Blend state.
 	* Multiple RT support. 
@@ -35,3 +34,5 @@
 * Sample: Clustered lighting.
 * Sample: Compute-based culling with draw-indirect.
 * Sample: Mirror reflection. 
+* Sample: Compute fluid simulation. 
+* Sample: Compute sorted triangles for transparency rendering. 

@@ -58,6 +58,16 @@ D3D11_PRIMITIVE_TOPOLOGY RlfToD3d(Topology topo)
 	return topos[(u32)topo];
 }
 
+D3D11_CULL_MODE RlfToD3d(CullMode cm)
+{
+	static D3D11_CULL_MODE cms[] = {
+		D3D11_CULL_NONE,
+		D3D11_CULL_FRONT,
+		D3D11_CULL_BACK,
+	};
+	return cms[(u32)cm];
+}
+
 u32 RlfToD3d(BufferFlags flags)
 {
 	u32 f = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
@@ -246,8 +256,7 @@ void InitD3D(
 		D3D11_RASTERIZER_DESC desc = {};
 		desc.FillMode = D3D11_FILL_SOLID;
 		desc.CullMode = D3D11_CULL_NONE;
-		desc.ScissorEnable = false;
-		desc.DepthClipEnable = false;
+		desc.DepthClipEnable = TRUE;
 		device->CreateRasterizerState(&desc, &DefaultRasterizerState);
 	}
 	
@@ -336,9 +345,7 @@ void InitD3D(
 		{
 			ResolveBind(bind, reflector, dc->Shader->ShaderPath, errorState);
 			if (errorState->InitSuccess == false)
-			{
 				return;
-			}
 		}
 	}
 
@@ -349,18 +356,14 @@ void InitD3D(
 		{
 			ResolveBind(bind, reflector, draw->VShader->ShaderPath, errorState);
 			if (errorState->InitSuccess == false)
-			{
 				return;
-			}
 		}
 		reflector = draw->PShader->Reflector;
 		for (Bind& bind : draw->PSBinds)
 		{
 			ResolveBind(bind, reflector, draw->PShader->ShaderPath, errorState);
 			if (errorState->InitSuccess == false)
-			{
 				return;
-			}
 		}
 	}
 
@@ -471,6 +474,20 @@ void InitD3D(
 		HRESULT hr = device->CreateSamplerState(&desc, &s->SamplerObject);
 		Assert(hr == S_OK, "failed to create sampler, hr=%x", hr);
 	}
+
+	for (RasterizerState* rs : rd->RasterizerStates)
+	{
+		D3D11_RASTERIZER_DESC desc = {};
+		desc.FillMode = rs->Fill ? D3D11_FILL_SOLID : D3D11_FILL_WIREFRAME;
+		desc.CullMode = RlfToD3d(rs->CullMode);
+		desc.FrontCounterClockwise = rs->FrontCCW;
+		desc.DepthBias = rs->DepthBias;
+		desc.SlopeScaledDepthBias = rs->SlopeScaledDepthBias;
+		desc.DepthBiasClamp = rs->DepthBiasClamp;
+		desc.DepthClipEnable = rs->DepthClipEnable;
+		desc.ScissorEnable = rs->ScissorEnable;
+		device->CreateRasterizerState(&desc, &rs->RSObject);
+	}
 }
 
 void ReleaseD3D(
@@ -510,6 +527,11 @@ void ReleaseD3D(
 	for (Sampler* s : rd->Samplers)
 	{
 		SafeRelease(s->SamplerObject);
+	}
+
+	for (RasterizerState* rs : rd->RasterizerStates)
+	{
+		SafeRelease(rs->RSObject);
 	}
 }
 
@@ -625,7 +647,7 @@ void ExecuteDraw(
 	vp.MaxDepth = 1.0f;
 	vp.TopLeftX = vp.TopLeftY = 0;
 	ctx->RSSetViewports(1, &vp);
-	ctx->RSSetState(DefaultRasterizerState);
+	ctx->RSSetState(draw->RState ? draw->RState->RSObject : DefaultRasterizerState);
 	if (draw->Type == DrawType::Draw)
 	{
 		ctx->Draw(draw->VertexCount, 0);
