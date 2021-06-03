@@ -124,6 +124,14 @@ ID3DBlob* CommonCompileShader(const char* path, const char* profile,
 		return nullptr;
 	}
 
+	// check for warnings
+	if (errorBlob)
+	{
+		errorState->InitWarning = true;
+		char* errorText = (char*)errorBlob->GetBufferPointer();
+		errorState->ErrorMessage += errorText;
+	}
+
 	SafeRelease(errorBlob);
 	return shaderBlob;
 }

@@ -38,6 +38,8 @@ static ID3D11Buffer*            g_pConstantBuffer = nullptr;
 
 bool RlfCompileSuccess = false;
 std::string RlfCompileErrorMessage;
+bool RlfCompileWarning = false;
+std::string RlfCompileWarningMessage;
 config::Parameters Cfg = { "", false, 0, 0, 1280, 800 };
 bool StartupComplete = false;
 
@@ -207,6 +209,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 				ImGui::PopTextWrapPos();
 				ImGui::PopStyleColor();
 			}
+			else if (RlfCompileWarning)
+			{
+				ImVec4 color = ImVec4(0.8f, 0.8f, 0.2f, 1.0f);
+				ImGui::PushStyleColor(ImGuiCol_Text, color);
+				ImGui::PushTextWrapPos(0.f);
+
+				ImGui::TextUnformatted(RlfCompileWarningMessage.c_str());
+
+				ImGui::PopTextWrapPos();
+				ImGui::PopStyleColor();
+			}
 
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
 				1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
@@ -332,7 +345,10 @@ void CreateShader()
 		return;
 	}
 
-	RlfCompileSuccess = ies.InitSuccess;
+	RlfCompileSuccess = true;
+
+	RlfCompileWarning = ies.InitWarning;
+	RlfCompileWarningMessage = ies.ErrorMessage;
 }
 
 void CleanupShader()

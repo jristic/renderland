@@ -4,6 +4,7 @@ namespace rlf
 	struct InitErrorState 
 	{
 		bool InitSuccess;
+		bool InitWarning;
 		std::string ErrorMessage;
 	};
 

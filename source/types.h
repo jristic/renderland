@@ -15,6 +15,12 @@ struct uint3 {
 	u32 x,y,z;
 };
 
+struct float2 {
+	float x,y;
+};
+struct float3 {
+	float x,y,z;
+};
 struct float4 {
 	float x,y,z,w;
 };
