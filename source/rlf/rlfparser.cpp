@@ -1,4 +1,8 @@
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "tinyobjloader/tiny_obj_loader.h"
+#undef TINYOBJLOADER_IMPLEMENTATION
+
 namespace rlf
 {
 
@@ -24,6 +28,7 @@ namespace rlf
 	RLF_TOKEN_ENTRY(Minus) \
 	RLF_TOKEN_ENTRY(Semicolon) \
 	RLF_TOKEN_ENTRY(At) \
+	RLF_TOKEN_ENTRY(Period) \
 	RLF_TOKEN_ENTRY(IntegerLiteral) \
 	RLF_TOKEN_ENTRY(FloatLiteral) \
 	RLF_TOKEN_ENTRY(Identifier) \
@@ -53,6 +58,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(Texture) \
 	RLF_KEYWORD_ENTRY(Sampler) \
 	RLF_KEYWORD_ENTRY(RasterizerState) \
+	RLF_KEYWORD_ENTRY(ObjImport) \
 	RLF_KEYWORD_ENTRY(Dispatch) \
 	RLF_KEYWORD_ENTRY(Draw) \
 	RLF_KEYWORD_ENTRY(DrawIndexed) \
@@ -123,6 +129,9 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(DepthBiasClamp) \
 	RLF_KEYWORD_ENTRY(DepthClipEnable) \
 	RLF_KEYWORD_ENTRY(ScissorEnable) \
+	RLF_KEYWORD_ENTRY(ObjPath) \
+	RLF_KEYWORD_ENTRY(Vertices) \
+	RLF_KEYWORD_ENTRY(Indices) \
 
 #define RLF_KEYWORD_ENTRY(name) name,
 enum class Keyword
@@ -209,10 +218,12 @@ struct ParseState
 	std::unordered_map<BufferString, Resource, BufferStringHash> resMap;
 	std::unordered_map<BufferString, TextureFormat, BufferStringHash> fmtMap;
 	std::unordered_map<BufferString, RasterizerState*, BufferStringHash> rsMap;
+	std::unordered_map<BufferString, ObjImport*, BufferStringHash> objMap;
 	std::unordered_map<u32, Keyword> keyMap;
 	ParseErrorState* es;
 
 	const char* filename;
+	const char* workingDirectory;
 	char* bufferStart;
 	Token fcLUT[128];
 } *GPS;
@@ -307,6 +318,7 @@ void ParseStateInit(ParseState* ps)
 	fcLUT['-'] = Token::Minus;
 	fcLUT[';'] = Token::Semicolon;
 	fcLUT['@'] = Token::At;
+	fcLUT['.'] = Token::Period;
 	fcLUT['"'] = Token::String;
 	for (u32 fc = 0 ; fc < 128 ; ++fc)
 	{
@@ -356,6 +368,7 @@ Token PeekNextToken(
 	case Token::Minus:
 	case Token::Semicolon:
 	case Token::At:
+	case Token::Period:
 		break;
 	case Token::IntegerLiteral:
 		while(b.next < b.end && isdigit(*b.next)) {
@@ -1066,6 +1079,162 @@ PixelShader* ConsumePixelShaderRefOrDef(
 	}
 }
 
+void ParseOBJ(ObjImport* import, RenderDescription* rd, ParseState& ps)
+{
+	tinyobj::attrib_t attrib;
+	std::vector<tinyobj::shape_t> shapes;
+	std::vector<tinyobj::material_t> materials;
+	std::string err;
+
+	std::string path = ps.workingDirectory;
+	path += import->ObjPath;
+
+	bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, path.c_str(),
+		"./", true);
+	ParserAssert(ret, "failed to load obj file: %s", err.c_str());
+
+	struct IndexEqual
+	{
+		bool operator()(const tinyobj::index_t& l, const tinyobj::index_t& r) const
+		{
+			if (l.vertex_index != r.vertex_index)
+				return false;
+			if (l.normal_index != r.normal_index)
+				return false;
+			if (l.texcoord_index != r.texcoord_index)
+				return false;
+			return true;
+		}
+	};
+	struct IndexHash
+	{
+		size_t operator()(const tinyobj::index_t& i) const
+		{
+			size_t h = 5381;
+			h = ((h << 5) + h) + i.vertex_index;
+			h = ((h << 5) + h) + i.normal_index;
+			h = ((h << 5) + h) + i.texcoord_index;
+			return h; 
+		}
+	};
+	std::unordered_map<tinyobj::index_t, size_t, IndexHash, IndexEqual> map;
+
+	struct Vertex {
+		float3 v;
+		float3 vn;
+		float2 vt;
+	};
+	std::vector<Vertex> verts;
+	std::vector<u32> indices;
+	bool isU16 = true;
+
+	for (tinyobj::shape_t& shape : shapes)
+	{
+		size_t indexOffset = 0;
+		tinyobj::mesh_t& mesh = shape.mesh;
+		for (size_t fv : mesh.num_face_vertices)
+		{
+			ParserAssert(fv == 3, "un-triangulated faces not supported.");
+			for (size_t v = 0 ; v < fv ; ++v)
+			{
+				tinyobj::index_t idx = mesh.indices[indexOffset + v];
+
+				auto search = map.find(idx);
+				if (search != map.end())
+				{
+					indices.push_back((u32)search->second);
+					continue;
+				}
+
+				Vertex vert = {};
+
+				tinyobj::real_t vx = attrib.vertices[3*size_t(idx.vertex_index)+0];
+				tinyobj::real_t vy = attrib.vertices[3*size_t(idx.vertex_index)+1];
+				tinyobj::real_t vz = attrib.vertices[3*size_t(idx.vertex_index)+2];
+				vert.v = {vx, vy, vz};
+
+				// Check if `normal_index` is zero or positive. negative = no normal data
+				if (idx.normal_index >= 0)
+				{
+					tinyobj::real_t nx = attrib.normals[3*size_t(idx.normal_index)+0];
+					tinyobj::real_t ny = attrib.normals[3*size_t(idx.normal_index)+1];
+					tinyobj::real_t nz = attrib.normals[3*size_t(idx.normal_index)+2];
+					vert.vn = {nx, ny, nz};
+				}
+
+				// Check if `texcoord_index` is zero or positive. negative = no texcoord data
+				if (idx.texcoord_index >= 0) {
+					tinyobj::real_t tx = attrib.texcoords[2*size_t(idx.texcoord_index)+0];
+					tinyobj::real_t ty = attrib.texcoords[2*size_t(idx.texcoord_index)+1];
+					vert.vt = {tx, ty};
+				}
+
+				size_t index = verts.size();
+				if (index > USHRT_MAX)
+					isU16 = false;
+				verts.push_back(vert);
+				indices.push_back((u32)index);
+				map[idx] = index;
+			}
+			indexOffset += fv;
+		}
+	}
+
+	import->U16 = isU16;
+	import->VertexCount = (u32)verts.size();
+	import->IndexCount = (u32)indices.size();
+
+	size_t vertsSize = sizeof(Vertex) * verts.size();
+	import->Vertices = malloc(vertsSize);
+	AddMemToDescriptionData(import->Vertices, rd);
+	memcpy(import->Vertices, verts.data(), vertsSize);
+
+	size_t indicesSize = (isU16 ? 2 : 4) * indices.size();
+	import->Indices = malloc(indicesSize);
+	AddMemToDescriptionData(import->Indices, rd);
+	if (isU16)
+	{
+		u16* shorts = (u16*)import->Indices;
+		for (size_t i = 0 ; i < indices.size() ; ++i)
+		{
+			u32 val = indices[i];
+			Assert(val <= USHRT_MAX, "mismatch in expected size");
+			shorts[i] = (u16)val;
+		}
+	}
+	else
+	{
+		memcpy(import->Indices, indices.data(), indicesSize);
+	}
+}
+
+ObjImport* ConsumeObjImportDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	RenderDescription* rd = ps.rd;
+
+	ConsumeToken(Token::LBrace, b);
+
+	ObjImport* obj = new ObjImport();
+	rd->Objs.push_back(obj);
+
+	BufferString fieldId = ConsumeIdentifier(b);
+	if (LookupKeyword(fieldId) == Keyword::ObjPath)
+	{
+		ConsumeToken(Token::Equals, b);
+		BufferString path = ConsumeString(b);
+		obj->ObjPath = AddStringToDescriptionData(path, rd);
+	}
+
+	ConsumeToken(Token::Semicolon, b);
+	ConsumeToken(Token::RBrace, b);
+
+	ParseOBJ(obj, rd, ps);
+
+	return obj;
+}
+
 
 Buffer* ConsumeBufferDef(
 	BufferIter& b,
@@ -1081,6 +1250,9 @@ Buffer* ConsumeBufferDef(
 	std::vector<u16> initDataU16;
 	std::vector<float> initDataFloat;
 	bool initToZero = false;
+
+	ObjImport* obj = nullptr;
+	bool objVerts = false;
 
 	while (true)
 	{
@@ -1148,9 +1320,28 @@ Buffer* ConsumeBufferDef(
 						ConsumeToken(Token::Comma, b);
 				}
 			}
+			else if (ps.objMap.count(id) > 0)
+			{
+				obj = ps.objMap[id];
+				ConsumeToken(Token::Period, b);
+				BufferString sub = ConsumeIdentifier(b);
+				Keyword subkey = LookupKeyword(sub);
+				if (subkey == Keyword::Vertices)
+				{
+					objVerts = true;
+				}
+				else if (subkey == Keyword::Indices)
+				{
+					objVerts = false;
+				}
+				else
+				{
+					ParserError("unexpected obj subscript %.*s", id.len, id.base);
+				}
+			}
 			else
 			{
-				ParserError("unexpected data type %.*s", id.len, id.base);
+				ParserError("unexpected data type or obj import %.*s", id.len, id.base);
 			}
 			break;
 		}
@@ -1164,30 +1355,49 @@ Buffer* ConsumeBufferDef(
 			break;
 	}
 
-	u32 bufSize = buf->ElementSize * buf->ElementCount;
-	ParserAssert(bufSize > 0, "Buffer size not given");
-	if (initToZero || initDataU16.size() > 0 || initDataFloat.size() > 0)
+	if (obj)
 	{
-		float* data = (float*)malloc(bufSize);
-		AddMemToDescriptionData(data, rd);
-		buf->InitData = data;
+		if (objVerts)
+		{
+			buf->InitData = obj->Vertices;
+			buf->ElementSize = 32;
+			buf->ElementCount = obj->VertexCount;
+			// TODO: configurable obj outputs
+		}
+		else
+		{
+			buf->InitData = obj->Indices;
+			buf->ElementSize = obj->U16 ? 2 : 4;
+			buf->ElementCount = obj->IndexCount;
+		}
 	}
+	else
+	{
+		u32 bufSize = buf->ElementSize * buf->ElementCount;
+		ParserAssert(bufSize > 0, "Buffer size not given");
+		if (initToZero || initDataU16.size() > 0 || initDataFloat.size() > 0)
+		{
+			float* data = (float*)malloc(bufSize);
+			AddMemToDescriptionData(data, rd);
+			buf->InitData = data;
+		}
 
-	if (initToZero)
-	{
-		ZeroMemory(buf->InitData, bufSize);
-	}
-	else if (initDataFloat.size() > 0)
-	{
-		ParserAssert(bufSize == initDataFloat.size() * sizeof(float), 
-			"Buffer/init-data size mismatch.");
-		memcpy(buf->InitData, initDataFloat.data(), bufSize);
-	}
-	else if (initDataU16.size() > 0)
-	{
-		ParserAssert(bufSize == initDataU16.size() * sizeof(u16), 
-			"Buffer/init-data size mismatch.");
-		memcpy(buf->InitData, initDataU16.data(), bufSize);
+		if (initToZero)
+		{
+			ZeroMemory(buf->InitData, bufSize);
+		}
+		else if (initDataFloat.size() > 0)
+		{
+			ParserAssert(bufSize == initDataFloat.size() * sizeof(float), 
+				"Buffer/init-data size mismatch.");
+			memcpy(buf->InitData, initDataFloat.data(), bufSize);
+		}
+		else if (initDataU16.size() > 0)
+		{
+			ParserAssert(bufSize == initDataU16.size() * sizeof(u16), 
+				"Buffer/init-data size mismatch.");
+			memcpy(buf->InitData, initDataU16.data(), bufSize);
+		}
 	}
 
 	return buf;
@@ -1613,6 +1823,15 @@ void ParseMain()
 			ps.rsMap[nameId] = rs;
 			break;
 		}
+		case Keyword::ObjImport:
+		{
+			ObjImport* obj = ConsumeObjImportDef(b,ps);
+			BufferString nameId = ConsumeIdentifier(b);
+			ParserAssert(ps.objMap.count(nameId) == 0, "Obj import %.*s already defined",
+				nameId.len, nameId.base);
+			ps.objMap[nameId] = obj;
+			break;
+		}
 		case Keyword::Dispatch:
 		{
 			Dispatch* dc = ConsumeDispatchDef(b, ps);
@@ -1667,6 +1886,7 @@ void ParseMain()
 
 RenderDescription* ParseFile(
 	const char* filename,
+	const char* workingDir,
 	ParseErrorState* errorState)
 {
 	HANDLE rlf = fileio::OpenFileOptional(filename, GENERIC_READ);
@@ -1693,6 +1913,7 @@ RenderDescription* ParseFile(
 	ps.b = { rlfBuffer, rlfBuffer + rlfSize };
 	ps.bufferStart = rlfBuffer;
 	ps.filename = filename;
+	ps.workingDirectory = workingDir;
 	ParseStateInit(&ps);
 
 	GPS = &ps;
@@ -1744,6 +1965,8 @@ void ReleaseData(RenderDescription* data)
 		delete s;
 	for (RasterizerState* rs : data->RasterizerStates)
 		delete rs;
+	for (ObjImport* obj : data->Objs)
+		delete obj;
 	for (void* mem : data->Mems)
 		free(mem);
 	delete data;

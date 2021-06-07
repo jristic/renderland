@@ -107,6 +107,15 @@ namespace rlf
 		ID3D11PixelShader* ShaderObject;
 		ID3D11ShaderReflection* Reflector;
 	};
+	struct ObjImport 
+	{
+		const char* ObjPath;
+		void* Vertices;
+		u32 VertexCount;
+		void* Indices;
+		u32 IndexCount;
+		bool U16;
+	};
 	struct Buffer
 	{
 		u32 ElementSize;
@@ -191,6 +200,7 @@ namespace rlf
 		std::vector<Texture*> Textures;
 		std::vector<Sampler*> Samplers;
 		std::vector<RasterizerState*> RasterizerStates;
+		std::vector<ObjImport*> Objs;
 		std::set<std::string> Strings;
 		std::vector<void*> Mems;
 	};

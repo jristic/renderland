@@ -9,6 +9,7 @@ namespace rlf
 
 	RenderDescription* ParseFile(
 		const char* filename,
+		const char* workingDir,
 		ParseErrorState* errorState);
 
 	void ReleaseData(RenderDescription* data);

@@ -313,9 +313,17 @@ void CreateShader()
 {
 	char* filename = Cfg.FilePath;
 
+	std::string filePath(filename);
+	std::string dirPath;
+	size_t pos = filePath.find_last_of("/\\");
+	if (pos != std::string::npos)
+	{
+		dirPath = filePath.substr(0, pos+1);
+	}
+
 	Assert(CurrentRenderDesc == nullptr, "leaking data");
 	rlf::ParseErrorState es = {};
-	CurrentRenderDesc = rlf::ParseFile(filename, &es);
+	CurrentRenderDesc = rlf::ParseFile(filename, dirPath.c_str(), &es);
 
 	if (es.ParseSuccess == false)
 	{
@@ -323,14 +331,6 @@ void CreateShader()
 		RlfCompileSuccess = false;
 		RlfCompileErrorMessage = std::string("Failed to parse RLF:\n") + es.ErrorMessage;
 		return;
-	}
-
-	std::string filePath(filename);
-	std::string dirPath;
-	size_t pos = filePath.find_last_of("/\\");
-	if (pos != std::string::npos)
-	{
-		dirPath = filePath.substr(0, pos+1);
 	}
 
 	rlf::InitErrorState ies = {};

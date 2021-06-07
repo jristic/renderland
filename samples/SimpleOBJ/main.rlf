@@ -1,0 +1,33 @@
+
+ObjImport {
+	ObjPath = "monkey.obj";
+} monkeyObj
+
+Buffer {
+	Flags = { Vertex };
+	InitData = monkeyObj.vertices;
+} verts
+
+Buffer {
+	Flags = { Index };
+	InitData = monkeyObj.indices;
+} indices
+
+DrawIndexed {
+	Topology = TriList;
+	VShader = VertexShader {
+		ShaderPath = "vertex.hlsl";
+		EntryPoint = "VSMain";
+	};
+	PShader = PixelShader {
+		ShaderPath = "pixel.hlsl";
+		EntryPoint = "PSMain";
+	};
+	VertexBuffer = verts;
+	IndexBuffer = indices;
+	RenderTarget = @BackBuffer;
+} objDraw
+
+Passes {
+	objDraw
+}

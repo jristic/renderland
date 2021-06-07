@@ -1,5 +1,3 @@
-* Allow populating vertex/index buffers from OBJ file. 
-
 * Expose D3D debug errors to the user. 
 
 * Use linear memory allocator for RenderDescription allocations. 
@@ -9,6 +7,9 @@
 	* Should I fill a constant buffer declared in the shader using reflection info? or generate a global / per-dispatch constant buffer for shaders?
 * Better way to size structured buffers.
 	* right now you have to figure out manually how big a struct would be and enter that as the ElementSize field.
+* Templating of blocks of RLF data
+	* For instance if you wanted to draw a model multiple times, you have all the boilerplate for a draw, but you allow the position / obj-file / textures to be substituted. 
+	* Kind of like a text prefab.
 * Integrate RenderDoc capture?
 * Investigate automatically reloading any time a file is updated.
 * Dynamic flow control? 
