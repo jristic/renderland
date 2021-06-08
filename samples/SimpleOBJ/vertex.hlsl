@@ -7,13 +7,13 @@ struct VSInput {
 
 struct VSOutput {
 	float4 pos : SV_Position;
-	float2 tex : TEXCOORD0;
+	float3 n : NORMAL0;
 };
 
 VSOutput VSMain(uint id : SV_VertexID, VSInput input)
 {
 	VSOutput output;
 	output.pos = float4(input.pos, 1.0);
-	output.tex = input.tex;
+	output.n = input.normal;
 	return output;
 }

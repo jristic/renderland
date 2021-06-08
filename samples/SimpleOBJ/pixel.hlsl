@@ -1,5 +1,16 @@
 
-float4 PSMain(float4 pos : SV_Position, float2 coords : TEXCOORD0) : SV_Target0
+struct VSOutput {
+	float4 pos : SV_Position;
+	float3 n : NORMAL0;
+};
+
+float4 PSMain(VSOutput input) : SV_Target0
 {
-	return float4(coords, 1-coords.x, 1);
+	float4 col = float4(0,0,0,1);
+
+	float3 dir = float3(1,0,-1);
+	float light = dot(input.n, normalize(dir));
+	col.rgb = light;
+
+	return col;
 }
