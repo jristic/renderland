@@ -22,6 +22,7 @@ namespace rlf
 		ID3D11DeviceContext* D3dCtx;
 		ID3D11RenderTargetView* MainRtv;
 		ID3D11UnorderedAccessView* MainRtUav;
+		ID3D11DepthStencilView* DefaultDepthView;
 		ID3D11Buffer* GlobalConstantBuffer;
 		uint2 DisplaySize;
 		float Time;

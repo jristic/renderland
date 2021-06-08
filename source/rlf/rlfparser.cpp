@@ -64,6 +64,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(DrawIndexed) \
 	RLF_KEYWORD_ENTRY(Passes) \
 	RLF_KEYWORD_ENTRY(BackBuffer) \
+	RLF_KEYWORD_ENTRY(DefaultDepth) \
 	RLF_KEYWORD_ENTRY(Point) \
 	RLF_KEYWORD_ENTRY(Linear) \
 	RLF_KEYWORD_ENTRY(Aniso) \
@@ -105,6 +106,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(IndexBuffer) \
 	RLF_KEYWORD_ENTRY(VertexCount) \
 	RLF_KEYWORD_ENTRY(RenderTarget) \
+	RLF_KEYWORD_ENTRY(DepthTarget) \
 	RLF_KEYWORD_ENTRY(BindVS) \
 	RLF_KEYWORD_ENTRY(BindPS) \
 	RLF_KEYWORD_ENTRY(True) \
@@ -590,9 +592,14 @@ void AddMemToDescriptionData(void* mem, RenderDescription* rd)
 SystemValue ConsumeSystemValue(BufferIter& b)
 {
 	BufferString sysId = ConsumeIdentifier(b);
-	if (LookupKeyword(sysId) == Keyword::BackBuffer)
+	Keyword key = LookupKeyword(sysId);
+	if (key == Keyword::BackBuffer)
 	{
 		return SystemValue::BackBuffer;
+	}
+	else if (key == Keyword::DefaultDepth)
+	{
+		return SystemValue::DefaultDepth;
 	}
 	ParserError("Invalid system value: %.*s", sysId.len, sysId.base);
 	return SystemValue::Invalid;
@@ -1683,6 +1690,19 @@ Draw* ConsumeDrawDef(
 			if (TryConsumeToken(Token::At, b))
 			{
 				draw->RenderTarget = ConsumeSystemValue(b);
+			}
+			else
+			{
+				Unimplemented();
+			}
+			break;
+		}
+		case Keyword::DepthTarget:
+		{
+			ConsumeToken(Token::Equals, b);
+			if (TryConsumeToken(Token::At, b))
+			{
+				draw->DepthTarget = ConsumeSystemValue(b);
 			}
 			else
 			{

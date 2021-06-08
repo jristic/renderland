@@ -26,6 +26,7 @@ DrawIndexed {
 	VertexBuffer = verts;
 	IndexBuffer = indices;
 	RenderTarget = @BackBuffer;
+	DepthTarget = @DefaultDepth;
 } objDraw
 
 Passes {

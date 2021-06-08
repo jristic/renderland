@@ -29,11 +29,13 @@
 
 #define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
 
-static ID3D11Device*            g_pd3dDevice = NULL;
-static ID3D11DeviceContext*     g_pd3dDeviceContext = NULL;
-static IDXGISwapChain*          g_pSwapChain = NULL;
-static ID3D11RenderTargetView*  g_mainRenderTargetView = NULL;
-static ID3D11UnorderedAccessView*  g_mainRenderTargetUav = NULL;
+static ID3D11Device*            g_pd3dDevice = nullptr;
+static ID3D11DeviceContext*     g_pd3dDeviceContext = nullptr;
+static IDXGISwapChain*          g_pSwapChain = nullptr;
+static ID3D11RenderTargetView*  g_mainRenderTargetView = nullptr;
+static ID3D11UnorderedAccessView*  g_mainRenderTargetUav = nullptr;
+static ID3D11Texture2D* 		g_mainDepthStencilTex = nullptr;
+static ID3D11DepthStencilView*  g_mainDepthStencilView = nullptr;
 static ID3D11Buffer*            g_pConstantBuffer = nullptr;
 
 bool RlfCompileSuccess = false;
@@ -240,9 +242,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			clear_color.z * clear_color.w, 
 			clear_color.w
 		};
-		g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
 		g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, 
 			clear_color_with_alpha);
+		g_pd3dDeviceContext->ClearDepthStencilView(g_mainDepthStencilView, 
+			D3D11_CLEAR_DEPTH, 1.f, 0);
 
 		// Dispatch our shader
 		if (RlfCompileSuccess)
@@ -251,6 +254,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			ctx.D3dCtx = g_pd3dDeviceContext;
 			ctx.MainRtv = g_mainRenderTargetView;
 			ctx.MainRtUav = g_mainRenderTargetUav;
+			ctx.DefaultDepthView = g_mainDepthStencilView;
 			ctx.GlobalConstantBuffer = g_pConstantBuffer;
 			ctx.DisplaySize.x = (u32)io.DisplaySize.x;
 			ctx.DisplaySize.y = (u32)io.DisplaySize.y;
@@ -301,12 +305,37 @@ void CreateRenderTarget()
 	g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_mainRenderTargetView);
 	g_pd3dDevice->CreateUnorderedAccessView(pBackBuffer, nullptr, &g_mainRenderTargetUav);
 	pBackBuffer->Release();
+
+	D3D11_TEXTURE2D_DESC rtDesc = {};
+	pBackBuffer->GetDesc(&rtDesc);
+
+	D3D11_TEXTURE2D_DESC desc;
+	desc.Width = rtDesc.Width;
+	desc.Height = rtDesc.Height;
+	desc.MipLevels = 1;
+	desc.ArraySize = 1;
+	desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	desc.SampleDesc.Count = 1;
+	desc.SampleDesc.Quality = 0;
+	desc.Usage = D3D11_USAGE_DEFAULT;
+	desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+	desc.CPUAccessFlags = 0;
+	desc.MiscFlags = 0;
+
+	HRESULT hr = g_pd3dDevice->CreateTexture2D(&desc, nullptr, &g_mainDepthStencilTex);
+	Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
+
+	hr = g_pd3dDevice->CreateDepthStencilView(g_mainDepthStencilTex, nullptr, 
+		&g_mainDepthStencilView);
+	Assert(hr == S_OK, "failed to create depthstencil view, hr=%x", hr);
 }
 
 void CleanupRenderTarget()
 {
 	SafeRelease(g_mainRenderTargetView);
 	SafeRelease(g_mainRenderTargetUav);
+	SafeRelease(g_mainDepthStencilView);
+	SafeRelease(g_mainDepthStencilTex);
 }
 
 void CreateShader()

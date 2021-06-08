@@ -20,6 +20,7 @@ namespace rlf
 	{
 		Invalid,
 		BackBuffer,
+		DefaultDepth,
 	};
 	enum class Filter
 	{
@@ -177,6 +178,7 @@ namespace rlf
 		Buffer* IndexBuffer;
 		u32 VertexCount;
 		SystemValue RenderTarget;
+		SystemValue DepthTarget;
 		std::vector<Bind> VSBinds;
 		std::vector<Bind> PSBinds;
 	};

@@ -642,11 +642,16 @@ void ExecuteDraw(
 		}
 	}
 	ID3D11RenderTargetView* rtViews[8] = {};
+	ID3D11DepthStencilView* dsView = nullptr;
 	if (draw->RenderTarget == SystemValue::BackBuffer)
 		rtViews[0] = ec->MainRtv;
 	else 
 		Unimplemented();
-	ctx->OMSetRenderTargets(8, rtViews, nullptr);
+	if (draw->DepthTarget == SystemValue::DefaultDepth)
+		dsView = ec->DefaultDepthView;
+	else
+		Unimplemented();
+	ctx->OMSetRenderTargets(8, rtViews, dsView);
 	ctx->IASetPrimitiveTopology(RlfToD3d(draw->Topology));
 	D3D11_VIEWPORT vp = {};
 	vp.Width = (float)ec->DisplaySize.x;
