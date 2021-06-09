@@ -699,6 +699,7 @@ void Execute(
 		float DisplaySizeX, DisplaySizeY;
 		float Time;
 		float Padding;
+		float4x4 Matrix;
 	};
 
 	// Update constant buffer
@@ -711,6 +712,15 @@ void Execute(
 		cb->DisplaySizeX = (float)ec->DisplaySize.x;
 		cb->DisplaySizeY = (float)ec->DisplaySize.y;
 		cb->Time = time;
+		float fovv = 3.14f/2.f;
+		float aspect = (float)ec->DisplaySize.x / (float)ec->DisplaySize.y;
+		float znear = 0.1f;
+		float zfar = 10.f;
+		float3 from = { 2.f, 0.f, 0.f };
+		float3 to = { 0.f, 0.f, 0.f };
+		float4x4 look = lookAt(from, to);
+		float4x4 proj = projection(fovv, aspect, znear, zfar);
+		cb->Matrix = proj * look;
 		ctx->Unmap(ec->GlobalConstantBuffer, 0);
 	}
 

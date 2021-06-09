@@ -20,6 +20,7 @@
 
 // Project headers
 #include "types.h"
+#include "matrix.h"
 #include "assert.h"
 #include "config.h"
 #include "fileio.h"
@@ -124,6 +125,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		float DisplaySizeX, DisplaySizeY;
 		float Time;
 		float Padding;
+		float4x4 Matrix;
 	};
 
 	// Create constant buffer

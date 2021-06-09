@@ -23,6 +23,7 @@
 **** Expand draw pipeline support.
 	* Render to texture
 		* need some way to size rendertarget based on backbuffer
+		* adjust viewport based on texture being rendered to. 
 	* Depth/stencil support.
 		* Depth stencil state.
 	* Viewport.
@@ -41,3 +42,4 @@
 * Sample: Mirror reflection. 
 * Sample: Compute fluid simulation. 
 * Sample: Compute sorted triangles for transparency rendering. 
+* Sample: Deferred rendering with gbuffers.
