@@ -145,6 +145,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	Assert(SUCCEEDED(success), "failed to get debug device");
 	success = g_d3dInfoQueue->QueryInterface(__uuidof(ID3D11InfoQueue),
 		(void**)&g_d3dInfoQueue);
+	Assert(SUCCEEDED(success), "failed to get info queue");
 	// D3D11_MESSAGE_ID hide[] = {
 	   //  D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS,
 	// };
@@ -155,7 +156,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	// g_d3dInfoQueue->AddStorageFilterEntries(&filter);
 	if (IsDebuggerPresent())
 	{
-		Assert(SUCCEEDED(success), "failed to get info queue");
 		g_d3dInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
 		g_d3dInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, true);
 	}
@@ -340,8 +340,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 	CleanupShader();
 	CleanupRenderTarget();
+
 	SafeRelease(g_pSwapChain);
 	SafeRelease(g_pd3dDeviceContext);
+	SafeRelease(g_d3dInfoQueue);
+	SafeRelease(g_d3dDebug);
 	SafeRelease(g_pd3dDevice);
 
 	::DestroyWindow(hwnd);
