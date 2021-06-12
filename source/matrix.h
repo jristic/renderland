@@ -47,8 +47,15 @@ struct float4x4
 	};
 #pragma warning(default: 4201)
 
-	float4x4() {
+	float4x4()
+	{
 		ZeroMemory(this, sizeof(*this));
+	}
+
+	float4x4(float diagonal)
+	{
+		ZeroMemory(this, sizeof(*this));
+		m00 = m11 = m22 = m33 = diagonal;
 	}
 
 	explicit float4x4(

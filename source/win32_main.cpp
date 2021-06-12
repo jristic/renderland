@@ -4,6 +4,7 @@
 #include <d3d11.h>
 #include <d3d11shader.h>
 #include <d3dcompiler.h>
+#include <d3d11sdklayers.h>
 #include <dwmapi.h>
 #include <stdio.h>
 #include <string>
@@ -31,6 +32,8 @@
 #define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
 
 static ID3D11Device*            g_pd3dDevice = nullptr;
+static ID3D11Debug*             g_d3dDebug = nullptr;
+static ID3D11InfoQueue*			g_d3dInfoQueue = nullptr;
 static ID3D11DeviceContext*     g_pd3dDeviceContext = nullptr;
 static IDXGISwapChain*          g_pSwapChain = nullptr;
 static ID3D11RenderTargetView*  g_mainRenderTargetView = nullptr;
@@ -43,6 +46,8 @@ bool RlfCompileSuccess = false;
 std::string RlfCompileErrorMessage;
 bool RlfCompileWarning = false;
 std::string RlfCompileWarningMessage;
+bool RlfValidationError = false;
+std::string RlfValidationErrorMessage;
 config::Parameters Cfg = { "", false, 0, 0, 1280, 800 };
 bool StartupComplete = false;
 
@@ -54,6 +59,25 @@ void CleanupRenderTarget();
 void CreateShader();
 void CleanupShader();
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+bool CheckD3DValidation(std::string& outMessage)
+{
+	UINT64 num = g_d3dInfoQueue->GetNumStoredMessages();
+	for (u32 i = 0 ; i < num ; ++i)
+	{
+		size_t messageLength;
+		HRESULT hr = g_d3dInfoQueue->GetMessage(i, nullptr, &messageLength);
+		Assert(hr == S_FALSE, "Failed to get message, hr=%x", hr);
+		D3D11_MESSAGE* message = (D3D11_MESSAGE*)malloc(messageLength);
+		g_d3dInfoQueue->GetMessage(i, message, &messageLength);
+		Assert(hr == S_FALSE, "Failed to get message, hr=%x", hr);
+		outMessage += message->pDescription;
+		free(message);
+	}
+	g_d3dInfoQueue->ClearStoredMessages();
+
+	return num > 0;
+}
 
 // Main code
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, int nCmdShow)
@@ -115,6 +139,26 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		createDeviceFlags, featureLevelArray, 1, D3D11_SDK_VERSION, &sd, &g_pSwapChain, 
 		&g_pd3dDevice, &featureLevel, &g_pd3dDeviceContext);
 	Assert(hr == S_OK, "failed to create device %x", hr);
+
+	BOOL success = g_pd3dDevice->QueryInterface(__uuidof(ID3D11Debug), 
+		(void**)&g_d3dInfoQueue);
+	Assert(SUCCEEDED(success), "failed to get debug device");
+	success = g_d3dInfoQueue->QueryInterface(__uuidof(ID3D11InfoQueue),
+		(void**)&g_d3dInfoQueue);
+	// D3D11_MESSAGE_ID hide[] = {
+	   //  D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS,
+	// };
+
+	// D3D11_INFO_QUEUE_FILTER filter = {};
+	// filter.DenyList.NumIDs = _countof(hide);
+	// filter.DenyList.pIDList = hide;
+	// g_d3dInfoQueue->AddStorageFilterEntries(&filter);
+	if (IsDebuggerPresent())
+	{
+		Assert(SUCCEEDED(success), "failed to get info queue");
+		g_d3dInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
+		g_d3dInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, true);
+	}
 
 	CreateRenderTarget();
 
@@ -213,13 +257,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 				ImGui::PopTextWrapPos();
 				ImGui::PopStyleColor();
 			}
-			else if (RlfCompileWarning)
+			if (RlfCompileWarning)
 			{
 				ImVec4 color = ImVec4(0.8f, 0.8f, 0.2f, 1.0f);
 				ImGui::PushStyleColor(ImGuiCol_Text, color);
 				ImGui::PushTextWrapPos(0.f);
 
 				ImGui::TextUnformatted(RlfCompileWarningMessage.c_str());
+
+				ImGui::PopTextWrapPos();
+				ImGui::PopStyleColor();
+			}
+			if (RlfValidationError)
+			{
+				ImVec4 color = ImVec4(0.8f, 0.8f, 0.2f, 1.0f);
+				ImGui::PushStyleColor(ImGuiCol_Text, color);
+				ImGui::PushTextWrapPos(0.f);
+
+				ImGui::TextUnformatted(RlfValidationErrorMessage.c_str());
 
 				ImGui::PopTextWrapPos();
 				ImGui::PopStyleColor();
@@ -271,6 +326,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		//g_pSwapChain->Present(0, 0); // Present without vsync
 
 		time += io.DeltaTime;
+
+		RlfValidationErrorMessage = "Validation error:\n";
+		RlfValidationError = CheckD3DValidation(RlfValidationErrorMessage);
 	}
 
 	// Cleanup
@@ -342,6 +400,10 @@ void CleanupRenderTarget()
 
 void CreateShader()
 {
+	RlfCompileSuccess = true;
+	RlfCompileWarning = false;
+	RlfValidationError = false;
+
 	char* filename = Cfg.FilePath;
 
 	std::string filePath(filename);
@@ -375,8 +437,6 @@ void CreateShader()
 			ies.ErrorMessage;
 		return;
 	}
-
-	RlfCompileSuccess = true;
 
 	RlfCompileWarning = ies.InitWarning;
 	RlfCompileWarningMessage = ies.ErrorMessage;

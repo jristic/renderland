@@ -1,4 +1,5 @@
 * Expose D3D debug errors to the user. 
+	* Use reportliveobjects to check for leaks. 
 
 * Use linear memory allocator for RenderDescription allocations. 
 * Defines that are usable within the RLF and shader. 
@@ -35,6 +36,7 @@
 	* Multiple vertex buffer support. 
 	* MSAA support.
 
+* Sample: Reverse-z.
 * Sample: Compute-generated vertex buffer for a draw
 * Sample: Shadow-sampling methods comparison. 
 * Sample: Clustered lighting.
