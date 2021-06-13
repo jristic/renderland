@@ -341,6 +341,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	CleanupShader();
 	CleanupRenderTarget();
 
+	SafeRelease(g_pConstantBuffer);
 	SafeRelease(g_pSwapChain);
 	SafeRelease(g_pd3dDeviceContext);
 	SafeRelease(g_d3dInfoQueue);

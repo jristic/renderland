@@ -36,7 +36,9 @@ D3D11_FILTER RlfToD3d(FilterMode fm)
 
 D3D11_TEXTURE_ADDRESS_MODE RlfToD3d(AddressMode m)
 {
+	Assert(m != AddressMode::Invalid, "Invalid");
 	static D3D11_TEXTURE_ADDRESS_MODE modes[] = {
+		(D3D11_TEXTURE_ADDRESS_MODE)0, //invalid
 		D3D11_TEXTURE_ADDRESS_WRAP,
 		D3D11_TEXTURE_ADDRESS_MIRROR,
 		D3D11_TEXTURE_ADDRESS_MIRROR_ONCE,
@@ -48,7 +50,9 @@ D3D11_TEXTURE_ADDRESS_MODE RlfToD3d(AddressMode m)
 
 D3D11_PRIMITIVE_TOPOLOGY RlfToD3d(Topology topo)
 {
+	Assert(topo != Topology::Invalid, "Invalid");
 	static D3D11_PRIMITIVE_TOPOLOGY topos[] = {
+		(D3D11_PRIMITIVE_TOPOLOGY)0, //invalid
 		D3D11_PRIMITIVE_TOPOLOGY_POINTLIST,
 		D3D11_PRIMITIVE_TOPOLOGY_LINELIST,
 		D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP,
@@ -60,7 +64,9 @@ D3D11_PRIMITIVE_TOPOLOGY RlfToD3d(Topology topo)
 
 D3D11_CULL_MODE RlfToD3d(CullMode cm)
 {
+	Assert(cm != CullMode::Invalid, "Invalid");
 	static D3D11_CULL_MODE cms[] = {
+		(D3D11_CULL_MODE)0, //invalid
 		D3D11_CULL_NONE,
 		D3D11_CULL_FRONT,
 		D3D11_CULL_BACK,

@@ -589,44 +589,136 @@ void AddMemToDescriptionData(void* mem, RenderDescription* rd)
 	rd->Mems.push_back(mem);
 }
 
+// -----------------------------------------------------------------------------
+// ------------------------------ ENUMS ----------------------------------------
+// -----------------------------------------------------------------------------
+template <typename T>
+struct EnumEntry
+{
+	Keyword Key;
+	T Value;
+};
+template <typename T, size_t DefSize>
+T ConsumeEnum(BufferIter& b, EnumEntry<T> def[DefSize], const char* name)
+{
+	BufferString id = ConsumeIdentifier(b);
+	Keyword key = LookupKeyword(id);
+	for (size_t i = 0 ; i < DefSize ; ++i)
+	{
+		if (key == def[i].Key)
+		{
+			return def[i].Value;
+		}
+	}
+	ParserError("Invalid %s enum value: %.*s", name, id.len, id.base);
+	return T::Invalid;
+}
+
 SystemValue ConsumeSystemValue(BufferIter& b)
 {
-	BufferString sysId = ConsumeIdentifier(b);
-	Keyword key = LookupKeyword(sysId);
-	if (key == Keyword::BackBuffer)
-	{
-		return SystemValue::BackBuffer;
-	}
-	else if (key == Keyword::DefaultDepth)
-	{
-		return SystemValue::DefaultDepth;
-	}
-	ParserError("Invalid system value: %.*s", sysId.len, sysId.base);
-	return SystemValue::Invalid;
+	static EnumEntry<SystemValue> def[] = {
+		Keyword::BackBuffer,	SystemValue::BackBuffer,
+		Keyword::DefaultDepth,	SystemValue::DefaultDepth,
+	};
+	return ConsumeEnum<SystemValue,sizeof_array(def)>(b, def, "SystemValue");
 }
 
 Filter ConsumeFilter(BufferIter& b)
 {
-	Filter f = Filter::Point;
-	BufferString filterId = ConsumeIdentifier(b);
-	Keyword key = LookupKeyword(filterId);
-	switch (key)
-	{
-	case Keyword::Point:
-		f = Filter::Point;
-		break;
-	case Keyword::Linear:
-		f = Filter::Linear;
-		break;
-	case Keyword::Aniso:
-		f = Filter::Aniso;
-		break;
-	default:
-		ParserError("unexpected filter %.*s", filterId.len, filterId.base);
-	}
-	return f;
+	static EnumEntry<Filter> def[] = {
+		Keyword::Point,		Filter::Point,
+		Keyword::Linear,	Filter::Linear,
+		Keyword::Aniso,		Filter::Aniso,
+	};
+	return ConsumeEnum<Filter,sizeof_array(def)>(b, def, "Filter");
 }
 
+AddressMode ConsumeAddressMode(BufferIter& b)
+{
+	static EnumEntry<AddressMode> def[] = {
+		Keyword::Wrap,			AddressMode::Wrap,
+		Keyword::Mirror,		AddressMode::Mirror,
+		Keyword::MirrorOnce,	AddressMode::MirrorOnce,
+		Keyword::Clamp,			AddressMode::Clamp,
+		Keyword::Border,		AddressMode::Border,
+	};
+	return ConsumeEnum<AddressMode,sizeof_array(def)>(b, def, "AddressMode");
+}
+
+Topology ConsumeTopology(BufferIter& b)
+{
+	static EnumEntry<Topology> def[] = {
+		Keyword::PointList,		Topology::PointList,
+		Keyword::LineList,		Topology::LineList,
+		Keyword::LineStrip,		Topology::LineStrip,
+		Keyword::TriList,		Topology::TriList,
+		Keyword::TriStrip,		Topology::TriStrip,
+	};
+	return ConsumeEnum<Topology,sizeof_array(def)>(b, def, "Topology");
+}
+
+CullMode ConsumeCullMode(BufferIter& b)
+{
+	static EnumEntry<CullMode> def[] = {
+		Keyword::None,	CullMode::None,
+		Keyword::Front,	CullMode::Front,
+		Keyword::Back,	CullMode::Back,
+	};
+	return ConsumeEnum<CullMode,sizeof_array(def)>(b, def, "CullMode");
+}
+
+// -----------------------------------------------------------------------------
+// ------------------------------ FLAGS ----------------------------------------
+// -----------------------------------------------------------------------------
+template <typename T>
+struct FlagsEntry
+{
+	Keyword Key;
+	T Value;
+};
+template <typename T, size_t DefSize>
+T ConsumeFlags(BufferIter& b, FlagsEntry<T> def[DefSize], const char* name)
+{
+	ConsumeToken(Token::LBrace, b);
+
+	T flags = (T)0;
+	while (true)
+	{
+		BufferString id = ConsumeIdentifier(b);
+		Keyword key = LookupKeyword(id);
+		bool found = false;
+		for (size_t i = 0 ; i < DefSize ; ++i)
+		{
+			if (key == def[i].Key)
+			{
+				flags = (BufferFlags)(flags | BufferFlags_Vertex);
+				found = true;
+				break;
+			}
+		}
+		ParserAssert(found, "Unexpected %s flag: %.*s", name, id.len, id.base)
+
+		if (TryConsumeToken(Token::RBrace, b))
+			break;
+		else
+			ConsumeToken(Token::Comma, b);
+	}
+
+	return flags;
+}
+
+BufferFlags ConsumeBufferFlags(BufferIter& b)
+{
+	static FlagsEntry<BufferFlags> def[] = {
+		Keyword::Vertex,	BufferFlags::BufferFlags_Vertex,
+		Keyword::Index,		BufferFlags::BufferFlags_Index,
+	};
+	return ConsumeFlags<BufferFlags,sizeof_array(def)>(b, def, "BufferFlags");
+}
+
+// -----------------------------------------------------------------------------
+// ------------------------------ STRUCTS --------------------------------------
+// -----------------------------------------------------------------------------
 FilterMode ConsumeFilterMode(BufferIter& b)
 {
 	FilterMode fm = {};
@@ -661,36 +753,10 @@ FilterMode ConsumeFilterMode(BufferIter& b)
 	return fm;
 }
 
-AddressMode ConsumeAddressMode(BufferIter& b)
-{
-	AddressMode addr = AddressMode::Wrap;
-	BufferString adrId = ConsumeIdentifier(b);
-	switch (LookupKeyword(adrId))
-	{
-	case Keyword::Wrap:
-		addr = AddressMode::Wrap;
-		break;
-	case Keyword::Mirror:
-		addr = AddressMode::Mirror;
-		break;
-	case Keyword::MirrorOnce:
-		addr = AddressMode::MirrorOnce;
-		break;
-	case Keyword::Clamp:
-		addr = AddressMode::Clamp;
-		break;
-	case Keyword::Border:
-		addr = AddressMode::Border;
-		break;
-	default:
-		ParserError("unexpected address mode %.*s", adrId.len, adrId.base);
-	}
-	return addr;
-}
-
 AddressModeUVW ConsumeAddressModeUVW(BufferIter& b)
 {
-	AddressModeUVW addr = {};
+	AddressModeUVW addr; 
+	addr.U = addr.V = addr.W = AddressMode::Wrap;
 	ConsumeToken(Token::LBrace,b);
 	while (true)
 	{
@@ -722,83 +788,6 @@ AddressModeUVW ConsumeAddressModeUVW(BufferIter& b)
 			ConsumeToken(Token::Comma, b);
 	}
 	return addr;
-}
-
-BufferFlags ConsumeBufferFlags(BufferIter& b)
-{
-	ConsumeToken(Token::LBrace, b);
-
-	BufferFlags flags = (BufferFlags)0;
-	while (true)
-	{
-		BufferString id = ConsumeIdentifier(b);
-		switch (LookupKeyword(id))
-		{
-		case Keyword::Vertex:
-			flags = (BufferFlags)(flags | BufferFlags_Vertex);
-			break;
-		case Keyword::Index:
-			flags = (BufferFlags)(flags | BufferFlags_Index);
-			break;
-		default:
-			ParserError("unexpected buffer flag %.*s", id.len, id.base);
-		}
-
-		if (TryConsumeToken(Token::RBrace, b))
-			break;
-		else 
-			ConsumeToken(Token::Comma, b);
-	}
-
-	return flags;
-}
-
-Topology ConsumeTopology(BufferIter& b)
-{
-	Topology topo = Topology::TriList;
-	BufferString id = ConsumeIdentifier(b);
-	switch (LookupKeyword(id))
-	{
-	case Keyword::PointList:
-		topo = Topology::PointList;
-		break;
-	case Keyword::LineList:
-		topo = Topology::LineList;
-		break;
-	case Keyword::LineStrip:
-		topo = Topology::LineStrip;
-		break;
-	case Keyword::TriList:
-		topo = Topology::TriList;
-		break;
-	case Keyword::TriStrip:
-		topo = Topology::TriStrip;
-		break;
-	default:
-		ParserError("unexpected topology %.*s", id.len, id.base);
-	}
-	return topo;
-}
-
-CullMode ConsumeCullMode(BufferIter& b)
-{
-	CullMode cm = CullMode::Back;
-	BufferString id = ConsumeIdentifier(b);
-	switch (LookupKeyword(id))
-	{
-	case Keyword::None:
-		cm = CullMode::None;
-		break;
-	case Keyword::Front:
-		cm = CullMode::Front;
-		break;
-	case Keyword::Back:
-		cm = CullMode::Back;
-		break;
-	default:
-		ParserError("unexpected topology %.*s", id.len, id.base);
-	}
-	return cm;
 }
 
 Bind ConsumeBind(BufferIter& b, ParseState& ps)

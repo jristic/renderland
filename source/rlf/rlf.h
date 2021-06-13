@@ -13,6 +13,7 @@ namespace rlf
 	};
 	enum class PassType
 	{
+		Invalid,
 		Draw,
 		Dispatch,
 	};
@@ -24,6 +25,7 @@ namespace rlf
 	};
 	enum class Filter
 	{
+		Invalid,
 		Point,
 		Linear,
 		Aniso,
@@ -36,6 +38,7 @@ namespace rlf
 	};
 	enum class AddressMode
 	{
+		Invalid,
 		Wrap,
 		Mirror,
 		MirrorOnce,
@@ -48,6 +51,7 @@ namespace rlf
 	};
 	enum class Topology
 	{
+		Invalid,
 		PointList,
 		LineList,
 		LineStrip,
@@ -56,6 +60,7 @@ namespace rlf
 	};
 	enum class DrawType
 	{
+		Invalid,
 		Draw,
 		DrawIndexed,
 	};
@@ -66,6 +71,7 @@ namespace rlf
 	};
 	enum class CullMode
 	{
+		Invalid,
 		None,
 		Front,
 		Back,

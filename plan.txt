@@ -1,5 +1,7 @@
 * Expose D3D debug errors to the user. 
-	* Use reportliveobjects to check for leaks. 
+	* Report D3D errors in object creation. 
+
+* Allow trailing commas in rlf arrays. 
 
 * Use linear memory allocator for RenderDescription allocations. 
 * Defines that are usable within the RLF and shader. 
