@@ -691,7 +691,7 @@ T ConsumeFlags(BufferIter& b, FlagsEntry<T> def[DefSize], const char* name)
 		{
 			if (key == def[i].Key)
 			{
-				flags = (BufferFlags)(flags | BufferFlags_Vertex);
+				flags = (BufferFlags)(flags | def[i].Value);
 				found = true;
 				break;
 			}
@@ -717,7 +717,7 @@ BufferFlags ConsumeBufferFlags(BufferIter& b)
 }
 
 // -----------------------------------------------------------------------------
-// ------------------------------ STRUCTS --------------------------------------
+// ------------------------------ SPECIAL --------------------------------------
 // -----------------------------------------------------------------------------
 FilterMode ConsumeFilterMode(BufferIter& b)
 {
@@ -813,13 +813,101 @@ Bind ConsumeBind(BufferIter& b, ParseState& ps)
 	return bind;
 }
 
+// -----------------------------------------------------------------------------
+// ------------------------------ STRUCTS --------------------------------------
+// -----------------------------------------------------------------------------
+enum class ConsumeType
+{
+	Bool,
+	Int,
+	Uint,
+	Float,
+	String,
+	CullMode,
+};
+struct StructEntry
+{
+	Keyword Key;
+	ConsumeType Type;
+	size_t Offset;
+};
+#define StructEntryDef(struc, type, field) Keyword::field, ConsumeType::type, offsetof(struc, field)
+template <typename T>
+void ConsumeField(BufferIter& b, T* s, ConsumeType type, size_t offset)
+{
+	u8* p = (u8*)s;
+	p += offset;
+	switch (type)
+	{
+	case ConsumeType::Bool:
+		*(bool*)p = ConsumeBool(b);
+		break;
+	case ConsumeType::Int:
+		*(i32*)p = ConsumeIntLiteral(b);
+		break;
+	case ConsumeType::Uint:
+		*(u32*)p = ConsumeUintLiteral(b);
+		break;
+	case ConsumeType::Float:
+		*(float*)p = ConsumeFloatLiteral(b);
+		break;
+	case ConsumeType::String:
+	{
+		BufferString str = ConsumeString(b);
+		*(const char**)p = AddStringToDescriptionData(str, GPS->rd);
+		break;
+	}
+	case ConsumeType::CullMode:
+		*(CullMode*)p = ConsumeCullMode(b);
+		break;
+	default:
+		Unimplemented();
+	}
+}
+template <typename T, size_t DefSize, Token Delim, bool TrailingRequired>
+void ConsumeStruct(BufferIter& b, T* s, StructEntry def[DefSize], const char* name)
+{
+	ConsumeToken(Token::LBrace, b);
+
+	while (true)
+	{
+		if (TryConsumeToken(Token::RBrace, b))
+			break;
+
+		BufferString id = ConsumeIdentifier(b);
+		Keyword key = LookupKeyword(id);
+		ConsumeToken(Token::Equals, b);
+		bool found = false;
+		for (size_t i = 0 ; i < DefSize ; ++i)
+		{
+			if (key == def[i].Key)
+			{
+				ConsumeField(b, s, def[i].Type, def[i].Offset);
+				found = true;
+				break;
+			}
+		}
+		ParserAssert(found, "Unexpected field (%.*s) in struct %s", 
+			id.len, id.base, name)
+
+		if (TrailingRequired)
+		{
+			ConsumeToken(Delim, b);
+		}
+		else if (!TryConsumeToken(Delim, b))
+		{
+			ConsumeToken(Token::RBrace, b);
+			break;
+		}
+	}
+}
+
+
 RasterizerState* ConsumeRasterizerStateDef(
 	BufferIter& b,
 	ParseState& ps)
 {
 	RenderDescription* rd = ps.rd;
-
-	ConsumeToken(Token::LBrace, b);
 
 	RasterizerState* rs = new RasterizerState();
 	rd->RasterizerStates.push_back(rs);
@@ -829,54 +917,20 @@ RasterizerState* ConsumeRasterizerStateDef(
 	rs->CullMode = CullMode::None;
 	rs->DepthClipEnable = true;
 
-	while (true)
-	{
-		BufferString fieldId = ConsumeIdentifier(b);
-
-		switch (LookupKeyword(fieldId))
-		{
-		case Keyword::Fill:
-			ConsumeToken(Token::Equals, b);
-			rs->Fill = ConsumeBool(b);
-			break;
-		case Keyword::CullMode:
-			ConsumeToken(Token::Equals, b);
-			rs->CullMode = ConsumeCullMode(b);
-			break;
-		case Keyword::FrontCCW:
-			ConsumeToken(Token::Equals, b);
-			rs->FrontCCW = ConsumeBool(b);
-			break;
-		case Keyword::DepthBias:
-			ConsumeToken(Token::Equals, b);
-			rs->DepthBias = ConsumeIntLiteral(b);
-			break;
-		case Keyword::SlopeScaledDepthBias:
-			ConsumeToken(Token::Equals, b);
-			rs->SlopeScaledDepthBias = ConsumeFloatLiteral(b);
-			break;
-		case Keyword::DepthBiasClamp:
-			ConsumeToken(Token::Equals, b);
-			rs->DepthBiasClamp = ConsumeFloatLiteral(b);
-			break;
-		case Keyword::DepthClipEnable:
-			ConsumeToken(Token::Equals, b);
-			rs->DepthClipEnable = ConsumeBool(b);
-			break;
-		case Keyword::ScissorEnable:
-			ConsumeToken(Token::Equals, b);
-			rs->ScissorEnable = ConsumeBool(b);
-			break;
-		default:
-			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
-		}
-
-		ConsumeToken(Token::Semicolon, b);
-
-		if (TryConsumeToken(Token::RBrace, b))
-			break;
-	}
-
+	static StructEntry def[] = {
+		StructEntryDef(RasterizerState, Bool, Fill),
+		StructEntryDef(RasterizerState, CullMode, CullMode),
+		StructEntryDef(RasterizerState, Bool, FrontCCW),
+		StructEntryDef(RasterizerState, Int, DepthBias),
+		StructEntryDef(RasterizerState, Float, SlopeScaledDepthBias),
+		StructEntryDef(RasterizerState, Float, DepthBiasClamp),
+		StructEntryDef(RasterizerState, Float, DepthClipEnable),
+		StructEntryDef(RasterizerState, Bool, ScissorEnable),
+	};
+	constexpr Token Delim = Token::Semicolon;
+	constexpr bool TrailingRequired = true;
+	ConsumeStruct<RasterizerState,sizeof_array(def), Delim, TrailingRequired>(
+		b, rs, def, "RasterizerState");
 	return rs;
 }
 
@@ -904,38 +958,17 @@ ComputeShader* ConsumeComputeShaderDef(
 {
 	RenderDescription* rd = ps.rd;
 
-	ConsumeToken(Token::LBrace, b);
-
 	ComputeShader* cs = new ComputeShader();
 	rd->CShaders.push_back(cs);
 
-	while (true)
-	{
-		BufferString fieldId = ConsumeIdentifier(b);
-		Keyword key = LookupKeyword(fieldId);
-		if (key == Keyword::ShaderPath)
-		{
-			ConsumeToken(Token::Equals, b);
-			BufferString value = ConsumeString(b);
-			cs->ShaderPath = AddStringToDescriptionData(value, rd);
-		}
-		else if (key == Keyword::EntryPoint)
-		{
-			ConsumeToken(Token::Equals, b);
-			BufferString value = ConsumeString(b);
-			cs->EntryPoint = AddStringToDescriptionData(value, rd);
-		}
-		else
-		{
-			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
-		}
-
-		ConsumeToken(Token::Semicolon, b);
-
-		if (TryConsumeToken(Token::RBrace, b))
-			break;
-	}
-
+	static StructEntry def[] = {
+		StructEntryDef(ComputeShader, String, ShaderPath),
+		StructEntryDef(ComputeShader, String, EntryPoint),
+	};
+	constexpr Token Delim = Token::Semicolon;
+	constexpr bool TrailingRequired = true;
+	ConsumeStruct<ComputeShader,sizeof_array(def), Delim, TrailingRequired>(
+		b, cs, def, "ComputeShader");
 	return cs;
 }
 
@@ -963,38 +996,17 @@ VertexShader* ConsumeVertexShaderDef(
 {
 	RenderDescription* rd = ps.rd;
 
-	ConsumeToken(Token::LBrace, b);
-
 	VertexShader* vs = new VertexShader();
 	rd->VShaders.push_back(vs);
 
-	while (true)
-	{
-		BufferString fieldId = ConsumeIdentifier(b);
-		Keyword key = LookupKeyword(fieldId);
-		if (key == Keyword::ShaderPath)
-		{
-			ConsumeToken(Token::Equals, b);
-			BufferString value = ConsumeString(b);
-			vs->ShaderPath = AddStringToDescriptionData(value, rd);
-		}
-		else if (key == Keyword::EntryPoint)
-		{
-			ConsumeToken(Token::Equals, b);
-			BufferString value = ConsumeString(b);
-			vs->EntryPoint = AddStringToDescriptionData(value, rd);
-		}
-		else
-		{
-			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
-		}
-
-		ConsumeToken(Token::Semicolon, b);
-
-		if (TryConsumeToken(Token::RBrace, b))
-			break;
-	}
-
+	static StructEntry def[] = {
+		StructEntryDef(VertexShader, String, ShaderPath),
+		StructEntryDef(VertexShader, String, EntryPoint),
+	};
+	constexpr Token Delim = Token::Semicolon;
+	constexpr bool TrailingRequired = true;
+	ConsumeStruct<VertexShader,sizeof_array(def), Delim, TrailingRequired>(
+		b, vs, def, "VertexShader");
 	return vs;
 }
 
@@ -1022,38 +1034,17 @@ PixelShader* ConsumePixelShaderDef(
 {
 	RenderDescription* rd = state.rd;
 
-	ConsumeToken(Token::LBrace, b);
-
 	PixelShader* ps = new PixelShader();
 	rd->PShaders.push_back(ps);
 
-	while (true)
-	{
-		BufferString fieldId = ConsumeIdentifier(b);
-		Keyword key = LookupKeyword(fieldId);
-		if (key == Keyword::ShaderPath)
-		{
-			ConsumeToken(Token::Equals, b);
-			BufferString value = ConsumeString(b);
-			ps->ShaderPath = AddStringToDescriptionData(value, rd);
-		}
-		else if (key == Keyword::EntryPoint)
-		{
-			ConsumeToken(Token::Equals, b);
-			BufferString value = ConsumeString(b);
-			ps->EntryPoint = AddStringToDescriptionData(value, rd);
-		}
-		else
-		{
-			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
-		}
-
-		ConsumeToken(Token::Semicolon, b);
-
-		if (TryConsumeToken(Token::RBrace, b))
-			break;
-	}
-
+	static StructEntry def[] = {
+		StructEntryDef(PixelShader, String, ShaderPath),
+		StructEntryDef(PixelShader, String, EntryPoint),
+	};
+	constexpr Token Delim = Token::Semicolon;
+	constexpr bool TrailingRequired = true;
+	ConsumeStruct<PixelShader,sizeof_array(def), Delim, TrailingRequired>(
+		b, ps, def, "PixelShader");
 	return ps;
 }
 

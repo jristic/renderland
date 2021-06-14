@@ -7,6 +7,10 @@ typedef unsigned short u16;
 typedef signed short i16;
 static_assert(sizeof(u16) == 2, "Didn't get expected size.");
 static_assert(sizeof(i16) == 2, "Didn't get expected size.");
+typedef unsigned char u8;
+typedef signed char i8;
+static_assert(sizeof(u8) == 1, "Didn't get expected size.");
+static_assert(sizeof(i8) == 1, "Didn't get expected size.");
 
 
 struct uint2 {
