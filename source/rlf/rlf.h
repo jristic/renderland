@@ -203,8 +203,8 @@ namespace rlf
 		Buffer* VertexBuffer;
 		Buffer* IndexBuffer;
 		u32 VertexCount;
-		TextureTarget RenderTarget;
-		TextureTarget DepthStencil;
+		std::vector<TextureTarget> RenderTarget;
+		std::vector<TextureTarget> DepthStencil;
 		std::vector<Bind> VSBinds;
 		std::vector<Bind> PSBinds;
 	};

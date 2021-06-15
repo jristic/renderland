@@ -61,7 +61,7 @@ Dispatch {
 
 Passes {
 	ClearColor{ Target=RT; Color={0,0,0,1}; },
-	ClearDepth{ Target=DSV; Depth=0; },
+	ClearDepth{ Target=DSV; Depth=1; },
 	objDraw,
 	copy
 }

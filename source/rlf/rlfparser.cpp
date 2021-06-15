@@ -1721,41 +1721,45 @@ Draw* ConsumeDrawDef(
 		case Keyword::RenderTarget:
 		{
 			ConsumeToken(Token::Equals, b);
+			TextureTarget target;
 			if (TryConsumeToken(Token::At, b))
 			{
-				draw->RenderTarget.Type = BindType::SystemValue;
-				draw->RenderTarget.System = ConsumeSystemValue(b);
+				target.Type = BindType::SystemValue;
+				target.System = ConsumeSystemValue(b);
 			}
 			else
 			{
-				draw->RenderTarget.Type = BindType::Texture;
+				target.Type = BindType::Texture;
 				BufferString id = ConsumeIdentifier(b);
 				ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
 					id.len, id.base);
 				ParseState::Resource& res = ps.resMap[id];
 				ParserAssert(res.type == BindType::Texture, "RenderTarget must be texture");
-				draw->RenderTarget.Texture = reinterpret_cast<Texture*>(res.m);
+				target.Texture = reinterpret_cast<Texture*>(res.m);
 			}
+			draw->RenderTarget.push_back(target);
 			break;
 		}
 		case Keyword::DepthStencil:
 		{
+			TextureTarget target;
 			ConsumeToken(Token::Equals, b);
 			if (TryConsumeToken(Token::At, b))
 			{
-				draw->DepthStencil.Type = BindType::SystemValue;
-				draw->DepthStencil.System = ConsumeSystemValue(b);
+				target.Type = BindType::SystemValue;
+				target.System = ConsumeSystemValue(b);
 			}
 			else
 			{
-				draw->DepthStencil.Type = BindType::Texture;
+				target.Type = BindType::Texture;
 				BufferString id = ConsumeIdentifier(b);
 				ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
 					id.len, id.base);
 				ParseState::Resource& res = ps.resMap[id];
 				ParserAssert(res.type == BindType::Texture, "DepthStencil must be texture");
-				draw->DepthStencil.Texture = reinterpret_cast<Texture*>(res.m);
+				target.Texture = reinterpret_cast<Texture*>(res.m);
 			}
+			draw->DepthStencil.push_back(target);
 			break;
 		}
 		case Keyword::BindVS:

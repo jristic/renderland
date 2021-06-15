@@ -6,6 +6,7 @@ Sampler {
 
 Texture {
 	Size = {256,256};
+	Flags = { SRV, UAV };
 } Tex
 
 ComputeShader {

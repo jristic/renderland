@@ -679,38 +679,50 @@ void ExecuteDraw(
 		}
 	}
 	ID3D11RenderTargetView* rtViews[8] = {};
-	ID3D11DepthStencilView* dsView = nullptr;
-	if (draw->RenderTarget.Type == BindType::SystemValue)
+	D3D11_VIEWPORT vp[8] = {};
+	u32 rtCount = 0;
+	for (TextureTarget target : draw->RenderTarget)
 	{
-		if (draw->RenderTarget.System == SystemValue::BackBuffer)
-			rtViews[0] = ec->MainRtv;
-		else 
-			Unimplemented();
-	}
-	else
-	{
-		rtViews[0] = draw->RenderTarget.Texture->RTV;
-	}
-	if (draw->DepthStencil.Type == BindType::SystemValue)
-	{
-		if (draw->DepthStencil.System == SystemValue::DefaultDepth)
-			dsView = ec->DefaultDepthView;
+		if (target.Type == BindType::SystemValue)
+		{
+			if (target.System == SystemValue::BackBuffer)
+			{
+				rtViews[rtCount] = ec->MainRtv;
+				vp[rtCount].Width = (float)ec->DisplaySize.x;
+				vp[rtCount].Height = (float)ec->DisplaySize.y;
+			}
+			else 
+				Unimplemented();
+		}
 		else
-			Unimplemented();
+		{
+			vp[rtCount].Width = (float)target.Texture->Size.x;
+			vp[rtCount].Height = (float)target.Texture->Size.y;
+			rtViews[rtCount] = target.Texture->RTV;
+		}
+		vp[rtCount].MinDepth = 0.0f;
+		vp[rtCount].MaxDepth = 1.0f;
+		vp[rtCount].TopLeftX = vp[rtCount].TopLeftY = 0;
+		++rtCount;
 	}
-	else
+	ID3D11DepthStencilView* dsView = nullptr;
+	for (TextureTarget target : draw->DepthStencil)
 	{
-		dsView = draw->DepthStencil.Texture->DSV;
+		if (target.Type == BindType::SystemValue)
+		{
+			if (target.System == SystemValue::DefaultDepth)
+				dsView = ec->DefaultDepthView;
+			else
+				Unimplemented();
+		}
+		else
+		{
+			dsView = target.Texture->DSV;
+		}
 	}
 	ctx->OMSetRenderTargets(8, rtViews, dsView);
+	ctx->RSSetViewports(8, vp);
 	ctx->IASetPrimitiveTopology(RlfToD3d(draw->Topology));
-	D3D11_VIEWPORT vp = {};
-	vp.Width = (float)ec->DisplaySize.x;
-	vp.Height = (float)ec->DisplaySize.y;
-	vp.MinDepth = 0.0f;
-	vp.MaxDepth = 1.0f;
-	vp.TopLeftX = vp.TopLeftY = 0;
-	ctx->RSSetViewports(1, &vp);
 	ctx->RSSetState(draw->RState ? draw->RState->RSObject : DefaultRasterizerState);
 	if (draw->Type == DrawType::Draw)
 	{
