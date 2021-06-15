@@ -16,6 +16,8 @@ namespace rlf
 		Invalid,
 		Draw,
 		Dispatch,
+		ClearColor,
+		ClearDepth,
 	};
 	enum class SystemValue
 	{
@@ -64,10 +66,17 @@ namespace rlf
 		Draw,
 		DrawIndexed,
 	};
-	enum BufferFlags
+	enum BufferFlag
 	{
-		BufferFlags_Vertex = 1,
-		BufferFlags_Index = 2,
+		BufferFlag_Vertex = 1,
+		BufferFlag_Index = 2,
+	};
+	enum TextureFlag
+	{
+		TextureFlag_SRV = 1,
+		TextureFlag_UAV = 2,
+		TextureFlag_RTV = 4,
+		TextureFlag_DSV = 8,
 	};
 	enum class CullMode
 	{
@@ -128,7 +137,7 @@ namespace rlf
 		u32 ElementSize;
 		u32 ElementCount;
 		void* InitData;
-		BufferFlags Flags;
+		BufferFlag Flags;
 		ID3D11Buffer* BufferObject;
 		ID3D11ShaderResourceView* SRV;
 		ID3D11UnorderedAccessView* UAV;
@@ -138,9 +147,12 @@ namespace rlf
 		uint2 Size;
 		TextureFormat Format;
 		const char* DDSPath;
+		TextureFlag Flags;
 		ID3D11Texture2D* TextureObject;
 		ID3D11ShaderResourceView* SRV;
 		ID3D11UnorderedAccessView* UAV;
+		ID3D11RenderTargetView* RTV;
+		ID3D11DepthStencilView* DSV;
 	};
 	struct Sampler
 	{
@@ -173,6 +185,14 @@ namespace rlf
 		uint3 Groups;
 		std::vector<Bind> Binds;
 	};
+	struct TextureTarget
+	{
+		BindType Type;
+		union {
+			SystemValue System;
+			Texture* Texture;
+		};
+	};
 	struct Draw
 	{
 		DrawType Type;
@@ -183,10 +203,20 @@ namespace rlf
 		Buffer* VertexBuffer;
 		Buffer* IndexBuffer;
 		u32 VertexCount;
-		SystemValue RenderTarget;
-		SystemValue DepthTarget;
+		TextureTarget RenderTarget;
+		TextureTarget DepthStencil;
 		std::vector<Bind> VSBinds;
 		std::vector<Bind> PSBinds;
+	};
+	struct ClearColor
+	{
+		Texture* Target;
+		float4 Color;
+	};
+	struct ClearDepth
+	{
+		Texture* Target;
+		float Depth;
 	};
 	struct Pass
 	{
@@ -194,6 +224,8 @@ namespace rlf
 		union {
 			Dispatch* Dispatch;
 			Draw* Draw;
+			ClearColor* ClearColor;
+			ClearDepth* ClearDepth;
 		};
 	};
 	struct RenderDescription
@@ -201,6 +233,8 @@ namespace rlf
 		std::vector<Pass> Passes;
 		std::vector<Dispatch*> Dispatches;
 		std::vector<Draw*> Draws;
+		std::vector<ClearColor*> ClearColors;
+		std::vector<ClearDepth*> ClearDepths;
 		std::vector<ComputeShader*> CShaders;
 		std::vector<VertexShader*> VShaders;
 		std::vector<PixelShader*> PShaders;

@@ -13,6 +13,25 @@ Buffer {
 	InitData = monkeyObj.indices;
 } indices
 
+
+Sampler {
+	Filter = { All = Point };
+	AddressMode = { UVW=Clamp };
+} PointSampler
+
+Texture {
+	Format = R8G8B8A8_UNORM;
+	Size = {256,256};
+	Flags = { RTV, SRV };
+} RT
+
+Texture {
+	Format = D24_UNORM_S8_UINT;
+	Size = {256,256};
+	Flags = { DSV };
+} DSV
+
+
 DrawIndexed {
 	Topology = TriList;
 	VShader = VertexShader {
@@ -25,10 +44,24 @@ DrawIndexed {
 	};
 	VertexBuffer = verts;
 	IndexBuffer = indices;
-	RenderTarget = @BackBuffer;
-	DepthTarget = @DefaultDepth;
+	RenderTarget = RT;
+	DepthStencil = DSV;
 } objDraw
 
+Dispatch {
+	Shader = ComputeShader {
+		ShaderPath = "CopyTexture.hlsl";
+		EntryPoint = "CSMain";
+	};
+	ThreadPerPixel = true; 
+	Bind OutTexture = @BackBuffer;
+	Bind InTexture = RT;
+	Bind Sampler= PointSampler;
+} copy
+
 Passes {
-	objDraw
+	ClearColor{ Target=RT; Color={0,0,0,1}; },
+	ClearDepth{ Target=DSV; Depth=0; },
+	objDraw,
+	copy
 }

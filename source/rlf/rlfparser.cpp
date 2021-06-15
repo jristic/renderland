@@ -62,6 +62,8 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(Dispatch) \
 	RLF_KEYWORD_ENTRY(Draw) \
 	RLF_KEYWORD_ENTRY(DrawIndexed) \
+	RLF_KEYWORD_ENTRY(ClearColor) \
+	RLF_KEYWORD_ENTRY(ClearDepth) \
 	RLF_KEYWORD_ENTRY(Passes) \
 	RLF_KEYWORD_ENTRY(BackBuffer) \
 	RLF_KEYWORD_ENTRY(DefaultDepth) \
@@ -106,7 +108,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(IndexBuffer) \
 	RLF_KEYWORD_ENTRY(VertexCount) \
 	RLF_KEYWORD_ENTRY(RenderTarget) \
-	RLF_KEYWORD_ENTRY(DepthTarget) \
+	RLF_KEYWORD_ENTRY(DepthStencil) \
 	RLF_KEYWORD_ENTRY(BindVS) \
 	RLF_KEYWORD_ENTRY(BindPS) \
 	RLF_KEYWORD_ENTRY(True) \
@@ -134,6 +136,13 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(ObjPath) \
 	RLF_KEYWORD_ENTRY(Vertices) \
 	RLF_KEYWORD_ENTRY(Indices) \
+	RLF_KEYWORD_ENTRY(Target) \
+	RLF_KEYWORD_ENTRY(Color) \
+	RLF_KEYWORD_ENTRY(Depth) \
+	RLF_KEYWORD_ENTRY(SRV) \
+	RLF_KEYWORD_ENTRY(UAV) \
+	RLF_KEYWORD_ENTRY(RTV) \
+	RLF_KEYWORD_ENTRY(DSV) \
 
 #define RLF_KEYWORD_ENTRY(name) name,
 enum class Keyword
@@ -684,6 +693,9 @@ T ConsumeFlags(BufferIter& b, FlagsEntry<T> def[DefSize], const char* name)
 	T flags = (T)0;
 	while (true)
 	{
+		if (TryConsumeToken(Token::RBrace, b))
+			break;
+
 		BufferString id = ConsumeIdentifier(b);
 		Keyword key = LookupKeyword(id);
 		bool found = false;
@@ -691,7 +703,7 @@ T ConsumeFlags(BufferIter& b, FlagsEntry<T> def[DefSize], const char* name)
 		{
 			if (key == def[i].Key)
 			{
-				flags = (BufferFlags)(flags | def[i].Value);
+				flags = (T)(flags | def[i].Value);
 				found = true;
 				break;
 			}
@@ -707,13 +719,23 @@ T ConsumeFlags(BufferIter& b, FlagsEntry<T> def[DefSize], const char* name)
 	return flags;
 }
 
-BufferFlags ConsumeBufferFlags(BufferIter& b)
+BufferFlag ConsumeBufferFlag(BufferIter& b)
 {
-	static FlagsEntry<BufferFlags> def[] = {
-		Keyword::Vertex,	BufferFlags::BufferFlags_Vertex,
-		Keyword::Index,		BufferFlags::BufferFlags_Index,
+	static FlagsEntry<BufferFlag> def[] = {
+		Keyword::Vertex,	BufferFlag_Vertex,
+		Keyword::Index,		BufferFlag_Index,
 	};
-	return ConsumeFlags<BufferFlags,sizeof_array(def)>(b, def, "BufferFlags");
+	return ConsumeFlags<BufferFlag,sizeof_array(def)>(b, def, "BufferFlag");
+}
+TextureFlag ConsumeTextureFlag(BufferIter& b)
+{
+	static FlagsEntry<TextureFlag> def[] = {
+		Keyword::SRV,	TextureFlag_SRV,
+		Keyword::UAV,	TextureFlag_UAV,
+		Keyword::RTV,	TextureFlag_RTV,
+		Keyword::DSV,	TextureFlag_DSV,
+	};
+	return ConsumeFlags<TextureFlag,sizeof_array(def)>(b, def, "TextureFlag");
 }
 
 // -----------------------------------------------------------------------------
@@ -822,8 +844,10 @@ enum class ConsumeType
 	Int,
 	Uint,
 	Float,
+	Float4,
 	String,
 	CullMode,
+	Texture,
 };
 struct StructEntry
 {
@@ -851,6 +875,20 @@ void ConsumeField(BufferIter& b, T* s, ConsumeType type, size_t offset)
 	case ConsumeType::Float:
 		*(float*)p = ConsumeFloatLiteral(b);
 		break;
+	case ConsumeType::Float4:
+	{
+		float4& f4 = *(float4*)p;
+		ConsumeToken(Token::LBrace, b);
+		f4.x = ConsumeFloatLiteral(b);
+		ConsumeToken(Token::Comma, b);
+		f4.y = ConsumeFloatLiteral(b);
+		ConsumeToken(Token::Comma, b);
+		f4.z = ConsumeFloatLiteral(b);
+		ConsumeToken(Token::Comma, b);
+		f4.w = ConsumeFloatLiteral(b);
+		ConsumeToken(Token::RBrace, b);
+		break;
+	}
 	case ConsumeType::String:
 	{
 		BufferString str = ConsumeString(b);
@@ -860,6 +898,16 @@ void ConsumeField(BufferIter& b, T* s, ConsumeType type, size_t offset)
 	case ConsumeType::CullMode:
 		*(CullMode*)p = ConsumeCullMode(b);
 		break;
+	case ConsumeType::Texture:
+	{
+		BufferString id = ConsumeIdentifier(b);
+		ParserAssert(GPS->resMap.count(id) != 0, "Couldn't find resource %.*s", 
+			id.len, id.base);
+		ParseState::Resource& res = GPS->resMap[id];
+		ParserAssert(res.type == BindType::Texture, "Resource must be texture");
+		*(Texture**)p = reinterpret_cast<Texture*>(res.m);
+		break;
+	}
 	default:
 		Unimplemented();
 	}
@@ -1261,7 +1309,7 @@ Buffer* ConsumeBufferDef(
 		case Keyword::Flags:
 		{
 			ConsumeToken(Token::Equals, b);
-			buf->Flags = ConsumeBufferFlags(b);
+			buf->Flags = ConsumeBufferFlag(b);
 			break;
 		}
 		case Keyword::InitToZero:
@@ -1409,6 +1457,12 @@ Texture* ConsumeTextureDef(
 		BufferString fieldId = ConsumeIdentifier(b);
 		switch (LookupKeyword(fieldId))
 		{
+		case Keyword::Flags:
+		{
+			ConsumeToken(Token::Equals, b);
+			tex->Flags = ConsumeTextureFlag(b);
+			break;
+		}
 		case Keyword::Size:
 		{
 			ConsumeToken(Token::Equals, b);
@@ -1669,24 +1723,38 @@ Draw* ConsumeDrawDef(
 			ConsumeToken(Token::Equals, b);
 			if (TryConsumeToken(Token::At, b))
 			{
-				draw->RenderTarget = ConsumeSystemValue(b);
+				draw->RenderTarget.Type = BindType::SystemValue;
+				draw->RenderTarget.System = ConsumeSystemValue(b);
 			}
 			else
 			{
-				Unimplemented();
+				draw->RenderTarget.Type = BindType::Texture;
+				BufferString id = ConsumeIdentifier(b);
+				ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
+					id.len, id.base);
+				ParseState::Resource& res = ps.resMap[id];
+				ParserAssert(res.type == BindType::Texture, "RenderTarget must be texture");
+				draw->RenderTarget.Texture = reinterpret_cast<Texture*>(res.m);
 			}
 			break;
 		}
-		case Keyword::DepthTarget:
+		case Keyword::DepthStencil:
 		{
 			ConsumeToken(Token::Equals, b);
 			if (TryConsumeToken(Token::At, b))
 			{
-				draw->DepthTarget = ConsumeSystemValue(b);
+				draw->DepthStencil.Type = BindType::SystemValue;
+				draw->DepthStencil.System = ConsumeSystemValue(b);
 			}
 			else
 			{
-				Unimplemented();
+				draw->DepthStencil.Type = BindType::Texture;
+				BufferString id = ConsumeIdentifier(b);
+				ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
+					id.len, id.base);
+				ParseState::Resource& res = ps.resMap[id];
+				ParserAssert(res.type == BindType::Texture, "DepthStencil must be texture");
+				draw->DepthStencil.Texture = reinterpret_cast<Texture*>(res.m);
 			}
 			break;
 		}
@@ -1715,6 +1783,45 @@ Draw* ConsumeDrawDef(
 	return draw;
 }
 
+ClearColor* ConsumeClearColorDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	RenderDescription* rd = ps.rd;
+
+	ClearColor* clear = new ClearColor();
+	rd->ClearColors.push_back(clear);
+
+	static StructEntry def[] = {
+		StructEntryDef(ClearColor, Texture, Target),
+		StructEntryDef(ClearColor, Float4, Color),
+	};
+	constexpr Token Delim = Token::Semicolon;
+	constexpr bool TrailingRequired = true;
+	ConsumeStruct<ClearColor,sizeof_array(def), Delim, TrailingRequired>(
+		b, clear, def, "ClearColor");
+	return clear;
+}
+
+ClearDepth* ConsumeClearDepthDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	RenderDescription* rd = ps.rd;
+
+	ClearDepth* clear = new ClearDepth();
+	rd->ClearDepths.push_back(clear);
+
+	static StructEntry def[] = {
+		StructEntryDef(ClearDepth, Texture, Target),
+		StructEntryDef(ClearDepth, Float, Depth),
+	};
+	constexpr Token Delim = Token::Semicolon;
+	constexpr bool TrailingRequired = true;
+	ConsumeStruct<ClearDepth,sizeof_array(def), Delim, TrailingRequired>(
+		b, clear, def, "ClearDepth");
+	return clear;
+}
 
 Pass ConsumePassRefOrDef(
 	BufferIter& b,
@@ -1732,6 +1839,16 @@ Pass ConsumePassRefOrDef(
 	{
 		pass.Type = PassType::Draw;
 		pass.Draw = ConsumeDrawDef(b, ps);
+	}
+	else if (key == Keyword::ClearColor)
+	{
+		pass.Type = PassType::ClearColor;
+		pass.ClearColor = ConsumeClearColorDef(b, ps);
+	}
+	else if (key == Keyword::ClearDepth)
+	{
+		pass.Type = PassType::ClearDepth;
+		pass.ClearDepth = ConsumeClearDepthDef(b, ps);
 	}
 	else
 	{
@@ -1858,6 +1975,30 @@ void ParseMain()
 			ps.passMap[nameId] = pass;
 			break;
 		}
+		case Keyword::ClearColor:
+		{
+			ClearColor* clear = ConsumeClearColorDef(b,ps);
+			BufferString nameId = ConsumeIdentifier(b);
+			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %.*s already defined", 
+				nameId.len, nameId.base);
+			Pass pass;
+			pass.Type = PassType::ClearColor;
+			pass.ClearColor = clear;
+			ps.passMap[nameId] = pass;
+			break;
+		}
+		case Keyword::ClearDepth:
+		{
+			ClearDepth* clear = ConsumeClearDepthDef(b,ps);
+			BufferString nameId = ConsumeIdentifier(b);
+			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %.*s already defined", 
+				nameId.len, nameId.base);
+			Pass pass;
+			pass.Type = PassType::ClearDepth;
+			pass.ClearDepth = clear;
+			ps.passMap[nameId] = pass;
+			break;
+		}
 		case Keyword::Passes:
 		{
 			ConsumeToken(Token::LBrace, b);
@@ -1951,6 +2092,10 @@ void ReleaseData(RenderDescription* data)
 		delete dc;
 	for (Draw* draw : data->Draws)
 		delete draw;
+	for (ClearColor* clear : data->ClearColors)
+		delete clear;
+	for (ClearDepth* clear : data->ClearDepths)
+		delete clear;
 	for (ComputeShader* cs : data->CShaders)
 		delete cs;
 	for (VertexShader* vs : data->VShaders)

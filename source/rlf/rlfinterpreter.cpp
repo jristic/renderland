@@ -74,13 +74,27 @@ D3D11_CULL_MODE RlfToD3d(CullMode cm)
 	return cms[(u32)cm];
 }
 
-u32 RlfToD3d(BufferFlags flags)
+u32 RlfToD3d(BufferFlag flags)
 {
 	u32 f = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-	if (flags & BufferFlags_Vertex)
+	if (flags & BufferFlag_Vertex)
 		f |= D3D11_BIND_VERTEX_BUFFER;
-	if (flags & BufferFlags_Index)
+	if (flags & BufferFlag_Index)
 		f |= D3D11_BIND_INDEX_BUFFER;
+	return f;
+}
+
+u32 RlfToD3d(TextureFlag flags)
+{
+	u32 f = 0;
+	if (flags & TextureFlag_SRV)
+		f |= D3D11_BIND_SHADER_RESOURCE; 
+	if (flags & TextureFlag_UAV)
+		f |= D3D11_BIND_UNORDERED_ACCESS;
+	if (flags & TextureFlag_RTV)
+		f |= D3D11_BIND_RENDER_TARGET;
+	if (flags & TextureFlag_DSV)
+		f |= D3D11_BIND_DEPTH_STENCIL;
 	return f;
 }
 
@@ -453,18 +467,33 @@ void InitD3D(
 			desc.SampleDesc.Count = 1;
 			desc.SampleDesc.Quality = 0;
 			desc.Usage = D3D11_USAGE_DEFAULT;
-			desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+			desc.BindFlags = RlfToD3d(tex->Flags);
 			desc.CPUAccessFlags = 0;
 			desc.MiscFlags = 0;
 
 			HRESULT hr = device->CreateTexture2D(&desc, nullptr, &tex->TextureObject);
 			Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
 
-			hr = device->CreateShaderResourceView(tex->TextureObject, nullptr, &tex->SRV);
-			Assert(hr == S_OK, "failed to create SRV, hr=%x", hr);
-
-			hr = device->CreateUnorderedAccessView(tex->TextureObject, nullptr, &tex->UAV);
-			Assert(hr == S_OK, "failed to create UAV, hr=%x", hr);
+			if (tex->Flags & TextureFlag_SRV)
+			{
+				hr = device->CreateShaderResourceView(tex->TextureObject, nullptr, &tex->SRV);
+				Assert(hr == S_OK, "failed to create SRV, hr=%x", hr);
+			}
+			if (tex->Flags & TextureFlag_UAV)
+			{
+				hr = device->CreateUnorderedAccessView(tex->TextureObject, nullptr, &tex->UAV);
+				Assert(hr == S_OK, "failed to create UAV, hr=%x", hr);
+			}
+			if (tex->Flags & TextureFlag_RTV)
+			{
+				hr = device->CreateRenderTargetView(tex->TextureObject, nullptr, &tex->RTV);
+				Assert(hr == S_OK, "failed to create RTV, hr=%x", hr);
+			}
+			if (tex->Flags & TextureFlag_DSV)
+			{
+				hr = device->CreateDepthStencilView(tex->TextureObject, nullptr, &tex->DSV);
+				Assert(hr == S_OK, "failed to create DSV, hr=%x", hr);
+			}
 		}
 	}
 
@@ -535,6 +564,8 @@ void ReleaseD3D(
 	{
 		SafeRelease(tex->UAV);
 		SafeRelease(tex->SRV);
+		SafeRelease(tex->RTV);
+		SafeRelease(tex->DSV);
 		SafeRelease(tex->TextureObject);
 	}
 
@@ -649,19 +680,27 @@ void ExecuteDraw(
 	}
 	ID3D11RenderTargetView* rtViews[8] = {};
 	ID3D11DepthStencilView* dsView = nullptr;
-	if (draw->RenderTarget != SystemValue::Invalid)
+	if (draw->RenderTarget.Type == BindType::SystemValue)
 	{
-		if (draw->RenderTarget == SystemValue::BackBuffer)
+		if (draw->RenderTarget.System == SystemValue::BackBuffer)
 			rtViews[0] = ec->MainRtv;
 		else 
 			Unimplemented();
 	}
-	if (draw->DepthTarget != SystemValue::Invalid)
+	else
 	{
-		if (draw->DepthTarget == SystemValue::DefaultDepth)
+		rtViews[0] = draw->RenderTarget.Texture->RTV;
+	}
+	if (draw->DepthStencil.Type == BindType::SystemValue)
+	{
+		if (draw->DepthStencil.System == SystemValue::DefaultDepth)
 			dsView = ec->DefaultDepthView;
 		else
 			Unimplemented();
+	}
+	else
+	{
+		dsView = draw->DepthStencil.Texture->DSV;
 	}
 	ctx->OMSetRenderTargets(8, rtViews, dsView);
 	ctx->IASetPrimitiveTopology(RlfToD3d(draw->Topology));
@@ -745,6 +784,20 @@ void Execute(
 		else if (pass.Type == PassType::Draw)
 		{
 			ExecuteDraw(pass.Draw, ec);
+		}
+		else if (pass.Type == PassType::ClearColor)
+		{
+			float4& color = pass.ClearColor->Color;
+			const float clear_color[4] =
+			{
+				color.x, color.y, color.z, color.w
+			};
+			ctx->ClearRenderTargetView(pass.ClearColor->Target->RTV, clear_color);
+		}
+		else if (pass.Type == PassType::ClearDepth)
+		{
+			ctx->ClearDepthStencilView(pass.ClearDepth->Target->DSV, D3D11_CLEAR_DEPTH,
+				pass.ClearDepth->Depth, 0);
 		}
 		else
 		{
