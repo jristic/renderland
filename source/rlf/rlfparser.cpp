@@ -843,11 +843,16 @@ enum class ConsumeType
 	Bool,
 	Int,
 	Uint,
+	Uint2,
 	Float,
 	Float4,
 	String,
+	AddressModeUVW,
 	CullMode,
+	FilterMode,
 	Texture,
+	TextureFlag,
+	TextureFormat,
 };
 struct StructEntry
 {
@@ -872,6 +877,16 @@ void ConsumeField(BufferIter& b, T* s, ConsumeType type, size_t offset)
 	case ConsumeType::Uint:
 		*(u32*)p = ConsumeUintLiteral(b);
 		break;
+	case ConsumeType::Uint2:
+	{
+		ConsumeToken(Token::LBrace, b);
+		uint2& u2 = *(uint2*)p;
+		u2.x = ConsumeUintLiteral(b);
+		ConsumeToken(Token::Comma, b);
+		u2.y = ConsumeUintLiteral(b);
+		ConsumeToken(Token::RBrace, b);
+		break;
+	}
 	case ConsumeType::Float:
 		*(float*)p = ConsumeFloatLiteral(b);
 		break;
@@ -895,8 +910,14 @@ void ConsumeField(BufferIter& b, T* s, ConsumeType type, size_t offset)
 		*(const char**)p = AddStringToDescriptionData(str, GPS->rd);
 		break;
 	}
+	case ConsumeType::AddressModeUVW:
+		*(AddressModeUVW*)p = ConsumeAddressModeUVW(b);
+		break;
 	case ConsumeType::CullMode:
 		*(CullMode*)p = ConsumeCullMode(b);
+		break;
+	case ConsumeType::FilterMode:
+		*(FilterMode*)p = ConsumeFilterMode(b);
 		break;
 	case ConsumeType::Texture:
 	{
@@ -906,6 +927,17 @@ void ConsumeField(BufferIter& b, T* s, ConsumeType type, size_t offset)
 		ParseState::Resource& res = GPS->resMap[id];
 		ParserAssert(res.type == BindType::Texture, "Resource must be texture");
 		*(Texture**)p = reinterpret_cast<Texture*>(res.m);
+		break;
+	}
+	case ConsumeType::TextureFlag:
+		*(TextureFlag*)p = ConsumeTextureFlag(b);
+		break;
+	case ConsumeType::TextureFormat:
+	{
+		BufferString formatId = ConsumeIdentifier(b);
+		ParserAssert(GPS->fmtMap.count(formatId) != 0, "Couldn't find format %.*s", 
+			formatId.len, formatId.base);
+		*(TextureFormat*)p = GPS->fmtMap[formatId];
 		break;
 	}
 	default:
@@ -1444,61 +1476,22 @@ Texture* ConsumeTextureDef(
 {
 	RenderDescription* rd = ps.rd;
 
-	ConsumeToken(Token::LBrace, b);
-
 	Texture* tex = new Texture();
 	rd->Textures.push_back(tex);
 
 	// non-zero defaults
 	tex->Format = TextureFormat::R8G8B8A8_UNORM;
 
-	while (true)
-	{
-		BufferString fieldId = ConsumeIdentifier(b);
-		switch (LookupKeyword(fieldId))
-		{
-		case Keyword::Flags:
-		{
-			ConsumeToken(Token::Equals, b);
-			tex->Flags = ConsumeTextureFlag(b);
-			break;
-		}
-		case Keyword::Size:
-		{
-			ConsumeToken(Token::Equals, b);
-			ConsumeToken(Token::LBrace, b);
-			tex->Size.x = ConsumeUintLiteral(b);
-			ConsumeToken(Token::Comma, b);
-			tex->Size.y = ConsumeUintLiteral(b);
-			ConsumeToken(Token::RBrace, b);
-			break;
-		}
-		case Keyword::Format:
-		{
-			ConsumeToken(Token::Equals, b);
-			BufferString formatId = ConsumeIdentifier(b);
-			ParserAssert(ps.fmtMap.count(formatId) != 0, "Couldn't find format %.*s", 
-				formatId.len, formatId.base);
-			tex->Format = ps.fmtMap[formatId];
-			break;
-		}
-		case Keyword::DDSPath:
-		{
-			ConsumeToken(Token::Equals, b);
-			BufferString value = ConsumeString(b);
-			tex->DDSPath = AddStringToDescriptionData(value, rd);
-			break;
-		}
-		default:
-			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
-		}
-
-		ConsumeToken(Token::Semicolon, b);
-
-		if (TryConsumeToken(Token::RBrace, b))
-			break;
-	}
-
+	static StructEntry def[] = {
+		StructEntryDef(Texture, TextureFlag, Flags),
+		StructEntryDef(Texture, Uint2, Size),
+		StructEntryDef(Texture, TextureFormat, Format),
+		StructEntryDef(Texture, String, DDSPath),
+	};
+	constexpr Token Delim = Token::Semicolon;
+	constexpr bool TrailingRequired = true;
+	ConsumeStruct<Texture,sizeof_array(def), Delim, TrailingRequired>(
+		b, tex, def, "Texture");
 	return tex;
 }
 
@@ -1507,8 +1500,6 @@ Sampler* ConsumeSamplerDef(
 	ParseState& ps)
 {
 	RenderDescription* rd = ps.rd;
-
-	ConsumeToken(Token::LBrace, b);
 
 	Sampler* s = new Sampler();
 	rd->Samplers.push_back(s);
@@ -1519,71 +1510,19 @@ Sampler* ConsumeSamplerDef(
 	s->MaxAnisotropy = 1;
 	s->BorderColor = {1,1,1,1};
 
-	while (true)
-	{
-		BufferString fieldId = ConsumeIdentifier(b);
-		switch (LookupKeyword(fieldId))
-		{
-		case Keyword::Filter:
-		{
-			ConsumeToken(Token::Equals, b);
-			s->Filter = ConsumeFilterMode(b);
-			break;
-		}
-		case Keyword::AddressMode:
-		{
-			ConsumeToken(Token::Equals, b);
-			s->Address = ConsumeAddressModeUVW(b);
-			break;
-		}
-		case Keyword::MipLODBias:
-		{
-			ConsumeToken(Token::Equals, b);
-			s->MipLODBias = ConsumeFloatLiteral(b);
-			break;
-		}
-		case Keyword::MaxAnisotropy:
-		{
-			ConsumeToken(Token::Equals, b);
-			s->MaxAnisotropy = ConsumeUintLiteral(b);
-			break;
-		}
-		case Keyword::BorderColor:
-		{
-			ConsumeToken(Token::Equals, b);
-			ConsumeToken(Token::LBrace, b);
-			s->BorderColor.x = ConsumeFloatLiteral(b);
-			ConsumeToken(Token::Comma, b);
-			s->BorderColor.y = ConsumeFloatLiteral(b);
-			ConsumeToken(Token::Comma, b);
-			s->BorderColor.z = ConsumeFloatLiteral(b);
-			ConsumeToken(Token::Comma, b);
-			s->BorderColor.w = ConsumeFloatLiteral(b);
-			ConsumeToken(Token::RBrace, b);
-			break;
-		}
-		case Keyword::MinLOD:
-		{
-			ConsumeToken(Token::Equals, b);
-			s->MinLOD = ConsumeFloatLiteral(b);
-			break;
-		}
-		case Keyword::MaxLOD:
-		{
-			ConsumeToken(Token::Equals, b);
-			s->MaxLOD = ConsumeFloatLiteral(b);
-			break;
-		}
-		default:
-			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
-		}
-
-		ConsumeToken(Token::Semicolon, b);
-
-		if (TryConsumeToken(Token::RBrace, b))
-			break;
-	}
-
+	static StructEntry def[] = {
+		StructEntryDef(Sampler, FilterMode, Filter),
+		StructEntryDef(Sampler, AddressModeUVW, AddressMode),
+		StructEntryDef(Sampler, Float, MipLODBias),
+		StructEntryDef(Sampler, Uint, MaxAnisotropy),
+		StructEntryDef(Sampler, Float4, BorderColor),
+		StructEntryDef(Sampler, Float, MinLOD),
+		StructEntryDef(Sampler, Float, MaxLOD),
+	};
+	constexpr Token Delim = Token::Semicolon;
+	constexpr bool TrailingRequired = true;
+	ConsumeStruct<Sampler,sizeof_array(def), Delim, TrailingRequired>(
+		b, s, def, "Sampler");
 	return s;
 }
 

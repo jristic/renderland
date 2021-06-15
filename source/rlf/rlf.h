@@ -157,7 +157,7 @@ namespace rlf
 	struct Sampler
 	{
 		FilterMode Filter;
-		AddressModeUVW Address;
+		AddressModeUVW AddressMode;
 		float MipLODBias;
 		u32 MaxAnisotropy;
 		float4 BorderColor;

@@ -501,9 +501,9 @@ void InitD3D(
 	{
 		D3D11_SAMPLER_DESC desc = {};
 		desc.Filter = RlfToD3d(s->Filter);
-		desc.AddressU = RlfToD3d(s->Address.U);
-		desc.AddressV = RlfToD3d(s->Address.V);
-		desc.AddressW = RlfToD3d(s->Address.W);
+		desc.AddressU = RlfToD3d(s->AddressMode.U);
+		desc.AddressV = RlfToD3d(s->AddressMode.V);
+		desc.AddressW = RlfToD3d(s->AddressMode.W);
 		desc.MipLODBias = s->MipLODBias;
 		desc.MaxAnisotropy = s->MaxAnisotropy;
 		desc.ComparisonFunc = D3D11_COMPARISON_NEVER;

@@ -24,12 +24,8 @@
 	* Camera position/look-at utility
 
 **** Expand draw pipeline support.
-	* Clears for color and depth
-		* Ability to specify rlf texture as a RT or DS
-		* ClearDS/RT passes which take the texture as a param and color/depth
 	* Render to texture
 		* need some way to size rendertarget based on backbuffer
-		* adjust viewport based on texture being rendered to. 
 	* Depth/stencil support.
 		* Depth stencil state.
 	* Viewport.
