@@ -98,6 +98,50 @@ u32 RlfToD3d(TextureFlag flags)
 	return f;
 }
 
+D3D11_COMPARISON_FUNC RlfToD3d(ComparisonFunc cf)
+{
+	Assert(cf != ComparisonFunc::Invalid, "Invalid");
+	static D3D11_COMPARISON_FUNC cfs[] = {
+		(D3D11_COMPARISON_FUNC)0, //invalid
+		D3D11_COMPARISON_NEVER,
+		D3D11_COMPARISON_LESS,
+		D3D11_COMPARISON_EQUAL,
+		D3D11_COMPARISON_LESS_EQUAL,
+		D3D11_COMPARISON_GREATER,
+		D3D11_COMPARISON_NOT_EQUAL,
+		D3D11_COMPARISON_GREATER_EQUAL,
+		D3D11_COMPARISON_ALWAYS,
+	};
+	return cfs[(u32)cf];
+}
+
+D3D11_STENCIL_OP RlfToD3d(StencilOp so)
+{
+	Assert(so != StencilOp::Invalid, "Invalid");
+	static D3D11_STENCIL_OP sos[] = {
+		(D3D11_STENCIL_OP)0, //invalid
+		D3D11_STENCIL_OP_KEEP,
+		D3D11_STENCIL_OP_ZERO,
+		D3D11_STENCIL_OP_REPLACE,
+		D3D11_STENCIL_OP_INCR_SAT,
+		D3D11_STENCIL_OP_DECR_SAT,
+		D3D11_STENCIL_OP_INVERT,
+		D3D11_STENCIL_OP_INCR,
+		D3D11_STENCIL_OP_DECR
+	};
+	return sos[(u32)so];
+}
+
+D3D11_DEPTH_STENCILOP_DESC RlfToD3d(StencilOpDesc sod)
+{
+	D3D11_DEPTH_STENCILOP_DESC desc = {};
+	desc.StencilFailOp = RlfToD3d(sod.StencilFailOp);
+	desc.StencilDepthFailOp = RlfToD3d(sod.StencilDepthFailOp);
+	desc.StencilPassOp = RlfToD3d(sod.StencilPassOp);
+	desc.StencilFunc = RlfToD3d(sod.StencilFunc);
+	return desc;
+}
+
 ID3DBlob* CommonCompileShader(const char* path, const char* profile, 
 	const char * entry, InitErrorState* errorState)
 {
@@ -531,6 +575,23 @@ void InitD3D(
 		desc.ScissorEnable = rs->ScissorEnable;
 		device->CreateRasterizerState(&desc, &rs->RSObject);
 	}
+
+	for (DepthStencilState* dss : rd->DepthStencilStates)
+	{
+		D3D11_DEPTH_STENCIL_DESC desc = {};
+		desc.DepthEnable = dss->DepthEnable;
+		desc.DepthWriteMask = dss->DepthWrite ? D3D11_DEPTH_WRITE_MASK_ALL : 
+			D3D11_DEPTH_WRITE_MASK_ZERO;
+		desc.DepthFunc = RlfToD3d(dss->DepthFunc);
+		desc.StencilEnable = dss->StencilEnable;
+		Assert(dss->StencilReadMask <= 255, "value too big");
+		desc.StencilReadMask = (u8)dss->StencilReadMask;
+		Assert(dss->StencilWriteMask <= 255, "value too big");
+		desc.StencilWriteMask = (u8)dss->StencilWriteMask;
+		desc.FrontFace = RlfToD3d(dss->FrontFace);
+		desc.BackFace = RlfToD3d(dss->BackFace);
+		device->CreateDepthStencilState(&desc, &dss->DSSObject);
+	}
 }
 
 void ReleaseD3D(
@@ -577,6 +638,10 @@ void ReleaseD3D(
 	for (RasterizerState* rs : rd->RasterizerStates)
 	{
 		SafeRelease(rs->RSObject);
+	}
+	for (DepthStencilState* dss : rd->DepthStencilStates)
+	{
+		SafeRelease(dss->DSSObject);
 	}
 }
 
@@ -724,6 +789,9 @@ void ExecuteDraw(
 	ctx->RSSetViewports(8, vp);
 	ctx->IASetPrimitiveTopology(RlfToD3d(draw->Topology));
 	ctx->RSSetState(draw->RState ? draw->RState->RSObject : DefaultRasterizerState);
+	Assert(draw->StencilRef <= 255, "value too big");
+	ctx->OMSetDepthStencilState(draw->DSState ? draw->DSState->DSSObject : nullptr,
+		(u8)draw->StencilRef);
 	if (draw->Type == DrawType::Draw)
 	{
 		ctx->Draw(draw->VertexCount, 0);

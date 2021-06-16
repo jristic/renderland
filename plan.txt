@@ -2,6 +2,7 @@
 	* Report D3D errors in object creation. 
 
 * Allow trailing commas in rlf arrays. 
+* Hex uint literals. binary too?
 
 * Use linear memory allocator for RenderDescription allocations. 
 * Defines that are usable within the RLF and shader. 
@@ -26,8 +27,6 @@
 **** Expand draw pipeline support.
 	* Render to texture
 		* need some way to size rendertarget based on backbuffer
-	* Depth/stencil support.
-		* Depth stencil state.
 	* Viewport.
 	* Blend state.
 	* Multiple RT support. 
@@ -38,6 +37,7 @@
 	* MSAA support.
 
 * Sample: Reverse-z.
+* Sample: Stencil usage. 
 * Sample: Compute-generated vertex buffer for a draw
 * Sample: Shadow-sampling methods comparison. 
 * Sample: Clustered lighting.

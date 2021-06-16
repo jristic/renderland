@@ -58,6 +58,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(Texture) \
 	RLF_KEYWORD_ENTRY(Sampler) \
 	RLF_KEYWORD_ENTRY(RasterizerState) \
+	RLF_KEYWORD_ENTRY(DepthStencilState) \
 	RLF_KEYWORD_ENTRY(ObjImport) \
 	RLF_KEYWORD_ENTRY(Dispatch) \
 	RLF_KEYWORD_ENTRY(Draw) \
@@ -102,11 +103,13 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(Bind) \
 	RLF_KEYWORD_ENTRY(Topology) \
 	RLF_KEYWORD_ENTRY(RState) \
+	RLF_KEYWORD_ENTRY(DSState) \
 	RLF_KEYWORD_ENTRY(VShader) \
 	RLF_KEYWORD_ENTRY(PShader) \
 	RLF_KEYWORD_ENTRY(VertexBuffer) \
 	RLF_KEYWORD_ENTRY(IndexBuffer) \
 	RLF_KEYWORD_ENTRY(VertexCount) \
+	RLF_KEYWORD_ENTRY(StencilRef) \
 	RLF_KEYWORD_ENTRY(RenderTarget) \
 	RLF_KEYWORD_ENTRY(DepthStencil) \
 	RLF_KEYWORD_ENTRY(BindVS) \
@@ -143,6 +146,34 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(UAV) \
 	RLF_KEYWORD_ENTRY(RTV) \
 	RLF_KEYWORD_ENTRY(DSV) \
+	RLF_KEYWORD_ENTRY(Never) \
+	RLF_KEYWORD_ENTRY(Less) \
+	RLF_KEYWORD_ENTRY(Equal) \
+	RLF_KEYWORD_ENTRY(LessEqual) \
+	RLF_KEYWORD_ENTRY(Greater) \
+	RLF_KEYWORD_ENTRY(NotEqual) \
+	RLF_KEYWORD_ENTRY(GreaterEqual) \
+	RLF_KEYWORD_ENTRY(Always) \
+	RLF_KEYWORD_ENTRY(Keep) \
+	RLF_KEYWORD_ENTRY(Zero) \
+	RLF_KEYWORD_ENTRY(Replace) \
+	RLF_KEYWORD_ENTRY(IncrSat) \
+	RLF_KEYWORD_ENTRY(DecrSat) \
+	RLF_KEYWORD_ENTRY(Invert) \
+	RLF_KEYWORD_ENTRY(Incr) \
+	RLF_KEYWORD_ENTRY(Decr) \
+	RLF_KEYWORD_ENTRY(StencilFailOp) \
+	RLF_KEYWORD_ENTRY(StencilDepthFailOp) \
+	RLF_KEYWORD_ENTRY(StencilPassOp) \
+	RLF_KEYWORD_ENTRY(StencilFunc) \
+	RLF_KEYWORD_ENTRY(DepthEnable) \
+	RLF_KEYWORD_ENTRY(DepthWrite) \
+	RLF_KEYWORD_ENTRY(DepthFunc) \
+	RLF_KEYWORD_ENTRY(StencilEnable) \
+	RLF_KEYWORD_ENTRY(StencilReadMask) \
+	RLF_KEYWORD_ENTRY(StencilWriteMask) \
+	RLF_KEYWORD_ENTRY(FrontFace) \
+	RLF_KEYWORD_ENTRY(BackFace) \
 
 #define RLF_KEYWORD_ENTRY(name) name,
 enum class Keyword
@@ -229,6 +260,7 @@ struct ParseState
 	std::unordered_map<BufferString, Resource, BufferStringHash> resMap;
 	std::unordered_map<BufferString, TextureFormat, BufferStringHash> fmtMap;
 	std::unordered_map<BufferString, RasterizerState*, BufferStringHash> rsMap;
+	std::unordered_map<BufferString, DepthStencilState*, BufferStringHash> dssMap;
 	std::unordered_map<BufferString, ObjImport*, BufferStringHash> objMap;
 	std::unordered_map<u32, Keyword> keyMap;
 	ParseErrorState* es;
@@ -676,6 +708,36 @@ CullMode ConsumeCullMode(BufferIter& b)
 	return ConsumeEnum<CullMode,sizeof_array(def)>(b, def, "CullMode");
 }
 
+ComparisonFunc ConsumeComparisonFunc(BufferIter& b)
+{
+	static EnumEntry<ComparisonFunc> def[] = {
+		Keyword::Never,			ComparisonFunc::Never,
+		Keyword::Less,			ComparisonFunc::Less,
+		Keyword::Equal,			ComparisonFunc::Equal,
+		Keyword::LessEqual,		ComparisonFunc::LessEqual,
+		Keyword::Greater,		ComparisonFunc::Greater,
+		Keyword::NotEqual,		ComparisonFunc::NotEqual,
+		Keyword::GreaterEqual,	ComparisonFunc::GreaterEqual,
+		Keyword::Always,		ComparisonFunc::Always,
+	};
+	return ConsumeEnum<ComparisonFunc,sizeof_array(def)>(b, def, "ComparisonFunc");
+}
+
+StencilOp ConsumeStencilOp(BufferIter& b)
+{
+	static EnumEntry<StencilOp> def[] = {
+		Keyword::Keep,		StencilOp::Keep,
+		Keyword::Zero,		StencilOp::Zero,
+		Keyword::Replace,	StencilOp::Replace,
+		Keyword::IncrSat,	StencilOp::IncrSat,
+		Keyword::DecrSat,	StencilOp::DecrSat,
+		Keyword::Invert,	StencilOp::Invert,
+		Keyword::Incr,		StencilOp::Incr,
+		Keyword::Decr,		StencilOp::Decr,
+	};
+	return ConsumeEnum<StencilOp,sizeof_array(def)>(b, def, "StencilOp");
+}
+
 // -----------------------------------------------------------------------------
 // ------------------------------ FLAGS ----------------------------------------
 // -----------------------------------------------------------------------------
@@ -848,8 +910,11 @@ enum class ConsumeType
 	Float4,
 	String,
 	AddressModeUVW,
+	ComparisonFunc,
 	CullMode,
 	FilterMode,
+	StencilOp,
+	StencilOpDesc,
 	Texture,
 	TextureFlag,
 	TextureFormat,
@@ -861,6 +926,9 @@ struct StructEntry
 	size_t Offset;
 };
 #define StructEntryDef(struc, type, field) Keyword::field, ConsumeType::type, offsetof(struc, field)
+
+StencilOpDesc ConsumeStencilOpDesc(BufferIter& b);
+
 template <typename T>
 void ConsumeField(BufferIter& b, T* s, ConsumeType type, size_t offset)
 {
@@ -913,11 +981,20 @@ void ConsumeField(BufferIter& b, T* s, ConsumeType type, size_t offset)
 	case ConsumeType::AddressModeUVW:
 		*(AddressModeUVW*)p = ConsumeAddressModeUVW(b);
 		break;
+	case ConsumeType::ComparisonFunc:
+		*(ComparisonFunc*)p = ConsumeComparisonFunc(b);
+		break;
 	case ConsumeType::CullMode:
 		*(CullMode*)p = ConsumeCullMode(b);
 		break;
 	case ConsumeType::FilterMode:
 		*(FilterMode*)p = ConsumeFilterMode(b);
+		break;
+	case ConsumeType::StencilOp:
+		*(StencilOp*)p = ConsumeStencilOp(b);
+		break;
+	case ConsumeType::StencilOpDesc:
+		*(StencilOpDesc*)p = ConsumeStencilOpDesc(b);
 		break;
 	case ConsumeType::Texture:
 	{
@@ -1029,6 +1106,79 @@ RasterizerState* ConsumeRasterizerStateRefOrDef(
 		ParserAssert(ps.rsMap.count(id) != 0, "couldn't find rasterizer state %.*s",
 			id.len, id.base);
 		return ps.rsMap[id];
+	}
+}
+
+StencilOpDesc ConsumeStencilOpDesc(BufferIter& b)
+{
+	StencilOpDesc desc = {};
+	// non-zero defaults
+	desc.StencilFailOp = StencilOp::Keep;
+	desc.StencilDepthFailOp = StencilOp::Keep;
+	desc.StencilPassOp = StencilOp::Keep;
+	desc.StencilFunc = ComparisonFunc::Always;
+	static StructEntry def[] = {
+		StructEntryDef(StencilOpDesc, StencilOp, StencilFailOp),
+		StructEntryDef(StencilOpDesc, StencilOp, StencilDepthFailOp),
+		StructEntryDef(StencilOpDesc, StencilOp, StencilPassOp),
+		StructEntryDef(StencilOpDesc, ComparisonFunc, StencilFunc),
+	};
+	constexpr Token Delim = Token::Semicolon;
+	constexpr bool TrailingRequired = true;
+	ConsumeStruct<StencilOpDesc,sizeof_array(def), Delim, TrailingRequired>(
+		b, &desc, def, "StencilOpDesc");
+	return desc;
+}
+
+DepthStencilState* ConsumeDepthStencilStateDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	RenderDescription* rd = ps.rd;
+
+	DepthStencilState* dss = new DepthStencilState();
+	rd->DepthStencilStates.push_back(dss);
+
+	// non-zero defaults
+	dss->DepthEnable = true;
+	dss->DepthWrite = true;
+	dss->DepthFunc = ComparisonFunc::Less;
+	dss->StencilEnable = false;
+	dss->StencilReadMask = D3D11_DEFAULT_STENCIL_READ_MASK;
+	dss->StencilWriteMask = D3D11_DEFAULT_STENCIL_WRITE_MASK;
+
+	static StructEntry def[] = {
+		StructEntryDef(DepthStencilState, Bool, DepthEnable),
+		StructEntryDef(DepthStencilState, Bool, DepthWrite),
+		StructEntryDef(DepthStencilState, ComparisonFunc, DepthFunc),
+		StructEntryDef(DepthStencilState, Bool, StencilEnable),
+		StructEntryDef(DepthStencilState, Uint, StencilReadMask),
+		StructEntryDef(DepthStencilState, Uint, StencilReadMask),
+		StructEntryDef(DepthStencilState, StencilOpDesc, FrontFace),
+		StructEntryDef(DepthStencilState, StencilOpDesc, BackFace),
+	};
+	constexpr Token Delim = Token::Semicolon;
+	constexpr bool TrailingRequired = true;
+	ConsumeStruct<DepthStencilState,sizeof_array(def), Delim, TrailingRequired>(
+		b, dss, def, "DepthStencilState");
+	return dss;
+}
+
+DepthStencilState* ConsumeDepthStencilStateRefOrDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	BufferString id = ConsumeIdentifier(b);
+	Keyword key = LookupKeyword(id);
+	if (key == Keyword::DepthStencilState)
+	{
+		return ConsumeDepthStencilStateDef(b,ps);
+	}
+	else
+	{
+		ParserAssert(ps.dssMap.count(id) != 0, "couldn't find depthstencil state %.*s",
+			id.len, id.base);
+		return ps.dssMap[id];
 	}
 }
 
@@ -1617,6 +1767,12 @@ Draw* ConsumeDrawDef(
 			draw->RState = ConsumeRasterizerStateRefOrDef(b, ps);
 			break;
 		}
+		case Keyword::DSState:
+		{
+			ConsumeToken(Token::Equals, b);
+			draw->DSState = ConsumeDepthStencilStateRefOrDef(b, ps);
+			break;
+		}
 		case Keyword::VShader:
 		{
 			ConsumeToken(Token::Equals, b);
@@ -1655,6 +1811,12 @@ Draw* ConsumeDrawDef(
 		{
 			ConsumeToken(Token::Equals, b);
 			draw->VertexCount = ConsumeUintLiteral(b);
+			break;
+		}
+		case Keyword::StencilRef:
+		{
+			ConsumeToken(Token::Equals, b);
+			draw->StencilRef = ConsumeUintLiteral(b);
 			break;
 		}
 		case Keyword::RenderTarget:
@@ -1883,6 +2045,15 @@ void ParseMain()
 			ps.rsMap[nameId] = rs;
 			break;
 		}
+		case Keyword::DepthStencilState:
+		{
+			DepthStencilState* rs = ConsumeDepthStencilStateDef(b,ps);
+			BufferString nameId = ConsumeIdentifier(b);
+			ParserAssert(ps.dssMap.count(nameId) == 0, "Rasterizer state %.*s already defined",
+				nameId.len, nameId.base);
+			ps.dssMap[nameId] = rs;
+			break;
+		}
 		case Keyword::ObjImport:
 		{
 			ObjImport* obj = ConsumeObjImportDef(b,ps);
@@ -2053,6 +2224,8 @@ void ReleaseData(RenderDescription* data)
 		delete s;
 	for (RasterizerState* rs : data->RasterizerStates)
 		delete rs;
+	for (DepthStencilState* dss : data->DepthStencilStates)
+		delete dss;
 	for (ObjImport* obj : data->Objs)
 		delete obj;
 	for (void* mem : data->Mems)

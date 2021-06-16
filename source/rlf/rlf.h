@@ -85,6 +85,30 @@ namespace rlf
 		Front,
 		Back,
 	};
+	enum class ComparisonFunc
+	{
+		Invalid,
+		Never,
+		Less,
+		Equal,
+		LessEqual,
+		Greater,
+		NotEqual,
+		GreaterEqual,
+		Always,
+	};
+	enum class StencilOp
+	{
+		Invalid,
+		Keep,
+		Zero,
+		Replace,
+		IncrSat,
+		DecrSat,
+		Invert,
+		Incr,
+		Decr,
+	};
 	struct RasterizerState 
 	{
 		bool Fill;
@@ -99,6 +123,25 @@ namespace rlf
 		// bool MultisampleEnable;
 		// bool AntialiasedLineEnable;
 		ID3D11RasterizerState* RSObject;
+	};
+	struct StencilOpDesc
+	{
+		StencilOp StencilFailOp;
+		StencilOp StencilDepthFailOp;
+		StencilOp StencilPassOp;
+		ComparisonFunc StencilFunc;
+	};
+	struct DepthStencilState
+	{
+		bool DepthEnable;
+		bool DepthWrite;
+		ComparisonFunc DepthFunc;
+		bool StencilEnable;
+		u32 StencilReadMask;
+		u32 StencilWriteMask;
+		StencilOpDesc FrontFace;
+		StencilOpDesc BackFace;
+		ID3D11DepthStencilState* DSSObject;
 	};
 	struct ComputeShader
 	{
@@ -198,11 +241,13 @@ namespace rlf
 		DrawType Type;
 		Topology Topology;
 		RasterizerState* RState;
+		DepthStencilState* DSState;
 		VertexShader* VShader;
 		PixelShader* PShader;
 		Buffer* VertexBuffer;
 		Buffer* IndexBuffer;
 		u32 VertexCount;
+		u32 StencilRef;
 		std::vector<TextureTarget> RenderTarget;
 		std::vector<TextureTarget> DepthStencil;
 		std::vector<Bind> VSBinds;
@@ -242,6 +287,7 @@ namespace rlf
 		std::vector<Texture*> Textures;
 		std::vector<Sampler*> Samplers;
 		std::vector<RasterizerState*> RasterizerStates;
+		std::vector<DepthStencilState*> DepthStencilStates;
 		std::vector<ObjImport*> Objs;
 		std::set<std::string> Strings;
 		std::vector<void*> Mems;
