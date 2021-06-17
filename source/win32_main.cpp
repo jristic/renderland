@@ -378,7 +378,7 @@ void CreateRenderTarget()
 	desc.Height = rtDesc.Height;
 	desc.MipLevels = 1;
 	desc.ArraySize = 1;
-	desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	desc.Format = DXGI_FORMAT_D32_FLOAT;
 	desc.SampleDesc.Count = 1;
 	desc.SampleDesc.Quality = 0;
 	desc.Usage = D3D11_USAGE_DEFAULT;

@@ -1146,6 +1146,10 @@ DepthStencilState* ConsumeDepthStencilStateDef(
 	dss->StencilEnable = false;
 	dss->StencilReadMask = D3D11_DEFAULT_STENCIL_READ_MASK;
 	dss->StencilWriteMask = D3D11_DEFAULT_STENCIL_WRITE_MASK;
+	dss->FrontFace.StencilFailOp = dss->BackFace.StencilFailOp = StencilOp::Keep;
+	dss->FrontFace.StencilDepthFailOp = dss->BackFace.StencilDepthFailOp = StencilOp::Keep;
+	dss->FrontFace.StencilPassOp = dss->BackFace.StencilPassOp = StencilOp::Keep;
+	dss->FrontFace.StencilFunc = dss->BackFace.StencilFunc = ComparisonFunc::Always;
 
 	static StructEntry def[] = {
 		StructEntryDef(DepthStencilState, Bool, DepthEnable),
