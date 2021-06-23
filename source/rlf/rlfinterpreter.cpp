@@ -359,6 +359,25 @@ void InitD3D(
 			&cs->ThreadGroupSize.z);
 
 		SafeRelease(shaderBlob);
+
+		// D3D11_SHADER_DESC desc;
+		// cs->Reflector->GetDesc(&desc);
+		// Prompt("constant buffers: %d", desc.ConstantBuffers);
+		// for (u32 i = 0 ; i < desc.ConstantBuffers ; ++i)
+		// {
+		// 	D3D11_SHADER_BUFFER_DESC bd;
+		// 	ID3D11ShaderReflectionConstantBuffer* constBuffer = 
+		// 		cs->Reflector->GetConstantBufferByIndex(i);
+		// 	constBuffer->GetDesc(&bd);
+		// 	Prompt("const buffer: %s, %d", bd.Name, bd.Size);
+		// 	for (u32 j = 0 ; j < bd.Variables ; ++j)
+		// 	{
+		// 		ID3D11ShaderReflectionVariable* var = constBuffer->GetVariableByIndex(j);
+		// 		D3D11_SHADER_VARIABLE_DESC vd;
+		// 		var->GetDesc(&vd);
+		// 		Prompt("Var name=%s, size=%d, offset=%d", vd.Name, vd.Size, vd.StartOffset);
+		// 	}
+		// }
 	}
 
 	for (VertexShader* vs : rd->VShaders)
