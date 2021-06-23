@@ -29,6 +29,8 @@ namespace rlf
 	RLF_TOKEN_ENTRY(Semicolon) \
 	RLF_TOKEN_ENTRY(At) \
 	RLF_TOKEN_ENTRY(Period) \
+	RLF_TOKEN_ENTRY(ForwardSlash) \
+	RLF_TOKEN_ENTRY(Asterisk) \
 	RLF_TOKEN_ENTRY(IntegerLiteral) \
 	RLF_TOKEN_ENTRY(FloatLiteral) \
 	RLF_TOKEN_ENTRY(Identifier) \
@@ -101,6 +103,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(ThreadPerPixel) \
 	RLF_KEYWORD_ENTRY(Groups) \
 	RLF_KEYWORD_ENTRY(Bind) \
+	RLF_KEYWORD_ENTRY(SetConstant) \
 	RLF_KEYWORD_ENTRY(Topology) \
 	RLF_KEYWORD_ENTRY(RState) \
 	RLF_KEYWORD_ENTRY(DSState) \
@@ -114,6 +117,8 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(DepthStencil) \
 	RLF_KEYWORD_ENTRY(BindVS) \
 	RLF_KEYWORD_ENTRY(BindPS) \
+	RLF_KEYWORD_ENTRY(SetConstantVS) \
+	RLF_KEYWORD_ENTRY(SetConstantPS) \
 	RLF_KEYWORD_ENTRY(True) \
 	RLF_KEYWORD_ENTRY(False) \
 	RLF_KEYWORD_ENTRY(Vertex) \
@@ -174,6 +179,14 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(StencilWriteMask) \
 	RLF_KEYWORD_ENTRY(FrontFace) \
 	RLF_KEYWORD_ENTRY(BackFace) \
+	RLF_KEYWORD_ENTRY(Float3) \
+	RLF_KEYWORD_ENTRY(Time) \
+	RLF_KEYWORD_ENTRY(DisplaySize) \
+	RLF_KEYWORD_ENTRY(LookAt) \
+	RLF_KEYWORD_ENTRY(Projection) \
+	RLF_KEYWORD_ENTRY(X) \
+	RLF_KEYWORD_ENTRY(Y) \
+	RLF_KEYWORD_ENTRY(Z) \
 
 #define RLF_KEYWORD_ENTRY(name) name,
 enum class Keyword
@@ -362,6 +375,8 @@ void ParseStateInit(ParseState* ps)
 	fcLUT[';'] = Token::Semicolon;
 	fcLUT['@'] = Token::At;
 	fcLUT['.'] = Token::Period;
+	fcLUT['/'] = Token::ForwardSlash;
+	fcLUT['*'] = Token::Asterisk;
 	fcLUT['"'] = Token::String;
 	for (u32 fc = 0 ; fc < 128 ; ++fc)
 	{
@@ -412,6 +427,8 @@ Token PeekNextToken(
 	case Token::Semicolon:
 	case Token::At:
 	case Token::Period:
+	case Token::ForwardSlash:
+	case Token::Asterisk:
 		break;
 	case Token::IntegerLiteral:
 		while(b.next < b.end && isdigit(*b.next)) {
@@ -471,9 +488,7 @@ bool TryConsumeToken(
 	foundTok = PeekNextToken(nb);
 	bool found = (foundTok == tok);
 	if (found)
-	{
 		b = nb;
-	}
 	return found;
 }
 
@@ -895,6 +910,132 @@ Bind ConsumeBind(BufferIter& b, ParseState& ps)
 		bind.BufferBind = reinterpret_cast<Buffer*>(res.m);
 	}
 	return bind;
+}
+
+template <typename AstType>
+AstType* AllocateAst(RenderDescription* rd)
+{
+	AstType* ast = new AstType();
+	rd->Asts.push_back(ast);
+	return ast;
+} 
+
+ast::Node* ConsumeAst(BufferIter& b, ParseState& ps, Token delim)
+{
+	ast::Node* ast = nullptr;
+	do {
+		BufferIter nb = b;
+		SkipWhitespace(nb);
+		Token foundTok = PeekNextToken(nb);
+		if (foundTok == Token::Identifier)
+		{
+			ParserAssert(!ast, "expected op");
+			BufferString id = ConsumeIdentifier(b);
+			ConsumeToken(Token::LParen, b);
+			switch (LookupKeyword(id))
+			{
+			case Keyword::Float3:
+			{
+				ast::Float3* f3 = AllocateAst<ast::Float3>(ps.rd);
+				f3->X = ConsumeAst(b, ps, Token::Comma);
+				f3->Y = ConsumeAst(b, ps, Token::Comma);
+				f3->Z = ConsumeAst(b, ps, Token::RParen);
+				ast = f3;
+				break;
+			}
+			case Keyword::Time:
+				ConsumeToken(Token::RParen, b);
+				ast = AllocateAst<ast::Time>(ps.rd);
+				break;
+			case Keyword::DisplaySize:
+				ConsumeToken(Token::RParen, b);
+				ast = AllocateAst<ast::DisplaySize>(ps.rd);
+				break;
+			case Keyword::LookAt:
+			{
+				ast::LookAt* lookAt = AllocateAst<ast::LookAt>(ps.rd);
+				lookAt->From = ConsumeAst(b, ps, Token::Comma);
+				lookAt->To = ConsumeAst(b, ps, Token::RParen);
+				ast = lookAt;
+				break;
+			}
+			case Keyword::Projection:
+			{
+				ast::Projection* proj = AllocateAst<ast::Projection>(ps.rd);
+				proj->Fov = ConsumeAst(b, ps, Token::Comma);
+				proj->Aspect = ConsumeAst(b, ps, Token::Comma);
+				proj->ZNear = ConsumeAst(b, ps, Token::Comma);
+				proj->ZFar = ConsumeAst(b, ps, Token::RParen);
+				ast = proj;
+				break;
+			}
+			default:
+				ParserError("invalid function %.*s", id.len, id.base);
+			}
+		}
+		else if (foundTok == Token::Period)
+		{
+			ParserAssert(ast, "expected value")
+			ConsumeToken(Token::Period, b);
+			ast::Subscript* sub = AllocateAst<ast::Subscript>(ps.rd);
+			sub->Subject = ast;
+			BufferString ss = ConsumeIdentifier(b);
+			Keyword ssKey = LookupKeyword(ss);
+			if (ssKey == Keyword::X)
+				sub->Index = 0;
+			else if (ssKey == Keyword::Y)
+				sub->Index = 1;
+			else if (ssKey == Keyword::Z)
+				sub->Index = 2;
+			else
+				ParserError("Unexpected subscript: %.*s", ss.len, ss.base);
+			ast = sub;
+		}
+		else if (foundTok == Token::ForwardSlash)
+		{
+			ConsumeToken(Token::ForwardSlash, b);
+			ParserAssert(ast, "expected value")
+			ast::Divide* div = AllocateAst<ast::Divide>(ps.rd);
+			div->Arg1 = ast;
+			div->Arg2 = ConsumeAst(b, ps, delim);
+			ast = div;
+			break; // resursive call consumed the delim, break out of loop.
+		}
+		else if (foundTok == Token::Asterisk)
+		{
+			ConsumeToken(Token::Asterisk, b);
+			ParserAssert(ast, "expected value")
+			ast::Multiply* mul = AllocateAst<ast::Multiply>(ps.rd);
+			mul->Arg1 = ast;
+			mul->Arg2 = ConsumeAst(b, ps, delim);
+			ast = mul;
+			break; // resursive call consumed the delim, break out of loop.
+		}
+		else if (foundTok == Token::FloatLiteral || foundTok == Token::IntegerLiteral)
+		{
+			ParserAssert(!ast, "expected op")
+			float f = ConsumeFloatLiteral(b);
+			ast::FloatLiteral* fl = AllocateAst<ast::FloatLiteral>(ps.rd);
+			fl->Val = f;
+			ast = fl;
+		}
+		else
+		{
+			ParserError("Unexpected token given: %s", TokenNames[(u32)foundTok]);
+		}
+	} while (!TryConsumeToken(delim, b));
+
+	return ast;
+}
+
+SetConstant ConsumeSetConstant(BufferIter& b, ParseState& ps)
+{
+	BufferString varName = ConsumeIdentifier(b);
+	ConsumeToken(Token::Equals, b);
+	SetConstant sc = {};
+	sc.VariableName = AddStringToDescriptionData(varName, ps.rd);
+	sc.Value = ConsumeAst(b, ps, Token::Semicolon);
+	return sc;
 }
 
 // -----------------------------------------------------------------------------
@@ -1694,7 +1835,8 @@ Dispatch* ConsumeDispatchDef(
 	while (true)
 	{
 		BufferString fieldId = ConsumeIdentifier(b);
-		switch (LookupKeyword(fieldId))
+		Keyword key = LookupKeyword(fieldId);
+		switch (key)
 		{
 		case Keyword::Shader:
 		{
@@ -1727,11 +1869,18 @@ Dispatch* ConsumeDispatchDef(
 			dc->Binds.push_back(bind);
 			break;
 		}
+		case Keyword::SetConstant:
+		{
+			SetConstant sc = ConsumeSetConstant(b,ps);
+			dc->Constants.push_back(sc);
+			break;
+		}
 		default:
 			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
 		}
 
-		ConsumeToken(Token::Semicolon, b);
+		if (key != Keyword::SetConstant)
+			ConsumeToken(Token::Semicolon, b);
 
 		if (TryConsumeToken(Token::RBrace, b))
 			break;
@@ -1757,7 +1906,8 @@ Draw* ConsumeDrawDef(
 	while (true)
 	{
 		BufferString fieldId = ConsumeIdentifier(b);
-		switch (LookupKeyword(fieldId))
+		Keyword key = LookupKeyword(fieldId);
+		switch (key)
 		{
 		case Keyword::Topology:
 		{
@@ -1879,11 +2029,24 @@ Draw* ConsumeDrawDef(
 			draw->PSBinds.push_back(bind);
 			break;
 		}
+		case Keyword::SetConstantVS:
+		{
+			SetConstant sc = ConsumeSetConstant(b,ps);
+			draw->VSConstants.push_back(sc);
+			break;
+		}
+		case Keyword::SetConstantPS:
+		{
+			SetConstant sc = ConsumeSetConstant(b,ps);
+			draw->PSConstants.push_back(sc);
+			break;
+		}
 		default:
 			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
 		}
 
-		ConsumeToken(Token::Semicolon, b);
+		if (key != Keyword::SetConstantVS && key != Keyword::SetConstantPS)
+			ConsumeToken(Token::Semicolon, b);
 
 		if (TryConsumeToken(Token::RBrace, b))
 			break;
@@ -2234,9 +2397,12 @@ void ReleaseData(RenderDescription* data)
 		delete obj;
 	for (void* mem : data->Mems)
 		free(mem);
+	for (ast::Node* ast : data->Asts)
+		delete ast;
 	delete data;
 }
 
 #undef ParserAssert
+#undef StructEntryDef
 
 } // namespace rlf

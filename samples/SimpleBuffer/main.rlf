@@ -14,6 +14,7 @@ Dispatch {
 	Shader = producer;
 	Groups = { 1, 1, 1 };
 	Bind Points = Points;
+	SetConstant TextureSize = DisplaySize();
 } producerDispatch
 
 ComputeShader {
@@ -26,6 +27,7 @@ Dispatch {
 	ThreadPerPixel = true;
 	Bind OutTexture = @BackBuffer;
 	Bind Points=Points;
+	SetConstant TextureSize = DisplaySize();
 } consumerDispatch
 
 Passes {

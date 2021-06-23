@@ -19,6 +19,7 @@ Dispatch {
 	Bind OutTexture = @BackBuffer;
 	Bind InTexture=Tex;
 	Bind Sampler= PointSampler;
+	SetConstant TextureSize = DisplaySize();
 } disp
 
 Passes {

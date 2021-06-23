@@ -317,6 +317,115 @@ void ResolveBind(Bind& bind, ID3D11ShaderReflection* reflector, const char* path
 	}
 }
 
+void PrepareConstants(
+	ID3D11ShaderReflection* reflector, std::vector<ConstantBuffer>& buffers, 
+	std::vector<SetConstant>& sets, const char* path, InitErrorState* errorState)
+{
+	D3D11_SHADER_DESC sd;
+	reflector->GetDesc(&sd);
+	for (u32 i = 0 ; i < sd.ConstantBuffers ; ++i)
+	{
+		ConstantBuffer cb = {};
+		D3D11_SHADER_BUFFER_DESC bd;
+		ID3D11ShaderReflectionConstantBuffer* constBuffer = 
+			reflector->GetConstantBufferByIndex(i);
+		constBuffer->GetDesc(&bd);
+
+		if (bd.Type != D3D11_CT_CBUFFER)
+			continue;
+
+		cb.Name = bd.Name;
+		cb.Size = bd.Size;
+		cb.BackingMemory = (u8*)malloc(bd.Size);
+
+		for (u32 j = 0 ; j < bd.Variables ; ++j)
+		{
+			ID3D11ShaderReflectionVariable* var = constBuffer->GetVariableByIndex(j);
+			D3D11_SHADER_VARIABLE_DESC vd;
+			var->GetDesc(&vd);
+
+			if (vd.DefaultValue)
+				memcpy(cb.BackingMemory+vd.StartOffset, vd.DefaultValue, vd.Size);
+			else
+				ZeroMemory(cb.BackingMemory+vd.StartOffset, vd.Size);
+		}
+
+		D3D11_BUFFER_DESC desc;
+		desc.ByteWidth = bd.Size;
+		desc.Usage = D3D11_USAGE_DYNAMIC;
+		desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+		desc.MiscFlags = 0;
+		D3D11_SUBRESOURCE_DATA srd = {};
+		srd.pSysMem = cb.BackingMemory;
+		HRESULT hr = g_pd3dDevice->CreateBuffer(&desc, &srd, &cb.BufferObject);
+		Assert(hr == S_OK, "Failed to create CB hr=%x", hr);
+
+		for (u32 k = 0 ; k < sd.BoundResources ; ++k)
+		{
+			D3D11_SHADER_INPUT_BIND_DESC id; 
+			hr = reflector->GetResourceBindingDesc(k, &id);
+			Assert(hr == S_OK, "Failed to get desc, hr=%x", hr);
+			if (strcmp(id.Name, bd.Name) == 0)
+			{
+				cb.Slot = id.BindPoint;
+				break;
+			}
+		}
+
+		buffers.push_back(cb);
+	}
+
+	for (SetConstant& set : sets)
+	{
+		ID3D11ShaderReflectionVariable* cvar = nullptr;
+		const char* cbufname = nullptr;
+		for (u32 i = 0 ; i < sd.ConstantBuffers ; ++i)
+		{
+			D3D11_SHADER_BUFFER_DESC bd;
+			ID3D11ShaderReflectionConstantBuffer* buffer = 
+				reflector->GetConstantBufferByIndex(i);
+			buffer->GetDesc(&bd);
+			if (bd.Type != D3D11_CT_CBUFFER)
+				continue;
+			for (u32 j = 0 ; j < bd.Variables ; ++j)
+			{
+				ID3D11ShaderReflectionVariable* var = buffer->GetVariableByIndex(j);
+				D3D11_SHADER_VARIABLE_DESC vd;
+				var->GetDesc(&vd);
+				if (strcmp(set.VariableName, vd.Name) == 0)
+				{
+					cvar = var;
+					cbufname = bd.Name;
+					break;
+				}
+			}
+		}
+		if (!cvar)
+		{
+			errorState->InitSuccess = false;
+			errorState->ErrorMessage = std::string("Could not find constant ") +
+				set.VariableName + " in shader " + path;
+			return;
+		} 
+		D3D11_SHADER_VARIABLE_DESC vd;
+		cvar->GetDesc(&vd);
+		set.Offset = vd.StartOffset;
+		set.Size = vd.Size;
+		bool found = false;
+		for (ConstantBuffer& con : buffers)
+		{
+			if (con.Name == cbufname)
+			{
+				set.CB = &con;
+				found = true;
+				break;
+			}
+		}
+		Assert(found, "Failed to find cbuffer resource binding");
+	}
+}
+
 void InitD3D(
 	ID3D11Device* device,
 	RenderDescription* rd,
@@ -359,25 +468,6 @@ void InitD3D(
 			&cs->ThreadGroupSize.z);
 
 		SafeRelease(shaderBlob);
-
-		// D3D11_SHADER_DESC desc;
-		// cs->Reflector->GetDesc(&desc);
-		// Prompt("constant buffers: %d", desc.ConstantBuffers);
-		// for (u32 i = 0 ; i < desc.ConstantBuffers ; ++i)
-		// {
-		// 	D3D11_SHADER_BUFFER_DESC bd;
-		// 	ID3D11ShaderReflectionConstantBuffer* constBuffer = 
-		// 		cs->Reflector->GetConstantBufferByIndex(i);
-		// 	constBuffer->GetDesc(&bd);
-		// 	Prompt("const buffer: %s, %d", bd.Name, bd.Size);
-		// 	for (u32 j = 0 ; j < bd.Variables ; ++j)
-		// 	{
-		// 		ID3D11ShaderReflectionVariable* var = constBuffer->GetVariableByIndex(j);
-		// 		D3D11_SHADER_VARIABLE_DESC vd;
-		// 		var->GetDesc(&vd);
-		// 		Prompt("Var name=%s, size=%d, offset=%d", vd.Name, vd.Size, vd.StartOffset);
-		// 	}
-		// }
 	}
 
 	for (VertexShader* vs : rd->VShaders)
@@ -438,6 +528,10 @@ void InitD3D(
 			if (errorState->InitSuccess == false)
 				return;
 		}
+		PrepareConstants(reflector, dc->CBs, dc->Constants, dc->Shader->ShaderPath, 
+			errorState);
+		if (errorState->InitSuccess == false)
+			return;
 	}
 
 	for (Draw* draw : rd->Draws)
@@ -449,6 +543,10 @@ void InitD3D(
 			if (errorState->InitSuccess == false)
 				return;
 		}
+		PrepareConstants(reflector, draw->VSCBs, draw->VSConstants,
+			draw->VShader->ShaderPath, errorState);
+		if (errorState->InitSuccess == false)
+			return;
 		reflector = draw->PShader->Reflector;
 		for (Bind& bind : draw->PSBinds)
 		{
@@ -456,6 +554,10 @@ void InitD3D(
 			if (errorState->InitSuccess == false)
 				return;
 		}
+		PrepareConstants(reflector, draw->PSCBs, draw->PSConstants,
+			draw->PShader->ShaderPath, errorState);
+		if (errorState->InitSuccess == false)
+			return;
 	}
 
 	for (Buffer* buf : rd->Buffers)
@@ -662,6 +764,40 @@ void ReleaseD3D(
 	{
 		SafeRelease(dss->DSSObject);
 	}
+
+	for (Dispatch* dc : rd->Dispatches)
+	{
+		for (ConstantBuffer& cb : dc->CBs)
+		{
+			SafeRelease(cb.BufferObject);
+			free(cb.BackingMemory);
+		}
+	}
+}
+
+void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets, 
+	std::vector<ConstantBuffer>& buffers)
+{
+	ID3D11DeviceContext* ctx = ec->D3dCtx;
+	ast::EvaluationContext evCtx;
+	evCtx.DisplaySize = ec->DisplaySize;
+	evCtx.Time = ec->Time;
+	for (const SetConstant& set : sets)
+	{
+		ast::Result res;
+		set.Value->Evaluate(evCtx, &res);
+		Assert(set.Size == res.Size(), "mismatch size");
+		memcpy(set.CB->BackingMemory+set.Offset, &res.FloatVal, res.Size());
+	}
+	for (const ConstantBuffer& buf : buffers)
+	{
+		D3D11_MAPPED_SUBRESOURCE mapped_resource;
+		HRESULT hr = ctx->Map(buf.BufferObject, 0, D3D11_MAP_WRITE_DISCARD, 
+			0, &mapped_resource);
+		Assert(hr == S_OK, "failed to map CB hr=%x", hr);
+		memcpy(mapped_resource.pData, buf.BackingMemory, buf.Size);
+		ctx->Unmap(buf.BufferObject, 0);
+	}
 }
 
 void ExecuteDispatch(
@@ -671,7 +807,11 @@ void ExecuteDispatch(
 	ID3D11DeviceContext* ctx = ec->D3dCtx;
 	UINT initialCount = (UINT)-1;
 	ctx->CSSetShader(dc->Shader->ShaderObject, nullptr, 0);
-	ctx->CSSetConstantBuffers(0, 1, &ec->GlobalConstantBuffer);
+	ExecuteSetConstants(ec, dc->Constants, dc->CBs);
+	for (const ConstantBuffer& buf : dc->CBs)
+	{
+		ctx->CSSetConstantBuffers(buf.Slot, 1, &buf.BufferObject);
+	}
 	for (Bind& bind : dc->Binds)
 	{
 		switch (bind.Type)
@@ -705,7 +845,7 @@ void ExecuteDispatch(
 		}
 	}
 	uint3 groups = dc->Groups;
-	if (dc->ThreadPerPixel)
+	if (dc->ThreadPerPixel && ec->DisplaySize.x != 0 && ec->DisplaySize.y != 0)
 	{
 		uint3 tgs = dc->Shader->ThreadGroupSize;
 		groups.x = (u32)((ec->DisplaySize.x - 1) / tgs.x) + 1;
@@ -724,8 +864,16 @@ void ExecuteDraw(
 	ctx->VSSetShader(draw->VShader->ShaderObject, nullptr, 0);
 	ctx->IASetInputLayout(draw->VShader->InputLayout);
 	ctx->PSSetShader(draw->PShader->ShaderObject, nullptr, 0);
-	ctx->VSSetConstantBuffers(0, 1, &ec->GlobalConstantBuffer);
-	ctx->PSSetConstantBuffers(0, 1, &ec->GlobalConstantBuffer);
+	ExecuteSetConstants(ec, draw->VSConstants, draw->VSCBs);
+	ExecuteSetConstants(ec, draw->PSConstants, draw->PSCBs);
+	for (const ConstantBuffer& buf : draw->VSCBs)
+	{
+		ctx->VSSetConstantBuffers(buf.Slot, 1, &buf.BufferObject);
+	}
+	for (const ConstantBuffer& buf : draw->PSCBs)
+	{
+		ctx->PSSetConstantBuffers(buf.Slot, 1, &buf.BufferObject);
+	}
 	for (Bind& bind : draw->VSBinds)
 	{
 		switch (bind.Type)
@@ -837,42 +985,10 @@ void Execute(
 	RenderDescription* rd)
 {
 	ID3D11DeviceContext* ctx = ec->D3dCtx;
-	float time = ec->Time;
 
 	// Clear state so we aren't polluted by previous program drawing or previous 
 	//	execution. 
 	ctx->ClearState();
-
-	// TODO: duplicated definition
-	struct ConstantBuffer
-	{
-		float DisplaySizeX, DisplaySizeY;
-		float Time;
-		float Padding;
-		float4x4 Matrix;
-	};
-
-	// Update constant buffer
-	{
-		D3D11_MAPPED_SUBRESOURCE mapped_resource;
-		HRESULT hr = ctx->Map(ec->GlobalConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 
-			0, &mapped_resource);
-		Assert(hr == S_OK, "failed to map CB hr=%x", hr);
-		ConstantBuffer* cb = (ConstantBuffer*)mapped_resource.pData;
-		cb->DisplaySizeX = (float)ec->DisplaySize.x;
-		cb->DisplaySizeY = (float)ec->DisplaySize.y;
-		cb->Time = time;
-		float fovv = 3.14f/2.f;
-		float aspect = (float)ec->DisplaySize.x / (float)ec->DisplaySize.y;
-		float znear = 0.1f;
-		float zfar = 10.f;
-		float3 from = { 2.f, 0.f, 0.f };
-		float3 to = { 0.f, 0.f, 0.f };
-		float4x4 look = lookAt(from, to);
-		float4x4 proj = projection(fovv, aspect, znear, zfar);
-		cb->Matrix = proj * look;
-		ctx->Unmap(ec->GlobalConstantBuffer, 0);
-	}
 
 	for (Pass pass : rd->Passes)
 	{

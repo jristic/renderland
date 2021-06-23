@@ -40,7 +40,6 @@ static ID3D11RenderTargetView*  g_mainRenderTargetView = nullptr;
 static ID3D11UnorderedAccessView*  g_mainRenderTargetUav = nullptr;
 static ID3D11Texture2D* 		g_mainDepthStencilTex = nullptr;
 static ID3D11DepthStencilView*  g_mainDepthStencilView = nullptr;
-static ID3D11Buffer*            g_pConstantBuffer = nullptr;
 
 bool RlfCompileSuccess = false;
 std::string RlfCompileErrorMessage;
@@ -163,26 +162,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	CreateRenderTarget();
 
 	CreateShader();
-
-	struct ConstantBuffer
-	{
-		float DisplaySizeX, DisplaySizeY;
-		float Time;
-		float Padding;
-		float4x4 Matrix;
-	};
-
-	// Create constant buffer
-	{
-		D3D11_BUFFER_DESC desc;
-		desc.ByteWidth = sizeof(ConstantBuffer);
-		desc.Usage = D3D11_USAGE_DYNAMIC;
-		desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-		desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-		desc.MiscFlags = 0;
-		hr = g_pd3dDevice->CreateBuffer(&desc, NULL, &g_pConstantBuffer);
-		Assert(hr == S_OK, "Failed to create CB hr=%x", hr);
-	}
 
 	// Show the window
 	::ShowWindow(hwnd, Cfg.Maximized ? SW_MAXIMIZE : SW_SHOWDEFAULT);
@@ -312,7 +291,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			ctx.MainRtv = g_mainRenderTargetView;
 			ctx.MainRtUav = g_mainRenderTargetUav;
 			ctx.DefaultDepthView = g_mainDepthStencilView;
-			ctx.GlobalConstantBuffer = g_pConstantBuffer;
 			ctx.DisplaySize.x = (u32)io.DisplaySize.x;
 			ctx.DisplaySize.y = (u32)io.DisplaySize.y;
 			ctx.Time = time;
@@ -341,7 +319,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	CleanupShader();
 	CleanupRenderTarget();
 
-	SafeRelease(g_pConstantBuffer);
 	SafeRelease(g_pSwapChain);
 	SafeRelease(g_pd3dDeviceContext);
 	SafeRelease(g_d3dInfoQueue);
@@ -523,3 +500,4 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 #include "fileio.cpp"
 #include "rlf/rlfparser.cpp"
 #include "rlf/rlfinterpreter.cpp"
+#include "rlf/ast.cpp"

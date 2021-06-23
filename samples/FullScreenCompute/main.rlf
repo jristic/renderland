@@ -8,6 +8,8 @@ Dispatch {
 	Shader = testShader;
 	ThreadPerPixel = true;
 	Bind OutTexture = @BackBuffer;
+	SetConstant TextureSize = DisplaySize();
+	SetConstant Time = Time();
 } perPixelDispatch
 
 Passes {

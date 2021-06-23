@@ -36,6 +36,8 @@ Dispatch {
 	Bind InTexture = Tex;
 	Bind PointSampler = PointSampler;
 	Bind LinearSampler = LinearSampler;
+	setconstant TextureSize = DisplaySize();
+	setconstant Time = time();
 } consumerDispatch
 
 Passes {

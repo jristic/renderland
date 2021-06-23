@@ -18,6 +18,8 @@ Dispatch {
 	Shader = producer;
 	Groups = { 32, 32, 1 };
 	Bind OutTexture = Tex;
+	setconstant TextureSize = DisplaySize();
+	setconstant Time = time();
 } producerDispatch
 
 ComputeShader {
@@ -31,6 +33,8 @@ Dispatch {
 	Bind OutTexture = @BackBuffer;
 	Bind InTexture=Tex;
 	Bind Sampler= PointSampler;
+	setconstant TextureSize = DisplaySize();
+	setconstant Time = time();
 } consumerDispatch
 
 Passes {

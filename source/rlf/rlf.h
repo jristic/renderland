@@ -1,5 +1,6 @@
 
 #include "rlf/textureformat.h"
+#include "rlf/ast.h"
 
 namespace rlf
 {
@@ -221,12 +222,30 @@ namespace rlf
 		bool IsOutput;
 		u32 BindIndex;
 	};
+	struct ConstantBuffer
+	{
+		u8* BackingMemory;
+		ID3D11Buffer* BufferObject;
+		std::string Name;
+		u32 Slot;
+		u32 Size;
+	};
+	struct SetConstant
+	{
+		const char* VariableName;
+		ast::Node* Value;
+		ConstantBuffer* CB;
+		u32 Offset;
+		u32 Size;
+	};
 	struct Dispatch
 	{
 		ComputeShader* Shader;
 		bool ThreadPerPixel;
 		uint3 Groups;
 		std::vector<Bind> Binds;
+		std::vector<SetConstant> Constants;
+		std::vector<ConstantBuffer> CBs;
 	};
 	struct TextureTarget
 	{
@@ -252,6 +271,10 @@ namespace rlf
 		std::vector<TextureTarget> DepthStencil;
 		std::vector<Bind> VSBinds;
 		std::vector<Bind> PSBinds;
+		std::vector<SetConstant> VSConstants;
+		std::vector<SetConstant> PSConstants;
+		std::vector<ConstantBuffer> VSCBs;
+		std::vector<ConstantBuffer> PSCBs;
 	};
 	struct ClearColor
 	{
@@ -291,5 +314,6 @@ namespace rlf
 		std::vector<ObjImport*> Objs;
 		std::set<std::string> Strings;
 		std::vector<void*> Mems;
+		std::vector<ast::Node*> Asts;
 	};
 }
