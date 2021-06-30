@@ -22,6 +22,7 @@
 * Constant buffers and constant filling
 	* Tuneables: Specify shader parameters in the RLF and allow tuning via the imgui display.
 	* future: Expand to allow declaring vars like floats, ints, vectors, matrices in RLF, reference them for SetConstants
+	* FIX: GEDMAS order of operations, left to right order of operations, explicit grouping. 
 
 * Camera positioning utilities for drawing
 	* Specifying transforms manually 

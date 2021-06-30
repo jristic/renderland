@@ -785,7 +785,7 @@ void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets,
 	for (const SetConstant& set : sets)
 	{
 		ast::Result res;
-		set.Value->Evaluate(evCtx, &res);
+		set.Value->Evaluate(evCtx, res);
 		Assert(set.Size == res.Size(), "mismatch size");
 		memcpy(set.CB->BackingMemory+set.Offset, &res.FloatVal, res.Size());
 	}
