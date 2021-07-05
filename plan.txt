@@ -10,6 +10,7 @@
 * Allow #include of other RLF files
 * Better way to size structured buffers.
 	* right now you have to figure out manually how big a struct would be and enter that as the ElementSize field.
+	* Perhaps I can parse the types in the shader and compute their sizes, then have something in RLF like "sizeof(shader, type)".
 * Templating of blocks of RLF data
 	* For instance if you wanted to draw a model multiple times, you have all the boilerplate for a draw, but you allow the position / obj-file / textures to be substituted. 
 	* Kind of like a text prefab.
@@ -20,13 +21,11 @@
 	* Some way to choose which shader to run based on some condition. 
 
 * Constant buffers and constant filling
+	* AST errors need to be provide location in RLF file for the error.
+		* This may be a good opportunity to make common the line/char error reporting rather than implementing it per-system.
 	* Tuneables: Specify shader parameters in the RLF and allow tuning via the imgui display.
 	* future: Expand to allow declaring vars like floats, ints, vectors, matrices in RLF, reference them for SetConstants
 	* FIX: GEDMAS order of operations, left to right order of operations, explicit grouping. 
-
-* Camera positioning utilities for drawing
-	* Specifying transforms manually 
-	* Camera position/look-at utility
 
 **** Expand draw pipeline support.
 	* Render to texture

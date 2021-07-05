@@ -8,6 +8,26 @@ float3 operator-(const float3& lhs, const float3& rhs)
 	return res;
 }
 
+float4 operator*(const float4& lhs, const float4& rhs)
+{
+	float4 res;
+	res.x = lhs.x * rhs.x;
+	res.y = lhs.y * rhs.y;
+	res.z = lhs.z * rhs.z;
+	res.w = lhs.w * rhs.w;
+	return res;
+}
+
+float4 operator/(const float4& lhs, const float4& rhs)
+{
+	float4 res;
+	res.x = lhs.x / rhs.x;
+	res.y = lhs.y / rhs.y;
+	res.z = lhs.z / rhs.z;
+	res.w = lhs.w / rhs.w;
+	return res;
+}
+
 float3 normalized(const float3& a)
 {
 	float mag = std::sqrt(a.x*a.x + a.y*a.y + a.z*a.z);

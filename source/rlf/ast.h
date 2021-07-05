@@ -9,18 +9,20 @@ struct EvaluationContext // TODO: collapse with executecontext?
 	float Time;
 };
 
+enum class ResultType
+{
+	Float,
+	Float2,
+	Float3,
+	Float4,
+	Float4x4,
+};
+
 struct Result
 {
 	Result() {}
-	enum class Type
-	{
-		Float,
-		Float2,
-		Float3,
-		Float4,
-		Float4x4,
-	};
-	Type Type;
+	
+	ResultType Type;
 	union {
 		float FloatVal;
 		float2 Float2Val;
