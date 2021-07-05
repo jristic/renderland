@@ -27,7 +27,14 @@ namespace rlf
 		float Time;
 	};
 
+	struct ExecuteErrorState
+	{
+		bool ExecuteSuccess;
+		std::string ErrorMessage;
+	};
+
 	void Execute(
 		ExecuteContext* context,
-		RenderDescription* rd);
+		RenderDescription* rd,
+		ExecuteErrorState* es);
 }

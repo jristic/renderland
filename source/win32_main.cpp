@@ -294,7 +294,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			ctx.DisplaySize.x = (u32)io.DisplaySize.x;
 			ctx.DisplaySize.y = (u32)io.DisplaySize.y;
 			ctx.Time = time;
-			rlf::Execute(&ctx, CurrentRenderDesc);
+			rlf::ExecuteErrorState es = {};
+			rlf::Execute(&ctx, CurrentRenderDesc, &es);
+			if (!es.ExecuteSuccess)
+			{
+				RlfCompileSuccess = false;
+				RlfCompileErrorMessage = "RLF execution error: \n" + es.ErrorMessage;
+			}
 		}
 
 		g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);

@@ -775,6 +775,36 @@ void ReleaseD3D(
 	}
 }
 
+
+// -----------------------------------------------------------------------------
+// ------------------------------ EXECUTION ------------------------------------
+// -----------------------------------------------------------------------------
+struct ExecuteException
+{
+	std::string Message;
+};
+
+void ExecuteError(const char* str, ...)
+{
+	char buf[512];
+	va_list ptr;
+	va_start(ptr,str);
+	vsprintf_s(buf,512,str,ptr);
+	va_end(ptr);
+
+	ExecuteException ae;
+	ae.Message = buf;
+	throw ae;
+}
+
+#define ExecuteAssert(expression, message, ...) \
+do {											\
+	if (!(expression)) {						\
+		ExecuteError(message, ##__VA_ARGS__);	\
+	}											\
+} while (0);									\
+
+
 void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets, 
 	std::vector<ConstantBuffer>& buffers)
 {
@@ -785,8 +815,17 @@ void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets,
 	for (const SetConstant& set : sets)
 	{
 		ast::Result res;
-		set.Value->Evaluate(evCtx, res);
-		Assert(set.Size == res.Size(), "mismatch size");
+		ast::EvaluateErrorState es;
+		ast::Evaluate(evCtx, set.Value, res, es);
+		if (!es.EvaluateSuccess)
+		{
+			ExecuteException ee;
+			ee.Message = "AST evaluation error: \n" + es.ErrorMessage;
+			throw ee;
+		}
+		ExecuteAssert(set.Size == res.Size(), 
+			"SetConstant %s does not match size, expected=%u got=%u",
+			set.VariableName, set.Size, res.Size());
 		memcpy(set.CB->BackingMemory+set.Offset, &res.FloatVal, res.Size());
 	}
 	for (const ConstantBuffer& buf : buffers)
@@ -980,7 +1019,7 @@ void ExecuteDraw(
 	}
 }
 
-void Execute(
+void _Execute(
 	ExecuteContext* ec,
 	RenderDescription* rd)
 {
@@ -1024,5 +1063,24 @@ void Execute(
 	}
 
 }
+
+void Execute(
+	ExecuteContext* ec,
+	RenderDescription* rd,
+	ExecuteErrorState* es)
+{
+	es->ExecuteSuccess = true;
+	try {
+		_Execute(ec, rd);
+	}
+	catch (ExecuteException ee)
+	{
+		es->ExecuteSuccess = false;
+		es->ErrorMessage = ee.Message;
+	}
+}
+
+#undef ExeucteAssert
+
 
 } // namespace rlf

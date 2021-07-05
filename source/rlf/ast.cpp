@@ -29,31 +29,73 @@ std::unordered_map<u32, FunctionEvaluate> FuncMap = {
 	{ LowerHash("Projection"), EvaluateProjection },
 };
 
+struct AstException
+{
+	std::string Message;
+};
+
+void Evaluate(const EvaluationContext& ec, const Node* ast, Result& res, EvaluateErrorState& es)
+{
+	es.EvaluateSuccess = true;
+	try {
+		ast->Evaluate(ec, res);
+	}
+	catch (AstException ae)
+	{
+		es.EvaluateSuccess = false;
+		es.ErrorMessage = ae.Message;
+	}
+}
+
+void AstError(const char* str, ...)
+{
+	char buf[512];
+	va_list ptr;
+	va_start(ptr,str);
+	vsprintf_s(buf,512,str,ptr);
+	va_end(ptr);
+
+	AstException ae;
+	ae.Message = buf;
+	throw ae;
+}
+
+#define AstAssert(expression, message, ...) 	\
+do {											\
+	if (!(expression)) {						\
+		AstError(message, ##__VA_ARGS__);	\
+	}											\
+} while (0);									\
+
 
 // -----------------------------------------------------------------------------
 // ------------------------------ NODE EVALS -----------------------------------
 // -----------------------------------------------------------------------------
-void FloatLiteral::Evaluate(const EvaluationContext&, Result& res)
+void FloatLiteral::Evaluate(const EvaluationContext&, Result& res) const
 {
 	res.Type = Result::Type::Float;
 	res.FloatVal = Val;
 }
 
-void Subscript::Evaluate(const EvaluationContext& ec, Result& res)
+void Subscript::Evaluate(const EvaluationContext& ec, Result& res) const
 {
 	Result subjectRes;
 	Subject->Evaluate(ec, subjectRes);
-	Assert(subjectRes.Type == Result::Type::Float2, "not handled"); // TODO: expand
+	AstAssert((Index + 1) * 4 <= subjectRes.Size(), "Invalid subscript for this type");
 	res.Type = Result::Type::Float;
 	if (Index == 0)
-		res.FloatVal = subjectRes.Float2Val.x;
+		res.FloatVal = subjectRes.Float4Val.x;
 	else if (Index == 1)
-		res.FloatVal = subjectRes.Float2Val.y;
+		res.FloatVal = subjectRes.Float4Val.y;
+	else if (Index == 2)
+		res.FloatVal = subjectRes.Float4Val.z;
+	else if (Index == 3)
+		res.FloatVal = subjectRes.Float4Val.w;
 	else
 		Unimplemented();
 }
 
-void Multiply::Evaluate(const EvaluationContext& ec, Result& res)
+void Multiply::Evaluate(const EvaluationContext& ec, Result& res) const
 {
 	Result arg1Res, arg2Res;
 	Arg1->Evaluate(ec, arg1Res);
@@ -64,7 +106,7 @@ void Multiply::Evaluate(const EvaluationContext& ec, Result& res)
 	res.Float4x4Val = arg1Res.Float4x4Val * arg2Res.Float4x4Val;
 }
 
-void Divide::Evaluate(const EvaluationContext& ec, Result& res)
+void Divide::Evaluate(const EvaluationContext& ec, Result& res) const
 {
 	Result arg1Res, arg2Res;
 	Arg1->Evaluate(ec, arg1Res);
@@ -75,7 +117,7 @@ void Divide::Evaluate(const EvaluationContext& ec, Result& res)
 	res.FloatVal = arg1Res.FloatVal / arg2Res.FloatVal;
 }
 
-void FunctionNode::Evaluate(const EvaluationContext& ec, Result& res)
+void Function::Evaluate(const EvaluationContext& ec, Result& res) const
 {
 	u32 funcHash = LowerHash(Name.c_str());
 	Assert(FuncMap.count(funcHash) == 1, "No function named %s exists.", Name.c_str());
@@ -145,7 +187,8 @@ void EvaluateProjection(const EvaluationContext& ec, std::vector<Node*> args, Re
 		nearRes.FloatVal, farRes.FloatVal);
 }
 
+#undef AstAssert
 
 
-}
-}
+} // namespace ast
+} // namespace rlf

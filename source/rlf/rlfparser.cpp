@@ -182,6 +182,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(X) \
 	RLF_KEYWORD_ENTRY(Y) \
 	RLF_KEYWORD_ENTRY(Z) \
+	RLF_KEYWORD_ENTRY(W) \
 
 #define RLF_KEYWORD_ENTRY(name) name,
 enum class Keyword
@@ -321,13 +322,7 @@ void ParserError(const char* str, ...)
 	ps->es->ErrorMessage += buf;
 	ps->es->ErrorMessage += "\n";
 
-	// This if statement is meaningless (rd will always be non-null here), but
-	//	the compiler doesn't know that. Otherwise it will either generate 
-	// 	C4702 (unreachable code) for any code that comes after a ParserError in 
-	// 	optimized builds, or will generate C4715 (not all paths return value)
-	// 	in non-optimized builds if you remove the unreachable code. 
-	if (GPS->rd) 
-		throw ParseException();
+	throw ParseException();
 }
 
 #define ParserAssert(expression, message, ...) 	\
@@ -524,13 +519,15 @@ bool ConsumeBool(
 {
 	BufferString value = ConsumeIdentifier(b);
 	Keyword key = LookupKeyword(value);
+	bool ret = false;
 	if (key == Keyword::True)
-		return true;
+		ret = true;
 	else if (key == Keyword::False)
-		return false;
+		ret = false;
+	else
+		ParserError("Expected bool (true/false), got: %.*s", value.len, value.base);
 
-	ParserError("expected bool (true/false), got: %.*s", value.len, value.base);
-	return false;
+	return ret;
 }
 
 i32 ConsumeIntLiteral(
@@ -654,15 +651,17 @@ T ConsumeEnum(BufferIter& b, EnumEntry<T> def[DefSize], const char* name)
 {
 	BufferString id = ConsumeIdentifier(b);
 	Keyword key = LookupKeyword(id);
+	T t = T::Invalid;
 	for (size_t i = 0 ; i < DefSize ; ++i)
 	{
 		if (key == def[i].Key)
 		{
-			return def[i].Value;
+			t = def[i].Value;
+			break;
 		}
 	}
-	ParserError("Invalid %s enum value: %.*s", name, id.len, id.base);
-	return T::Invalid;
+	ParserAssert(t != T::Invalid, "Invalid %s enum value: %.*s", name, id.len, id.base);
+	return t;
 }
 
 SystemValue ConsumeSystemValue(BufferIter& b)
@@ -932,7 +931,7 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 			ParserAssert(!ast, "expected op");
 			BufferString id = ConsumeIdentifier(b);
 			ConsumeToken(Token::LParen, b);
-			ast::FunctionNode* func = AllocateAst<ast::FunctionNode>(ps.rd);
+			ast::Function* func = AllocateAst<ast::Function>(ps.rd);
 			func->Name = std::string(id.base, id.len);
 			while (true)
 			{
@@ -963,6 +962,8 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 				sub->Index = 1;
 			else if (ssKey == Keyword::Z)
 				sub->Index = 2;
+			else if (ssKey == Keyword::W)
+				sub->Index = 3;
 			else
 				ParserError("Unexpected subscript: %.*s", ss.len, ss.base);
 			ast = sub;
