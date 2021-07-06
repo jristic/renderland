@@ -296,6 +296,22 @@ namespace rlf
 			ClearDepth* ClearDepth;
 		};
 	};
+	struct Tuneable
+	{
+		const char* Name;
+		enum class Type
+		{
+			Bool,
+			Float,
+		};
+		Type T;
+		union {
+			bool BoolVal;
+			float FloatVal;
+		};
+		// float FloatParamMin;
+		// float FloatParamMax;
+	};
 	struct RenderDescription
 	{
 		std::vector<Pass> Passes;
@@ -312,6 +328,7 @@ namespace rlf
 		std::vector<RasterizerState*> RasterizerStates;
 		std::vector<DepthStencilState*> DepthStencilStates;
 		std::vector<ObjImport*> Objs;
+		std::vector<Tuneable*> Tuneables;
 		std::set<std::string> Strings;
 		std::vector<void*> Mems;
 		std::vector<ast::Node*> Asts;

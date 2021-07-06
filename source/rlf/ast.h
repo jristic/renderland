@@ -1,5 +1,5 @@
 
-namespace rlf {
+namespace rlf { struct Tuneable;
 namespace ast {
 
 
@@ -11,6 +11,7 @@ struct EvaluationContext // TODO: collapse with executecontext?
 
 enum class ResultType
 {
+	Bool,
 	Float,
 	Float2,
 	Float3,
@@ -24,6 +25,7 @@ struct Result
 	
 	ResultType Type;
 	union {
+		u32 BoolVal; // NOTE: booleans are 4 byte variables in hlsl
 		float FloatVal;
 		float2 Float2Val;
 		float3 Float3Val;
@@ -32,7 +34,7 @@ struct Result
 	};
 	u32 Size() {
 		u32 sizes[] = {
-			4, 8, 12, 16, 64
+			4, 4, 8, 12, 16, 64
 		};
 		return sizes[(u32)Type];
 	}
@@ -79,6 +81,12 @@ struct Divide : Node
 	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
 	Node* Arg1;
 	Node* Arg2;
+};
+
+struct TuneableRef : Node
+{
+	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
+	Tuneable* Tune;
 };
 
 struct Function : Node

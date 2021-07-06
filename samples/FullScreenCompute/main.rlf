@@ -1,4 +1,7 @@
 
+Tuneable bool Clockwise = false;
+Tuneable float Speed = 1;
+
 ComputeShader {
 	ShaderPath = "shader.hlsl";
 	EntryPoint = "CSMain";
@@ -10,6 +13,8 @@ Dispatch {
 	Bind OutTexture = @BackBuffer;
 	SetConstant TextureSize = DisplaySize();
 	SetConstant Time = Time();
+	SetConstant Clockwise = Clockwise;
+	SetConstant Speed = Speed;
 } perPixelDispatch
 
 Passes {

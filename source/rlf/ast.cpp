@@ -120,6 +120,7 @@ void Subscript::Evaluate(const EvaluationContext& ec, Result& res) const
 {
 	Result subjectRes;
 	Subject->Evaluate(ec, subjectRes);
+	AstAssert(subjectRes.Type != ResultType::Bool, "Subscripts aren't usable on bool types");
 	AstAssert((Index + 1) * 4 <= subjectRes.Size(), "Invalid subscript for this type");
 	AstAssert(subjectRes.Type != ResultType::Float4x4,
 		"Subscripts aren't usable on Matrix types");
@@ -141,6 +142,8 @@ void Multiply::Evaluate(const EvaluationContext& ec, Result& res) const
 	Result arg1Res, arg2Res;
 	Arg1->Evaluate(ec, arg1Res);
 	Arg2->Evaluate(ec, arg2Res);
+	AstAssert(arg1Res.Type != ResultType::Bool && arg2Res.Type != ResultType::Bool, 
+		"Bool multiplication not supported.");
 	if (arg1Res.Type == ResultType::Float4x4 ||
 		arg2Res.Type == ResultType::Float4x4)
 	{
@@ -154,7 +157,8 @@ void Multiply::Evaluate(const EvaluationContext& ec, Result& res) const
 		return;
 	}
 	AstAssert(arg1Res.Type == arg2Res.Type || arg1Res.Type == ResultType::Float ||
-		arg2Res.Type == ResultType::Float, "Vector size mismatch in multiply, %s and %s", TypeToString(arg1Res.Type), TypeToString(arg2Res.Type));
+		arg2Res.Type == ResultType::Float, "Vector size mismatch in multiply, %s and %s",
+		TypeToString(arg1Res.Type), TypeToString(arg2Res.Type));
 	ExpandFloat4(arg1Res);
 	ExpandFloat4(arg2Res);
 	res.Type = arg1Res.Type == ResultType::Float ? arg2Res.Type : arg1Res.Type;
@@ -166,15 +170,40 @@ void Divide::Evaluate(const EvaluationContext& ec, Result& res) const
 	Result arg1Res, arg2Res;
 	Arg1->Evaluate(ec, arg1Res);
 	Arg2->Evaluate(ec, arg2Res);
+	AstAssert(arg1Res.Type != ResultType::Bool && arg2Res.Type != ResultType::Bool, 
+		"Bool division not supported.");
 	AstAssert(arg1Res.Type != ResultType::Float4x4 && 
 		arg2Res.Type != ResultType::Float4x4,
 		"Matrix types not supported in divides.");
 	AstAssert(arg1Res.Type == arg2Res.Type || arg1Res.Type == ResultType::Float ||
-		arg2Res.Type == ResultType::Float, "Vector size mismatch in multiply, %s and %s", TypeToString(arg1Res.Type), TypeToString(arg2Res.Type));
+		arg2Res.Type == ResultType::Float, "Vector size mismatch in multiply, %s and %s",
+		TypeToString(arg1Res.Type), TypeToString(arg2Res.Type));
 	ExpandFloat4(arg1Res);
 	ExpandFloat4(arg2Res);
 	res.Type = arg1Res.Type == ResultType::Float ? arg2Res.Type : arg1Res.Type;
-	res.Float4Val = arg1Res.Float4Val / arg2Res.Float4Val;}
+	res.Float4Val = arg1Res.Float4Val / arg2Res.Float4Val;
+}
+
+void TuneableRef::Evaluate(const EvaluationContext&, Result& res) const
+{
+	switch (Tune->T)
+	{
+	case Tuneable::Type::Bool:
+	{
+		res.Type = ResultType::Bool;
+		res.BoolVal = Tune->BoolVal;
+		break;
+	}
+	case Tuneable::Type::Float:
+	{
+		res.Type = ResultType::Float;
+		res.FloatVal = Tune->FloatVal;
+		break;
+	}
+	default:
+		Unimplemented();
+	}
+}
 
 void Function::Evaluate(const EvaluationContext& ec, Result& res) const
 {

@@ -264,6 +264,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 			ImGui::Text("Exe directory: %s", ExeDirectoryPath.c_str());
 
+			if (RlfCompileSuccess)
+			{
+				ImGui::Text("Tuneables:");
+				for (rlf::Tuneable* tune : CurrentRenderDesc->Tuneables)
+				{
+					if (tune->T == rlf::Tuneable::Type::Bool)
+						ImGui::Checkbox(tune->Name, &tune->BoolVal);
+					else if (tune->T == rlf::Tuneable::Type::Float)
+						ImGui::InputFloat(tune->Name, &tune->FloatVal);
+					else
+						Unimplemented();
+				}
+			}
+
 			ImGui::End();
 		}
 

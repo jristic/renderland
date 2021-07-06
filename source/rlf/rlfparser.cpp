@@ -23,6 +23,8 @@ namespace rlf
 	RLF_TOKEN_ENTRY(RParen) \
 	RLF_TOKEN_ENTRY(LBrace) \
 	RLF_TOKEN_ENTRY(RBrace) \
+	RLF_TOKEN_ENTRY(LBracket) \
+	RLF_TOKEN_ENTRY(RBracket) \
 	RLF_TOKEN_ENTRY(Comma) \
 	RLF_TOKEN_ENTRY(Equals) \
 	RLF_TOKEN_ENTRY(Minus) \
@@ -123,8 +125,9 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(False) \
 	RLF_KEYWORD_ENTRY(Vertex) \
 	RLF_KEYWORD_ENTRY(Index) \
-	RLF_KEYWORD_ENTRY(Float) \
 	RLF_KEYWORD_ENTRY(U16) \
+	RLF_KEYWORD_ENTRY(Float) \
+	RLF_KEYWORD_ENTRY(Bool) \
 	RLF_KEYWORD_ENTRY(PointList) \
 	RLF_KEYWORD_ENTRY(LineList) \
 	RLF_KEYWORD_ENTRY(LineStrip) \
@@ -183,6 +186,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(Y) \
 	RLF_KEYWORD_ENTRY(Z) \
 	RLF_KEYWORD_ENTRY(W) \
+	RLF_KEYWORD_ENTRY(Tuneable) \
 
 #define RLF_KEYWORD_ENTRY(name) name,
 enum class Keyword
@@ -271,6 +275,7 @@ struct ParseState
 	std::unordered_map<BufferString, RasterizerState*, BufferStringHash> rsMap;
 	std::unordered_map<BufferString, DepthStencilState*, BufferStringHash> dssMap;
 	std::unordered_map<BufferString, ObjImport*, BufferStringHash> objMap;
+	std::unordered_map<BufferString, Tuneable*, BufferStringHash> tuneMap;
 	std::unordered_map<u32, Keyword> keyMap;
 	ParseErrorState* es;
 
@@ -359,6 +364,8 @@ void ParseStateInit(ParseState* ps)
 	fcLUT[')'] = Token::RParen;
 	fcLUT['{'] = Token::LBrace;
 	fcLUT['}'] = Token::RBrace;
+	fcLUT['['] = Token::LBracket;
+	fcLUT[']'] = Token::RBracket;
 	fcLUT[','] = Token::Comma;
 	fcLUT['='] = Token::Equals;
 	fcLUT['-'] = Token::Minus;
@@ -411,6 +418,8 @@ Token PeekNextToken(
 	case Token::RParen:
 	case Token::LBrace:
 	case Token::RBrace:
+	case Token::LBracket:
+	case Token::RBracket:
 	case Token::Comma:
 	case Token::Equals:
 	case Token::Minus:
@@ -930,23 +939,33 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 		{
 			ParserAssert(!ast, "expected op");
 			BufferString id = ConsumeIdentifier(b);
-			ConsumeToken(Token::LParen, b);
-			ast::Function* func = AllocateAst<ast::Function>(ps.rd);
-			func->Name = std::string(id.base, id.len);
-			while (true)
+			if (TryConsumeToken(Token::LParen, b))
 			{
-				ast::Node* arg = ConsumeAst(b, ps);
-				if (arg)
+				ast::Function* func = AllocateAst<ast::Function>(ps.rd);
+				func->Name = std::string(id.base, id.len);
+				while (true)
 				{
-					func->Args.push_back(arg);
-					if (!TryConsumeToken(Token::Comma, b))
+					ast::Node* arg = ConsumeAst(b, ps);
+					if (arg)
+					{
+						func->Args.push_back(arg);
+						if (!TryConsumeToken(Token::Comma, b))
+							break;
+					}
+					else
 						break;
 				}
-				else
-					break;
+				ConsumeToken(Token::RParen, b);
+				ast = func;
 			}
-			ConsumeToken(Token::RParen, b);
-			ast = func;
+			else
+			{
+				ast::TuneableRef* tr = AllocateAst<ast::TuneableRef>(ps.rd);
+				ParserAssert(ps.tuneMap.count(id) == 1, "Tuneable %.*s not defined.",
+					id.len, id.base);
+				tr->Tune = ps.tuneMap[id];
+				ast = tr;
+			}
 		}
 		else if (tok == Token::Period)
 		{
@@ -1010,6 +1029,57 @@ SetConstant ConsumeSetConstant(BufferIter& b, ParseState& ps)
 	sc.Value = ConsumeAst(b, ps);
 	ConsumeToken(Token::Semicolon, b);
 	return sc;
+}
+
+Tuneable* ConsumeTuneable(BufferIter& b, ParseState& ps)
+{
+	Tuneable* tune = new Tuneable();
+	ps.rd->Tuneables.push_back(tune);
+
+	BufferString typeId = ConsumeIdentifier(b);
+	Keyword typeKey = LookupKeyword(typeId);
+	switch (typeKey)
+	{
+	case Keyword::Float:
+		tune->T = Tuneable::Type::Float;
+		break;
+	case Keyword::Bool:
+		tune->T = Tuneable::Type::Bool;
+		break;
+	default:
+		ParserError("Unexpected tuneable type: %.*s", typeId.len, typeId.base);
+	}
+
+	BufferString nameId = ConsumeIdentifier(b);
+	tune->Name = AddStringToDescriptionData(nameId, ps.rd);
+	ParserAssert(ps.tuneMap.count(nameId) == 0, "Tuneable %.*s already defined", 
+		nameId.len, nameId.base);
+	ps.tuneMap[nameId] = tune;
+
+	// if (tune->T == Tuneable::Type::Float && TryConsumeToken(Token::LBracket,b))
+	// {
+	// 	float min = ConsumeFloatLiteral(b);
+	// 	ConsumeToken(Token::Minus,b);
+	// 	float max = ConsumeFloatLiteral(b);
+	// 	ConsumeToken(Token::RBracket,b);
+	// }
+
+	ConsumeToken(Token::Equals, b);
+	switch (tune->T)
+	{
+	case Tuneable::Type::Float:
+		tune->FloatVal = ConsumeFloatLiteral(b);
+		break;
+	case Tuneable::Type::Bool:
+		tune->BoolVal = ConsumeBool(b);
+		break;
+	default:
+		Unimplemented();
+	}
+
+	ConsumeToken(Token::Semicolon, b);
+
+	return tune;
 }
 
 // -----------------------------------------------------------------------------
@@ -2270,6 +2340,11 @@ void ParseMain()
 			}
 			break;
 		}
+		case Keyword::Tuneable:
+		{
+			ConsumeTuneable(b,ps);
+			break;
+		}
 		default:
 			ParserError("Unexpected structure: %.*s", id.len, id.base);
 		}
@@ -2369,6 +2444,8 @@ void ReleaseData(RenderDescription* data)
 		delete dss;
 	for (ObjImport* obj : data->Objs)
 		delete obj;
+	for (Tuneable* t : data->Tuneables)
+		delete t;
 	for (void* mem : data->Mems)
 		free(mem);
 	for (ast::Node* ast : data->Asts)
