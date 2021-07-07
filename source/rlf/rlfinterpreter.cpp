@@ -423,6 +423,54 @@ void PrepareConstants(
 			}
 		}
 		Assert(found, "Failed to find cbuffer resource binding");
+
+		ID3D11ShaderReflectionType* ctype = cvar->GetType();
+		D3D11_SHADER_TYPE_DESC td;
+		ctype->GetDesc(&td);
+		switch (td.Type)
+		{
+		case D3D_SVT_BOOL:
+			Assert(td.Rows == 1 && td.Columns == 1, "Unhandled bool vector");
+			set.Type = VariableType::Bool;
+			break;
+		case D3D_SVT_INT:
+			Assert(td.Rows == 1 && td.Columns == 1, "Unhandled int vector");
+			set.Type = VariableType::Int;
+			break;
+		case D3D_SVT_UINT:
+			Assert(td.Rows == 1 && td.Columns == 1, "Unhandled uint vector");
+			set.Type = VariableType::Uint;
+			break;
+		case D3D_SVT_FLOAT:
+			switch (td.Columns)
+			{
+			case 1:
+				Assert(td.Rows == 1, "Unhandled float vector");
+				set.Type = VariableType::Float;
+				break;
+			case 2:
+				Assert(td.Rows == 1, "Unhandled float vector");
+				set.Type = VariableType::Float2;
+				break;
+			case 3:
+				Assert(td.Rows == 1, "Unhandled float vector");
+				set.Type = VariableType::Float3;
+				break;
+			case 4:
+				if (td.Rows == 1)
+					set.Type = VariableType::Float4;
+				else if (td.Rows == 4)
+					set.Type = VariableType::Float4x4;
+				else
+					Unimplemented();
+				break;
+			default:
+				Unimplemented();
+			}
+			break;
+		default:
+			Unimplemented();
+		}
 	}
 }
 
@@ -823,10 +871,17 @@ void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets,
 			ee.Message = "AST evaluation error: \n" + es.ErrorMessage;
 			throw ee;
 		}
-		ExecuteAssert(set.Size == res.Size(), 
+		u32 typeSize = TypeToSize(res.Type);
+		ExecuteAssert(set.Size == typeSize, 
 			"SetConstant %s does not match size, expected=%u got=%u",
-			set.VariableName, set.Size, res.Size());
-		memcpy(set.CB->BackingMemory+set.Offset, &res.FloatVal, res.Size());
+			set.VariableName, set.Size, typeSize);
+		ExecuteAssert(set.Type == res.Type, 
+			"SetConstant %s does not match type, expected=%s got=%s",
+			set.VariableName, TypeToString(set.Type), TypeToString(res.Type));
+		if (res.Type == VariableType::Bool)
+			*(u32*)(set.CB->BackingMemory+set.Offset) = res.Value.BoolVal ? 1 : 0;
+		else
+			memcpy(set.CB->BackingMemory+set.Offset, &res.Value, typeSize);
 	}
 	for (const ConstantBuffer& buf : buffers)
 	{

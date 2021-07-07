@@ -1,4 +1,5 @@
 
+#include "rlf/types.h"
 #include "rlf/textureformat.h"
 #include "rlf/ast.h"
 
@@ -237,6 +238,7 @@ namespace rlf
 		ConstantBuffer* CB;
 		u32 Offset;
 		u32 Size;
+		VariableType Type;
 	};
 	struct Dispatch
 	{
@@ -299,16 +301,8 @@ namespace rlf
 	struct Tuneable
 	{
 		const char* Name;
-		enum class Type
-		{
-			Bool,
-			Float,
-		};
-		Type T;
-		union {
-			bool BoolVal;
-			float FloatVal;
-		};
+		VariableType Type;
+		Variable Value;
 		// float FloatParamMin;
 		// float FloatParamMax;
 	};

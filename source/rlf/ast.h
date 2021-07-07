@@ -9,35 +9,10 @@ struct EvaluationContext // TODO: collapse with executecontext?
 	float Time;
 };
 
-enum class ResultType
-{
-	Bool,
-	Float,
-	Float2,
-	Float3,
-	Float4,
-	Float4x4,
-};
-
 struct Result
 {
-	Result() {}
-	
-	ResultType Type;
-	union {
-		u32 BoolVal; // NOTE: booleans are 4 byte variables in hlsl
-		float FloatVal;
-		float2 Float2Val;
-		float3 Float3Val;
-		float4 Float4Val;
-		float4x4 Float4x4Val;
-	};
-	u32 Size() {
-		u32 sizes[] = {
-			4, 4, 8, 12, 16, 64
-		};
-		return sizes[(u32)Type];
-	}
+	VariableType Type;
+	Variable Value;
 };
 
 struct EvaluateErrorState

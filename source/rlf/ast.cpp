@@ -69,19 +69,9 @@ do {											\
 	}											\
 } while (0);									\
 
-const char* TypeToString(ResultType type)
-{
-	const char* names[] = {
-		"Float",
-		"Float2",
-		"Float3",
-		"Float4",
-		"Float4x4",
-	};
-	return names[(u32)type];
-}
 
-void Expect(ResultType type, Result& res, const char* name)
+
+void Expect(VariableType type, Result& res, const char* name)
 {
 	AstAssert(res.Type == type, "Expected %s to be type %s but got %s.",
 		name, TypeToString(type), TypeToString(res.Type));
@@ -91,16 +81,17 @@ void ExpandFloat4(Result& res)
 {
 	switch (res.Type)
 	{
-	case ResultType::Float:
-		res.Float4Val.y = res.Float4Val.z = res.Float4Val.w = res.Float4Val.x;
+	case VariableType::Float:
+		res.Value.Float4Val.y = res.Value.Float4Val.z = res.Value.Float4Val.w = 
+			res.Value.Float4Val.x;
 		break;
-	case ResultType::Float2:
-		res.Float4Val.z = res.Float4Val.w = res.Float4Val.x;
+	case VariableType::Float2:
+		res.Value.Float4Val.z = res.Value.Float4Val.w = res.Value.Float4Val.x;
 		break;
-	case ResultType::Float3:
-		res.Float4Val.w = res.Float4Val.x;
+	case VariableType::Float3:
+		res.Value.Float4Val.w = res.Value.Float4Val.x;
 		break;
-	case ResultType::Float4:
+	case VariableType::Float4:
 		break;
 	default:
 		Unimplemented();
@@ -112,27 +103,27 @@ void ExpandFloat4(Result& res)
 // -----------------------------------------------------------------------------
 void FloatLiteral::Evaluate(const EvaluationContext&, Result& res) const
 {
-	res.Type = ResultType::Float;
-	res.FloatVal = Val;
+	res.Type = VariableType::Float;
+	res.Value.FloatVal = Val;
 }
 
 void Subscript::Evaluate(const EvaluationContext& ec, Result& res) const
 {
 	Result subjectRes;
 	Subject->Evaluate(ec, subjectRes);
-	AstAssert(subjectRes.Type != ResultType::Bool, "Subscripts aren't usable on bool types");
-	AstAssert((Index + 1) * 4 <= subjectRes.Size(), "Invalid subscript for this type");
-	AstAssert(subjectRes.Type != ResultType::Float4x4,
+	AstAssert(subjectRes.Type != VariableType::Bool, "Subscripts aren't usable on bool types");
+	AstAssert((Index + 1) * 4 <= TypeToSize(subjectRes.Type), "Invalid subscript for this type");
+	AstAssert(subjectRes.Type != VariableType::Float4x4,
 		"Subscripts aren't usable on Matrix types");
-	res.Type = ResultType::Float;
+	res.Type = VariableType::Float;
 	if (Index == 0)
-		res.FloatVal = subjectRes.Float4Val.x;
+		res.Value.FloatVal = subjectRes.Value.Float4Val.x;
 	else if (Index == 1)
-		res.FloatVal = subjectRes.Float4Val.y;
+		res.Value.FloatVal = subjectRes.Value.Float4Val.y;
 	else if (Index == 2)
-		res.FloatVal = subjectRes.Float4Val.z;
+		res.Value.FloatVal = subjectRes.Value.Float4Val.z;
 	else if (Index == 3)
-		res.FloatVal = subjectRes.Float4Val.w;
+		res.Value.FloatVal = subjectRes.Value.Float4Val.w;
 	else
 		Unimplemented();
 }
@@ -142,27 +133,27 @@ void Multiply::Evaluate(const EvaluationContext& ec, Result& res) const
 	Result arg1Res, arg2Res;
 	Arg1->Evaluate(ec, arg1Res);
 	Arg2->Evaluate(ec, arg2Res);
-	AstAssert(arg1Res.Type != ResultType::Bool && arg2Res.Type != ResultType::Bool, 
+	AstAssert(arg1Res.Type != VariableType::Bool && arg2Res.Type != VariableType::Bool, 
 		"Bool multiplication not supported.");
-	if (arg1Res.Type == ResultType::Float4x4 ||
-		arg2Res.Type == ResultType::Float4x4)
+	if (arg1Res.Type == VariableType::Float4x4 ||
+		arg2Res.Type == VariableType::Float4x4)
 	{
-		Expect(ResultType::Float4x4, arg1Res, "lhs");
-		Expect(ResultType::Float4x4, arg2Res, "rhs");
-		AstAssert(arg1Res.Type == ResultType::Float4x4 &&
-			arg2Res.Type == ResultType::Float4x4, 
+		Expect(VariableType::Float4x4, arg1Res, "lhs");
+		Expect(VariableType::Float4x4, arg2Res, "rhs");
+		AstAssert(arg1Res.Type == VariableType::Float4x4 &&
+			arg2Res.Type == VariableType::Float4x4, 
 			"Matrix types can only be multiplied with other Matrix types");
-		res.Type = ResultType::Float4x4;
-		res.Float4x4Val = arg1Res.Float4x4Val * arg2Res.Float4x4Val;
+		res.Type = VariableType::Float4x4;
+		res.Value.Float4x4Val = arg1Res.Value.Float4x4Val * arg2Res.Value.Float4x4Val;
 		return;
 	}
-	AstAssert(arg1Res.Type == arg2Res.Type || arg1Res.Type == ResultType::Float ||
-		arg2Res.Type == ResultType::Float, "Vector size mismatch in multiply, %s and %s",
+	AstAssert(arg1Res.Type == arg2Res.Type || arg1Res.Type == VariableType::Float ||
+		arg2Res.Type == VariableType::Float, "Vector size mismatch in multiply, %s and %s",
 		TypeToString(arg1Res.Type), TypeToString(arg2Res.Type));
 	ExpandFloat4(arg1Res);
 	ExpandFloat4(arg2Res);
-	res.Type = arg1Res.Type == ResultType::Float ? arg2Res.Type : arg1Res.Type;
-	res.Float4Val = arg1Res.Float4Val * arg2Res.Float4Val;
+	res.Type = arg1Res.Type == VariableType::Float ? arg2Res.Type : arg1Res.Type;
+	res.Value.Float4Val = arg1Res.Value.Float4Val * arg2Res.Value.Float4Val;
 }
 
 void Divide::Evaluate(const EvaluationContext& ec, Result& res) const
@@ -170,39 +161,24 @@ void Divide::Evaluate(const EvaluationContext& ec, Result& res) const
 	Result arg1Res, arg2Res;
 	Arg1->Evaluate(ec, arg1Res);
 	Arg2->Evaluate(ec, arg2Res);
-	AstAssert(arg1Res.Type != ResultType::Bool && arg2Res.Type != ResultType::Bool, 
+	AstAssert(arg1Res.Type != VariableType::Bool && arg2Res.Type != VariableType::Bool, 
 		"Bool division not supported.");
-	AstAssert(arg1Res.Type != ResultType::Float4x4 && 
-		arg2Res.Type != ResultType::Float4x4,
+	AstAssert(arg1Res.Type != VariableType::Float4x4 && 
+		arg2Res.Type != VariableType::Float4x4,
 		"Matrix types not supported in divides.");
-	AstAssert(arg1Res.Type == arg2Res.Type || arg1Res.Type == ResultType::Float ||
-		arg2Res.Type == ResultType::Float, "Vector size mismatch in multiply, %s and %s",
+	AstAssert(arg1Res.Type == arg2Res.Type || arg1Res.Type == VariableType::Float ||
+		arg2Res.Type == VariableType::Float, "Vector size mismatch in multiply, %s and %s",
 		TypeToString(arg1Res.Type), TypeToString(arg2Res.Type));
 	ExpandFloat4(arg1Res);
 	ExpandFloat4(arg2Res);
-	res.Type = arg1Res.Type == ResultType::Float ? arg2Res.Type : arg1Res.Type;
-	res.Float4Val = arg1Res.Float4Val / arg2Res.Float4Val;
+	res.Type = arg1Res.Type == VariableType::Float ? arg2Res.Type : arg1Res.Type;
+	res.Value.Float4Val = arg1Res.Value.Float4Val / arg2Res.Value.Float4Val;
 }
 
 void TuneableRef::Evaluate(const EvaluationContext&, Result& res) const
 {
-	switch (Tune->T)
-	{
-	case Tuneable::Type::Bool:
-	{
-		res.Type = ResultType::Bool;
-		res.BoolVal = Tune->BoolVal;
-		break;
-	}
-	case Tuneable::Type::Float:
-	{
-		res.Type = ResultType::Float;
-		res.FloatVal = Tune->FloatVal;
-		break;
-	}
-	default:
-		Unimplemented();
-	}
+	res.Type = Tune->Type;
+	res.Value = Tune->Value;
 }
 
 void Function::Evaluate(const EvaluationContext& ec, Result& res) const
@@ -224,13 +200,13 @@ void EvaluateFloat3(const EvaluationContext& ec, std::vector<Node*> args, Result
 	args[0]->Evaluate(ec, resX);
 	args[1]->Evaluate(ec, resY);
 	args[2]->Evaluate(ec, resZ);
-	Expect(ResultType::Float, resX, "arg1");
-	Expect(ResultType::Float, resY, "arg2");
-	Expect(ResultType::Float, resZ, "arg3");
-	res.Type = ResultType::Float3;
-	res.Float3Val.x = resX.FloatVal;
-	res.Float3Val.y = resY.FloatVal;
-	res.Float3Val.z = resZ.FloatVal;
+	Expect(VariableType::Float, resX, "arg1");
+	Expect(VariableType::Float, resY, "arg2");
+	Expect(VariableType::Float, resZ, "arg3");
+	res.Type = VariableType::Float3;
+	res.Value.Float3Val.x = resX.Value.FloatVal;
+	res.Value.Float3Val.y = resY.Value.FloatVal;
+	res.Value.Float3Val.z = resZ.Value.FloatVal;
 }
 
 void EvaluateFloat2(const EvaluationContext& ec, std::vector<Node*> args, Result& res)
@@ -239,26 +215,26 @@ void EvaluateFloat2(const EvaluationContext& ec, std::vector<Node*> args, Result
 	Result resX, resY, resZ;
 	args[0]->Evaluate(ec, resX);
 	args[1]->Evaluate(ec, resY);
-	Expect(ResultType::Float, resX, "arg1");
-	Expect(ResultType::Float, resY, "arg2");
-	res.Type = ResultType::Float2;
-	res.Float3Val.x = resX.FloatVal;
-	res.Float3Val.y = resY.FloatVal;
+	Expect(VariableType::Float, resX, "arg1");
+	Expect(VariableType::Float, resY, "arg2");
+	res.Type = VariableType::Float2;
+	res.Value.Float3Val.x = resX.Value.FloatVal;
+	res.Value.Float3Val.y = resY.Value.FloatVal;
 }
 
 void EvaluateTime(const EvaluationContext& ec, std::vector<Node*> args, Result& res)
 {
 	AstAssert(args.size() == 0, "Time does not take a param");
-	res.Type = ResultType::Float;
-	res.FloatVal = ec.Time;
+	res.Type = VariableType::Float;
+	res.Value.FloatVal = ec.Time;
 }
 
 void EvaluateDisplaySize(const EvaluationContext& ec, std::vector<Node*> args, Result& res)
 {
 	AstAssert(args.size() == 0, "DisplaySize does not take a param");
-	res.Type = ResultType::Float2;
-	res.Float2Val.x = (float)ec.DisplaySize.x;
-	res.Float2Val.y = (float)ec.DisplaySize.y;
+	res.Type = VariableType::Float2;
+	res.Value.Float2Val.x = (float)ec.DisplaySize.x;
+	res.Value.Float2Val.y = (float)ec.DisplaySize.y;
 }
 
 void EvaluateLookAt(const EvaluationContext& ec, std::vector<Node*> args, Result& res)
@@ -267,10 +243,10 @@ void EvaluateLookAt(const EvaluationContext& ec, std::vector<Node*> args, Result
 	Result fromRes, toRes;
 	args[0]->Evaluate(ec, fromRes);
 	args[1]->Evaluate(ec, toRes);
-	Expect(ResultType::Float3, fromRes, "arg1 (from)");
-	Expect(ResultType::Float3, toRes, "arg2 (to)");
-	res.Type = ResultType::Float4x4;
-	res.Float4x4Val = lookAt(fromRes.Float3Val, toRes.Float3Val);
+	Expect(VariableType::Float3, fromRes, "arg1 (from)");
+	Expect(VariableType::Float3, toRes, "arg2 (to)");
+	res.Type = VariableType::Float4x4;
+	res.Value.Float4x4Val = lookAt(fromRes.Value.Float3Val, toRes.Value.Float3Val);
 }
 
 void EvaluateProjection(const EvaluationContext& ec, std::vector<Node*> args, Result& res)
@@ -281,13 +257,13 @@ void EvaluateProjection(const EvaluationContext& ec, std::vector<Node*> args, Re
 	args[1]->Evaluate(ec, aspectRes);
 	args[2]->Evaluate(ec, nearRes);
 	args[3]->Evaluate(ec, farRes);
-	Expect(ResultType::Float, fovRes, "arg1 (fov)");
-	Expect(ResultType::Float, aspectRes, "arg2 (aspect)");
-	Expect(ResultType::Float, nearRes, "arg3 (znear)");
-	Expect(ResultType::Float, farRes, "arg4 (zfar)");
-	res.Type = ResultType::Float4x4;
-	res.Float4x4Val = projection(fovRes.FloatVal, aspectRes.FloatVal, 
-		nearRes.FloatVal, farRes.FloatVal);
+	Expect(VariableType::Float, fovRes, "arg1 (fov)");
+	Expect(VariableType::Float, aspectRes, "arg2 (aspect)");
+	Expect(VariableType::Float, nearRes, "arg3 (znear)");
+	Expect(VariableType::Float, farRes, "arg4 (zfar)");
+	res.Type = VariableType::Float4x4;
+	res.Value.Float4x4Val = projection(fovRes.Value.FloatVal, aspectRes.Value.FloatVal, 
+		nearRes.Value.FloatVal, farRes.Value.FloatVal);
 }
 
 #undef AstAssert

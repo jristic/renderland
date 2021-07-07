@@ -269,10 +269,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 				ImGui::Text("Tuneables:");
 				for (rlf::Tuneable* tune : CurrentRenderDesc->Tuneables)
 				{
-					if (tune->T == rlf::Tuneable::Type::Bool)
-						ImGui::Checkbox(tune->Name, &tune->BoolVal);
-					else if (tune->T == rlf::Tuneable::Type::Float)
-						ImGui::InputFloat(tune->Name, &tune->FloatVal);
+					if (tune->Type == rlf::VariableType::Bool)
+						ImGui::Checkbox(tune->Name, &tune->Value.BoolVal);
+					else if (tune->Type == rlf::VariableType::Float)
+						ImGui::DragFloat(tune->Name, &tune->Value.FloatVal);
+					else if (tune->Type == rlf::VariableType::Int)
+						ImGui::DragInt(tune->Name, &tune->Value.IntVal);
+					else if (tune->Type == rlf::VariableType::Uint)
+						ImGui::DragInt(tune->Name, (i32*)&tune->Value.UintVal,
+							1, 0, INT_MAX, "%d%%", ImGuiSliderFlags_AlwaysClamp);
 					else
 						Unimplemented();
 				}

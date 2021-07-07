@@ -128,6 +128,8 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(U16) \
 	RLF_KEYWORD_ENTRY(Float) \
 	RLF_KEYWORD_ENTRY(Bool) \
+	RLF_KEYWORD_ENTRY(Int) \
+	RLF_KEYWORD_ENTRY(Uint) \
 	RLF_KEYWORD_ENTRY(PointList) \
 	RLF_KEYWORD_ENTRY(LineList) \
 	RLF_KEYWORD_ENTRY(LineStrip) \
@@ -1041,10 +1043,16 @@ Tuneable* ConsumeTuneable(BufferIter& b, ParseState& ps)
 	switch (typeKey)
 	{
 	case Keyword::Float:
-		tune->T = Tuneable::Type::Float;
+		tune->Type = VariableType::Float;
 		break;
 	case Keyword::Bool:
-		tune->T = Tuneable::Type::Bool;
+		tune->Type = VariableType::Bool;
+		break;
+	case Keyword::Int:
+		tune->Type = VariableType::Int;
+		break;
+	case Keyword::Uint:
+		tune->Type = VariableType::Uint;
 		break;
 	default:
 		ParserError("Unexpected tuneable type: %.*s", typeId.len, typeId.base);
@@ -1056,7 +1064,7 @@ Tuneable* ConsumeTuneable(BufferIter& b, ParseState& ps)
 		nameId.len, nameId.base);
 	ps.tuneMap[nameId] = tune;
 
-	// if (tune->T == Tuneable::Type::Float && TryConsumeToken(Token::LBracket,b))
+	// if (tune->Type == VariableType::Float && TryConsumeToken(Token::LBracket,b))
 	// {
 	// 	float min = ConsumeFloatLiteral(b);
 	// 	ConsumeToken(Token::Minus,b);
@@ -1065,13 +1073,19 @@ Tuneable* ConsumeTuneable(BufferIter& b, ParseState& ps)
 	// }
 
 	ConsumeToken(Token::Equals, b);
-	switch (tune->T)
+	switch (tune->Type)
 	{
-	case Tuneable::Type::Float:
-		tune->FloatVal = ConsumeFloatLiteral(b);
+	case VariableType::Float:
+		tune->Value.FloatVal = ConsumeFloatLiteral(b);
 		break;
-	case Tuneable::Type::Bool:
-		tune->BoolVal = ConsumeBool(b);
+	case VariableType::Bool:
+		tune->Value.BoolVal = ConsumeBool(b);
+		break;
+	case VariableType::Int:
+		tune->Value.IntVal = ConsumeIntLiteral(b);
+		break;
+	case VariableType::Uint:
+		tune->Value.UintVal = ConsumeUintLiteral(b);
 		break;
 	default:
 		Unimplemented();
