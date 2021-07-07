@@ -1,11 +1,26 @@
 # RenderLand
 
-RenderLand is a Windows program for dynamically specifying D3D11/HLSL routines via a description format (RLF) that is live-editable. 
+RenderLand is a Windows program for specifying D3D11/HLSL routines via a description format (RLF) that is live-editable. 
 
-RenderLand's goal is to allow one to experiment and prototype graphics techniques without having to write all the associated code to glue the shaders together. Where possible it will ingest normal HLSL shader files with the instructions specified in the RLF file on how to glue it all together. 
+RenderLand's goal is to allow one to experiment and prototype graphics techniques without having to write all the associated code to glue the shaders together. It ingests normal HLSL shader files with the instructions specified in the RLF file on how to use them.
 
 ## Status
-RenderLand is an early work in progress. Currently only the most basic draws are supported, and RLF doesn't allow specifying all the possibilities one would expect. 
+RenderLand is an early work in progress. Currently RLF doesn't allow specifying all the possibilities one would expect from D3D, including but not limited to:
+* Dynamic texture sizing.
+* Stencil usage. 
+* Viewport and Blend state. 
+* Multiple render targets.
+* Multiple vertex buffers.
+* Instancing for draws.
+* Indirect dispatches and draws.
+* MSAA.  
+
+Furthermore, the following features are not yet implemented/complete:
+* Robust dynamic expressions for filling constant buffers. 
+* RLF quality of life - includes, templating, etc. 
+* Application UI. 
+* Comprehensive samples which demonstrate every aspect of RLF. 
+See the plan.txt for more detail. 
 
 ## Usage
 See the samples in `samples/`.
