@@ -20,6 +20,7 @@ Furthermore, the following features are not yet implemented/complete:
 * RLF quality of life - includes, templating, etc. 
 * Application UI. 
 * Comprehensive samples which demonstrate every aspect of RLF. 
+
 See the plan.txt for more detail. 
 
 ## Usage
