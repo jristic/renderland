@@ -12,6 +12,9 @@ typedef signed char i8;
 static_assert(sizeof(u8) == 1, "Didn't get expected size.");
 static_assert(sizeof(i8) == 1, "Didn't get expected size.");
 
+struct int2 {
+	i32 x,y;
+};
 
 struct uint2 {
 	u32 x,y;
@@ -29,16 +32,4 @@ struct float3 {
 struct float4 {
 	float x,y,z,w;
 };
-
-
-template <std::size_t N>
-struct type_of_size
-{
-    typedef char type[N];
-};
-
-template <typename T, std::size_t Size>
-typename type_of_size<Size>::type& sizeof_array_helper(T(&)[Size]);
-
-#define sizeof_array(pArray) sizeof(sizeof_array_helper(pArray))
 

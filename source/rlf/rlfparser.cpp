@@ -658,7 +658,7 @@ struct EnumEntry
 	T Value;
 };
 template <typename T, size_t DefSize>
-T ConsumeEnum(BufferIter& b, EnumEntry<T> def[DefSize], const char* name)
+T ConsumeEnum(BufferIter& b, EnumEntry<T> (&def)[DefSize], const char* name)
 {
 	BufferString id = ConsumeIdentifier(b);
 	Keyword key = LookupKeyword(id);
@@ -681,7 +681,7 @@ SystemValue ConsumeSystemValue(BufferIter& b)
 		Keyword::BackBuffer,	SystemValue::BackBuffer,
 		Keyword::DefaultDepth,	SystemValue::DefaultDepth,
 	};
-	return ConsumeEnum<SystemValue,sizeof_array(def)>(b, def, "SystemValue");
+	return ConsumeEnum(b, def, "SystemValue");
 }
 
 Filter ConsumeFilter(BufferIter& b)
@@ -691,7 +691,7 @@ Filter ConsumeFilter(BufferIter& b)
 		Keyword::Linear,	Filter::Linear,
 		Keyword::Aniso,		Filter::Aniso,
 	};
-	return ConsumeEnum<Filter,sizeof_array(def)>(b, def, "Filter");
+	return ConsumeEnum(b, def, "Filter");
 }
 
 AddressMode ConsumeAddressMode(BufferIter& b)
@@ -703,7 +703,7 @@ AddressMode ConsumeAddressMode(BufferIter& b)
 		Keyword::Clamp,			AddressMode::Clamp,
 		Keyword::Border,		AddressMode::Border,
 	};
-	return ConsumeEnum<AddressMode,sizeof_array(def)>(b, def, "AddressMode");
+	return ConsumeEnum(b, def, "AddressMode");
 }
 
 Topology ConsumeTopology(BufferIter& b)
@@ -715,7 +715,7 @@ Topology ConsumeTopology(BufferIter& b)
 		Keyword::TriList,		Topology::TriList,
 		Keyword::TriStrip,		Topology::TriStrip,
 	};
-	return ConsumeEnum<Topology,sizeof_array(def)>(b, def, "Topology");
+	return ConsumeEnum(b, def, "Topology");
 }
 
 CullMode ConsumeCullMode(BufferIter& b)
@@ -725,7 +725,7 @@ CullMode ConsumeCullMode(BufferIter& b)
 		Keyword::Front,	CullMode::Front,
 		Keyword::Back,	CullMode::Back,
 	};
-	return ConsumeEnum<CullMode,sizeof_array(def)>(b, def, "CullMode");
+	return ConsumeEnum(b, def, "CullMode");
 }
 
 ComparisonFunc ConsumeComparisonFunc(BufferIter& b)
@@ -740,7 +740,7 @@ ComparisonFunc ConsumeComparisonFunc(BufferIter& b)
 		Keyword::GreaterEqual,	ComparisonFunc::GreaterEqual,
 		Keyword::Always,		ComparisonFunc::Always,
 	};
-	return ConsumeEnum<ComparisonFunc,sizeof_array(def)>(b, def, "ComparisonFunc");
+	return ConsumeEnum(b, def, "ComparisonFunc");
 }
 
 StencilOp ConsumeStencilOp(BufferIter& b)
@@ -755,7 +755,7 @@ StencilOp ConsumeStencilOp(BufferIter& b)
 		Keyword::Incr,		StencilOp::Incr,
 		Keyword::Decr,		StencilOp::Decr,
 	};
-	return ConsumeEnum<StencilOp,sizeof_array(def)>(b, def, "StencilOp");
+	return ConsumeEnum(b, def, "StencilOp");
 }
 
 // -----------------------------------------------------------------------------
@@ -768,7 +768,7 @@ struct FlagsEntry
 	T Value;
 };
 template <typename T, size_t DefSize>
-T ConsumeFlags(BufferIter& b, FlagsEntry<T> def[DefSize], const char* name)
+T ConsumeFlags(BufferIter& b, FlagsEntry<T> (&def)[DefSize], const char* name)
 {
 	ConsumeToken(Token::LBrace, b);
 
@@ -807,7 +807,7 @@ BufferFlag ConsumeBufferFlag(BufferIter& b)
 		Keyword::Vertex,	BufferFlag_Vertex,
 		Keyword::Index,		BufferFlag_Index,
 	};
-	return ConsumeFlags<BufferFlag,sizeof_array(def)>(b, def, "BufferFlag");
+	return ConsumeFlags(b, def, "BufferFlag");
 }
 TextureFlag ConsumeTextureFlag(BufferIter& b)
 {
@@ -817,7 +817,7 @@ TextureFlag ConsumeTextureFlag(BufferIter& b)
 		Keyword::RTV,	TextureFlag_RTV,
 		Keyword::DSV,	TextureFlag_DSV,
 	};
-	return ConsumeFlags<TextureFlag,sizeof_array(def)>(b, def, "TextureFlag");
+	return ConsumeFlags(b, def, "TextureFlag");
 }
 
 // -----------------------------------------------------------------------------
@@ -1220,8 +1220,8 @@ void ConsumeField(BufferIter& b, T* s, ConsumeType type, size_t offset)
 		Unimplemented();
 	}
 }
-template <typename T, size_t DefSize, Token Delim, bool TrailingRequired>
-void ConsumeStruct(BufferIter& b, T* s, StructEntry def[DefSize], const char* name)
+template <Token Delim, bool TrailingRequired, typename T, size_t DefSize>
+void ConsumeStruct(BufferIter& b, T* s, StructEntry (&def)[DefSize], const char* name)
 {
 	ConsumeToken(Token::LBrace, b);
 
@@ -1285,7 +1285,7 @@ RasterizerState* ConsumeRasterizerStateDef(
 	};
 	constexpr Token Delim = Token::Semicolon;
 	constexpr bool TrailingRequired = true;
-	ConsumeStruct<RasterizerState,sizeof_array(def), Delim, TrailingRequired>(
+	ConsumeStruct<Delim, TrailingRequired>(
 		b, rs, def, "RasterizerState");
 	return rs;
 }
@@ -1324,7 +1324,7 @@ StencilOpDesc ConsumeStencilOpDesc(BufferIter& b)
 	};
 	constexpr Token Delim = Token::Semicolon;
 	constexpr bool TrailingRequired = true;
-	ConsumeStruct<StencilOpDesc,sizeof_array(def), Delim, TrailingRequired>(
+	ConsumeStruct<Delim, TrailingRequired>(
 		b, &desc, def, "StencilOpDesc");
 	return desc;
 }
@@ -1362,7 +1362,7 @@ DepthStencilState* ConsumeDepthStencilStateDef(
 	};
 	constexpr Token Delim = Token::Semicolon;
 	constexpr bool TrailingRequired = true;
-	ConsumeStruct<DepthStencilState,sizeof_array(def), Delim, TrailingRequired>(
+	ConsumeStruct<Delim, TrailingRequired>(
 		b, dss, def, "DepthStencilState");
 	return dss;
 }
@@ -1400,7 +1400,7 @@ ComputeShader* ConsumeComputeShaderDef(
 	};
 	constexpr Token Delim = Token::Semicolon;
 	constexpr bool TrailingRequired = true;
-	ConsumeStruct<ComputeShader,sizeof_array(def), Delim, TrailingRequired>(
+	ConsumeStruct<Delim, TrailingRequired>(
 		b, cs, def, "ComputeShader");
 	return cs;
 }
@@ -1438,7 +1438,7 @@ VertexShader* ConsumeVertexShaderDef(
 	};
 	constexpr Token Delim = Token::Semicolon;
 	constexpr bool TrailingRequired = true;
-	ConsumeStruct<VertexShader,sizeof_array(def), Delim, TrailingRequired>(
+	ConsumeStruct<Delim, TrailingRequired>(
 		b, vs, def, "VertexShader");
 	return vs;
 }
@@ -1476,7 +1476,7 @@ PixelShader* ConsumePixelShaderDef(
 	};
 	constexpr Token Delim = Token::Semicolon;
 	constexpr bool TrailingRequired = true;
-	ConsumeStruct<PixelShader,sizeof_array(def), Delim, TrailingRequired>(
+	ConsumeStruct<Delim, TrailingRequired>(
 		b, ps, def, "PixelShader");
 	return ps;
 }
@@ -1843,7 +1843,7 @@ Texture* ConsumeTextureDef(
 	};
 	constexpr Token Delim = Token::Semicolon;
 	constexpr bool TrailingRequired = true;
-	ConsumeStruct<Texture,sizeof_array(def), Delim, TrailingRequired>(
+	ConsumeStruct<Delim, TrailingRequired>(
 		b, tex, def, "Texture");
 	return tex;
 }
@@ -1874,7 +1874,7 @@ Sampler* ConsumeSamplerDef(
 	};
 	constexpr Token Delim = Token::Semicolon;
 	constexpr bool TrailingRequired = true;
-	ConsumeStruct<Sampler,sizeof_array(def), Delim, TrailingRequired>(
+	ConsumeStruct<Delim, TrailingRequired>(
 		b, s, def, "Sampler");
 	return s;
 }
@@ -2128,7 +2128,7 @@ ClearColor* ConsumeClearColorDef(
 	};
 	constexpr Token Delim = Token::Semicolon;
 	constexpr bool TrailingRequired = true;
-	ConsumeStruct<ClearColor,sizeof_array(def), Delim, TrailingRequired>(
+	ConsumeStruct<Delim, TrailingRequired>(
 		b, clear, def, "ClearColor");
 	return clear;
 }
@@ -2148,7 +2148,7 @@ ClearDepth* ConsumeClearDepthDef(
 	};
 	constexpr Token Delim = Token::Semicolon;
 	constexpr bool TrailingRequired = true;
-	ConsumeStruct<ClearDepth,sizeof_array(def), Delim, TrailingRequired>(
+	ConsumeStruct<Delim, TrailingRequired>(
 		b, clear, def, "ClearDepth");
 	return clear;
 }
