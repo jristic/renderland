@@ -272,12 +272,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 					if (tune->Type == rlf::VariableType::Bool)
 						ImGui::Checkbox(tune->Name, &tune->Value.BoolVal);
 					else if (tune->Type == rlf::VariableType::Float)
-						ImGui::DragFloat(tune->Name, &tune->Value.FloatVal);
+						ImGui::DragFloat(tune->Name, &tune->Value.FloatVal, 1.f,
+							tune->Min.FloatVal, tune->Max.FloatVal);
 					else if (tune->Type == rlf::VariableType::Int)
-						ImGui::DragInt(tune->Name, &tune->Value.IntVal);
+						ImGui::DragInt(tune->Name, &tune->Value.IntVal, 1.f, 
+							tune->Min.IntVal, tune->Max.IntVal);
 					else if (tune->Type == rlf::VariableType::Uint)
+					{
+						i32 max = (tune->Min.UintVal == tune->Max.UintVal && 
+							tune->Min.UintVal == 0) ? INT_MAX : tune->Max.UintVal;
 						ImGui::DragInt(tune->Name, (i32*)&tune->Value.UintVal,
-							1, 0, INT_MAX, "%d%%", ImGuiSliderFlags_AlwaysClamp);
+							1, tune->Min.IntVal, max, "%d", ImGuiSliderFlags_AlwaysClamp);
+					}
 					else
 						Unimplemented();
 				}

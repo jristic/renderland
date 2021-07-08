@@ -1,6 +1,8 @@
 
 Tuneable bool Clockwise = false;
-Tuneable float Speed = 1;
+Tuneable int Speed [-20,20] = 10;
+Tuneable float Wavelength [0,100] = 30;
+Tuneable uint CheckerSize [1,10] = 4;
 
 ComputeShader {
 	ShaderPath = "shader.hlsl";
@@ -15,6 +17,8 @@ Dispatch {
 	SetConstant Time = Time();
 	SetConstant Clockwise = Clockwise;
 	SetConstant Speed = Speed;
+	SetConstant Wavelength = Wavelength;
+	SetConstant CheckerSize = CheckerSize;
 } perPixelDispatch
 
 Passes {

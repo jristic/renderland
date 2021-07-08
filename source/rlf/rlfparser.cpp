@@ -1033,6 +1033,27 @@ SetConstant ConsumeSetConstant(BufferIter& b, ParseState& ps)
 	return sc;
 }
 
+void ConsumeVariable(VariableType type, Variable& var, BufferIter& b)
+{
+	switch (type)
+	{
+	case VariableType::Float:
+		var.FloatVal = ConsumeFloatLiteral(b);
+		break;
+	case VariableType::Bool:
+		var.BoolVal = ConsumeBool(b);
+		break;
+	case VariableType::Int:
+		var.IntVal = ConsumeIntLiteral(b);
+		break;
+	case VariableType::Uint:
+		var.UintVal = ConsumeUintLiteral(b);
+		break;
+	default:
+		Unimplemented();
+	}
+}
+
 Tuneable* ConsumeTuneable(BufferIter& b, ParseState& ps)
 {
 	Tuneable* tune = new Tuneable();
@@ -1064,31 +1085,50 @@ Tuneable* ConsumeTuneable(BufferIter& b, ParseState& ps)
 		nameId.len, nameId.base);
 	ps.tuneMap[nameId] = tune;
 
-	// if (tune->Type == VariableType::Float && TryConsumeToken(Token::LBracket,b))
-	// {
-	// 	float min = ConsumeFloatLiteral(b);
-	// 	ConsumeToken(Token::Minus,b);
-	// 	float max = ConsumeFloatLiteral(b);
-	// 	ConsumeToken(Token::RBracket,b);
-	// }
+	bool hasRange = false;
+
+	if (tune->Type != VariableType::Bool && TryConsumeToken(Token::LBracket,b))
+	{
+		hasRange = true;
+		ConsumeVariable(tune->Type, tune->Min, b);
+		ConsumeToken(Token::Comma,b);
+		ConsumeVariable(tune->Type, tune->Max, b);
+		ConsumeToken(Token::RBracket,b);
+	}
 
 	ConsumeToken(Token::Equals, b);
-	switch (tune->Type)
+	ConsumeVariable(tune->Type, tune->Value, b);
+
+	if (hasRange)
 	{
-	case VariableType::Float:
-		tune->Value.FloatVal = ConsumeFloatLiteral(b);
-		break;
-	case VariableType::Bool:
-		tune->Value.BoolVal = ConsumeBool(b);
-		break;
-	case VariableType::Int:
-		tune->Value.IntVal = ConsumeIntLiteral(b);
-		break;
-	case VariableType::Uint:
-		tune->Value.UintVal = ConsumeUintLiteral(b);
-		break;
-	default:
-		Unimplemented();
+		switch (tune->Type)
+		{
+		case VariableType::Float:
+			ParserAssert(tune->Min.FloatVal < tune->Max.FloatVal && 
+				tune->Min.FloatVal <= tune->Value.FloatVal && 
+				tune->Value.FloatVal <= tune->Max.FloatVal, 
+				"Invalid tuneable range and default, %f <= %f <= %f",
+				tune->Min.FloatVal, tune->Value.FloatVal, tune->Max.FloatVal);
+			break;
+		case VariableType::Bool:
+			break;
+		case VariableType::Int:
+			ParserAssert(tune->Min.IntVal < tune->Max.IntVal && 
+				tune->Min.IntVal <= tune->Value.IntVal && 
+				tune->Value.IntVal <= tune->Max.IntVal, 
+				"Invalid tuneable range and default, %d <= %d <= %d",
+				tune->Min.IntVal, tune->Value.IntVal, tune->Max.IntVal);
+			break;
+		case VariableType::Uint:
+			ParserAssert(tune->Min.UintVal < tune->Max.UintVal && 
+				tune->Min.UintVal <= tune->Value.UintVal && 
+				tune->Value.UintVal <= tune->Max.UintVal, 
+				"Invalid tuneable range and default, %u <= %u <= %u",
+				tune->Min.UintVal, tune->Value.UintVal, tune->Max.UintVal);
+			break;
+		default:
+			Unimplemented();
+		}
 	}
 
 	ConsumeToken(Token::Semicolon, b);

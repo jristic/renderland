@@ -6,7 +6,9 @@ cbuffer ConstantBuffer : register(b0)
 	float2 TextureSize;
 	float Time;
 	bool Clockwise;
-	float Speed;
+	int Speed;
+	float Wavelength;
+	uint CheckerSize;
 }
 
 [numthreads(8,8,1)]
@@ -28,8 +30,8 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 	if (!Clockwise)
 		theta *= -1;
 
-	float intensity = (sin(dist/30 + theta*3.14*2 - Time*10*Speed) + 1) /2;
-	if ((DTid.x/4 + DTid.y/4)%2 == 0)
+	float intensity = (sin(dist/Wavelength + theta*3.14*2 - Time*Speed) + 1) /2;
+	if ((DTid.x/CheckerSize + DTid.y/CheckerSize)%2 == 0)
 		intensity = pow(intensity,2);
 
 	OutTexture[DTid.xy] = float4(intensity, intensity, intensity, 1);

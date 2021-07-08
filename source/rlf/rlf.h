@@ -303,8 +303,8 @@ namespace rlf
 		const char* Name;
 		VariableType Type;
 		Variable Value;
-		// float FloatParamMin;
-		// float FloatParamMax;
+		Variable Min;
+		Variable Max;
 	};
 	struct RenderDescription
 	{
