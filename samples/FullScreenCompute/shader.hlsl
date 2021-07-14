@@ -3,7 +3,7 @@ RWTexture2D<float4> OutTexture : register(u0);
 
 cbuffer ConstantBuffer : register(b0)
 {
-	float2 TextureSize;
+	uint2 TextureSize;
 	float Time;
 	bool Clockwise;
 	int Speed;
@@ -17,7 +17,7 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 	if (any(DTid.xy > TextureSize))
 		return;
 
-	float2 delta = DTid.xy - TextureSize/2;
+	float2 delta = int2(DTid.xy) - float2(TextureSize)/2;
 	float2 deltaSqr = delta*delta;
 	float dist = sqrt(deltaSqr.x + deltaSqr.y);
 

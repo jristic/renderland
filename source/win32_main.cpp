@@ -21,6 +21,7 @@
 
 // Project headers
 #include "types.h"
+#include "math.h"
 #include "matrix.h"
 #include "assert.h"
 #include "config.h"
@@ -269,15 +270,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 				ImGui::Text("Tuneables:");
 				for (rlf::Tuneable* tune : CurrentRenderDesc->Tuneables)
 				{
-					if (tune->Type == rlf::VariableType::Bool)
+					if (tune->Type == rlf::BoolType)
 						ImGui::Checkbox(tune->Name, &tune->Value.BoolVal);
-					else if (tune->Type == rlf::VariableType::Float)
+					else if (tune->Type == rlf::FloatType)
 						ImGui::DragFloat(tune->Name, &tune->Value.FloatVal, 1.f,
 							tune->Min.FloatVal, tune->Max.FloatVal);
-					else if (tune->Type == rlf::VariableType::Int)
+					else if (tune->Type == rlf::IntType)
 						ImGui::DragInt(tune->Name, &tune->Value.IntVal, 1.f, 
 							tune->Min.IntVal, tune->Max.IntVal);
-					else if (tune->Type == rlf::VariableType::Uint)
+					else if (tune->Type == rlf::UintType)
 					{
 						i32 max = (tune->Min.UintVal == tune->Max.UintVal && 
 							tune->Min.UintVal == 0) ? INT_MAX : tune->Max.UintVal;

@@ -1007,7 +1007,8 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 			mul->Arg2 = ConsumeAst(b, ps);
 			ast = mul;
 		}
-		else if (tok == Token::FloatLiteral || tok == Token::IntegerLiteral)
+		else if (tok == Token::Minus || tok == Token::FloatLiteral || 
+			tok == Token::IntegerLiteral)
 		{
 			ParserAssert(!ast, "expected op")
 			float f = ConsumeFloatLiteral(b);
@@ -1035,18 +1036,19 @@ SetConstant ConsumeSetConstant(BufferIter& b, ParseState& ps)
 
 void ConsumeVariable(VariableType type, Variable& var, BufferIter& b)
 {
-	switch (type)
+	Assert(type.Dim == 1, "Unhandled");
+	switch (type.Fmt)
 	{
-	case VariableType::Float:
+	case VariableFormat::Float:
 		var.FloatVal = ConsumeFloatLiteral(b);
 		break;
-	case VariableType::Bool:
+	case VariableFormat::Bool:
 		var.BoolVal = ConsumeBool(b);
 		break;
-	case VariableType::Int:
+	case VariableFormat::Int:
 		var.IntVal = ConsumeIntLiteral(b);
 		break;
-	case VariableType::Uint:
+	case VariableFormat::Uint:
 		var.UintVal = ConsumeUintLiteral(b);
 		break;
 	default:
@@ -1064,16 +1066,16 @@ Tuneable* ConsumeTuneable(BufferIter& b, ParseState& ps)
 	switch (typeKey)
 	{
 	case Keyword::Float:
-		tune->Type = VariableType::Float;
+		tune->Type = FloatType;
 		break;
 	case Keyword::Bool:
-		tune->Type = VariableType::Bool;
+		tune->Type = BoolType;
 		break;
 	case Keyword::Int:
-		tune->Type = VariableType::Int;
+		tune->Type = IntType;
 		break;
 	case Keyword::Uint:
-		tune->Type = VariableType::Uint;
+		tune->Type = UintType;
 		break;
 	default:
 		ParserError("Unexpected tuneable type: %.*s", typeId.len, typeId.base);
@@ -1087,7 +1089,7 @@ Tuneable* ConsumeTuneable(BufferIter& b, ParseState& ps)
 
 	bool hasRange = false;
 
-	if (tune->Type != VariableType::Bool && TryConsumeToken(Token::LBracket,b))
+	if (tune->Type != BoolType && TryConsumeToken(Token::LBracket,b))
 	{
 		hasRange = true;
 		ConsumeVariable(tune->Type, tune->Min, b);
@@ -1101,25 +1103,25 @@ Tuneable* ConsumeTuneable(BufferIter& b, ParseState& ps)
 
 	if (hasRange)
 	{
-		switch (tune->Type)
+		switch (tune->Type.Fmt)
 		{
-		case VariableType::Float:
+		case VariableFormat::Float:
 			ParserAssert(tune->Min.FloatVal < tune->Max.FloatVal && 
 				tune->Min.FloatVal <= tune->Value.FloatVal && 
 				tune->Value.FloatVal <= tune->Max.FloatVal, 
 				"Invalid tuneable range and default, %f <= %f <= %f",
 				tune->Min.FloatVal, tune->Value.FloatVal, tune->Max.FloatVal);
 			break;
-		case VariableType::Bool:
+		case VariableFormat::Bool:
 			break;
-		case VariableType::Int:
+		case VariableFormat::Int:
 			ParserAssert(tune->Min.IntVal < tune->Max.IntVal && 
 				tune->Min.IntVal <= tune->Value.IntVal && 
 				tune->Value.IntVal <= tune->Max.IntVal, 
 				"Invalid tuneable range and default, %d <= %d <= %d",
 				tune->Min.IntVal, tune->Value.IntVal, tune->Max.IntVal);
 			break;
-		case VariableType::Uint:
+		case VariableFormat::Uint:
 			ParserAssert(tune->Min.UintVal < tune->Max.UintVal && 
 				tune->Min.UintVal <= tune->Value.UintVal && 
 				tune->Value.UintVal <= tune->Max.UintVal, 

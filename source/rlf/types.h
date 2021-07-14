@@ -2,17 +2,38 @@
 namespace rlf
 {
 
-	enum class VariableType
+	enum class VariableFormat
 	{
 		Bool,
 		Int,
 		Uint,
 		Float,
-		Float2,
-		Float3,
-		Float4,
 		Float4x4,
 	};
+
+	struct VariableType {
+		VariableFormat Fmt;
+		u32 Dim;
+	};
+
+	bool operator==(VariableType lhs, VariableType rhs)
+	{
+		return lhs.Fmt == rhs.Fmt && lhs.Dim == rhs.Dim;
+	}
+	bool operator!=(VariableType lhs, VariableType rhs)
+	{
+		return lhs.Fmt != rhs.Fmt || lhs.Dim != rhs.Dim;
+	}
+
+	VariableType BoolType = { VariableFormat::Bool, 1 };
+	VariableType IntType = { VariableFormat::Int, 1 };
+	VariableType UintType = { VariableFormat::Uint, 1 };
+	VariableType Uint2Type = { VariableFormat::Uint, 2 };
+	VariableType FloatType = { VariableFormat::Float, 1 };
+	VariableType Float2Type = { VariableFormat::Float, 2 };
+	VariableType Float3Type = { VariableFormat::Float, 3 };
+	VariableType Float4Type = { VariableFormat::Float, 4 };
+	VariableType Float4x4Type = { VariableFormat::Float4x4, 16 };
 
 	struct Variable
 	{
@@ -20,7 +41,9 @@ namespace rlf
 		union {
 			bool BoolVal;
 			i32 IntVal;
+			int4 Int4Val;
 			u32 UintVal;
+			uint4 Uint4Val;
 			float FloatVal;
 			float2 Float2Val;
 			float3 Float3Val;
@@ -28,15 +51,7 @@ namespace rlf
 			float4x4 Float4x4Val;
 		};
 	};
-	
 
-
-	u32 TypeToSize(VariableType type) {
-		u32 sizes[] = {
-			4, 4, 4, 4, 8, 12, 16, 64
-		};
-		return sizes[(u32)type];
-	}
 	const char* TypeToString(VariableType type)
 	{
 		const char* names[] = {
@@ -44,11 +59,8 @@ namespace rlf
 			"Int",
 			"Uint",
 			"Float",
-			"Float2",
-			"Float3",
-			"Float4",
 			"Float4x4",
 		};
-		return names[(u32)type];
+		return names[(u32)type.Fmt];
 	}
 }

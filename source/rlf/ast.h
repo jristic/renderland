@@ -29,6 +29,8 @@ struct Node
 
 void Evaluate(const EvaluationContext& ec, const Node* ast, Result& res, EvaluateErrorState& es);
 
+void Convert(Result& res, VariableFormat fmt);
+
 
 
 struct FloatLiteral : Node

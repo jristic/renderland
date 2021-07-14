@@ -430,42 +430,30 @@ void PrepareConstants(
 		switch (td.Type)
 		{
 		case D3D_SVT_BOOL:
-			Assert(td.Rows == 1 && td.Columns == 1, "Unhandled bool vector");
-			set.Type = VariableType::Bool;
+			Assert(td.Rows == 1, "Unhandled bool vector");
+			set.Type.Fmt = VariableFormat::Bool;
+			set.Type.Dim = td.Columns;
 			break;
 		case D3D_SVT_INT:
-			Assert(td.Rows == 1 && td.Columns == 1, "Unhandled int vector");
-			set.Type = VariableType::Int;
+			Assert(td.Rows == 1, "Unhandled int vector");
+			set.Type.Fmt = VariableFormat::Int;
+			set.Type.Dim = td.Columns;
 			break;
 		case D3D_SVT_UINT:
-			Assert(td.Rows == 1 && td.Columns == 1, "Unhandled uint vector");
-			set.Type = VariableType::Uint;
+			Assert(td.Rows == 1, "Unhandled uint vector");
+			set.Type.Fmt = VariableFormat::Uint;
+			set.Type.Dim = td.Columns;
 			break;
 		case D3D_SVT_FLOAT:
-			switch (td.Columns)
+			if (td.Rows == 4 && td.Columns == 4)
 			{
-			case 1:
+				set.Type = Float4x4Type;
+			}
+			else
+			{
 				Assert(td.Rows == 1, "Unhandled float vector");
-				set.Type = VariableType::Float;
-				break;
-			case 2:
-				Assert(td.Rows == 1, "Unhandled float vector");
-				set.Type = VariableType::Float2;
-				break;
-			case 3:
-				Assert(td.Rows == 1, "Unhandled float vector");
-				set.Type = VariableType::Float3;
-				break;
-			case 4:
-				if (td.Rows == 1)
-					set.Type = VariableType::Float4;
-				else if (td.Rows == 4)
-					set.Type = VariableType::Float4x4;
-				else
-					Unimplemented();
-				break;
-			default:
-				Unimplemented();
+				set.Type.Fmt = VariableFormat::Float;
+				set.Type.Dim = td.Columns;
 			}
 			break;
 		default:
@@ -871,14 +859,16 @@ void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets,
 			ee.Message = "AST evaluation error: \n" + es.ErrorMessage;
 			throw ee;
 		}
-		u32 typeSize = TypeToSize(res.Type);
+		u32 typeSize = res.Type.Dim * 4;
 		ExecuteAssert(set.Size == typeSize, 
 			"SetConstant %s does not match size, expected=%u got=%u",
 			set.VariableName, set.Size, typeSize);
-		ExecuteAssert(set.Type == res.Type, 
-			"SetConstant %s does not match type, expected=%s got=%s",
-			set.VariableName, TypeToString(set.Type), TypeToString(res.Type));
-		if (res.Type == VariableType::Bool)
+		if (set.Type != res.Type)
+			Convert(res, set.Type.Fmt);
+		// ExecuteAssert(set.Type == res.Type, 
+		// 	"SetConstant %s does not match type, expected=%s got=%s",
+		// 	set.VariableName, TypeToString(set.Type), TypeToString(res.Type));
+		if (res.Type == BoolType)
 			*(u32*)(set.CB->BackingMemory+set.Offset) = res.Value.BoolVal ? 1 : 0;
 		else
 			memcpy(set.CB->BackingMemory+set.Offset, &res.Value, typeSize);

@@ -77,24 +77,117 @@ void Expect(VariableType type, Result& res, const char* name)
 		name, TypeToString(type), TypeToString(res.Type));
 }
 
-void ExpandFloat4(Result& res)
+VariableType DetermineResultType(VariableType t1, VariableType t2)
 {
-	switch (res.Type)
+	AstAssert(t1.Dim == t2.Dim || t1.Dim == 1 || t2.Dim == 1, 
+		"Vector size mismatch in multiply, %u and %u", t1.Dim, t2.Dim);
+	VariableType t;
+	t.Dim = t1.Dim == 1 ? t2.Dim : t1.Dim;
+	if (t1.Fmt == VariableFormat::Float || t2.Fmt == VariableFormat::Float)
+		t.Fmt = VariableFormat::Float;
+	else if (t1.Fmt == VariableFormat::Int || t2.Fmt == VariableFormat::Int)
+		t.Fmt = VariableFormat::Int;
+	else if (t1.Fmt == VariableFormat::Uint || t2.Fmt == VariableFormat::Uint)
+		t.Fmt = VariableFormat::Uint;
+	else
+		t.Fmt = VariableFormat::Bool;
+	return t;
+}
+
+void Expand(Result& res)
+{
+	Assert(res.Type.Fmt != VariableFormat::Float4x4, "Invalid type in expand");
+	if (res.Type.Dim == 1)
 	{
-	case VariableType::Float:
-		res.Value.Float4Val.y = res.Value.Float4Val.z = res.Value.Float4Val.w = 
-			res.Value.Float4Val.x;
-		break;
-	case VariableType::Float2:
-		res.Value.Float4Val.z = res.Value.Float4Val.w = res.Value.Float4Val.x;
-		break;
-	case VariableType::Float3:
-		res.Value.Float4Val.w = res.Value.Float4Val.x;
-		break;
-	case VariableType::Float4:
-		break;
-	default:
-		Unimplemented();
+		switch (res.Type.Fmt)
+		{
+		case VariableFormat::Float:
+			res.Value.Float4Val.w = res.Value.Float4Val.z = res.Value.Float4Val.y = 
+				res.Value.Float4Val.x;
+			break;
+		case VariableFormat::Int:
+			res.Value.Int4Val.w = res.Value.Int4Val.z = res.Value.Int4Val.y = 
+				res.Value.Int4Val.x;
+			break;
+		case VariableFormat::Bool:
+			res.Value.Uint4Val.w = res.Value.Uint4Val.z = res.Value.Uint4Val.y = 
+				res.Value.Uint4Val.x = res.Value.BoolVal ? 1 : 0;
+			break;
+		case VariableFormat::Uint:
+			res.Value.Uint4Val.w = res.Value.Uint4Val.z = res.Value.Uint4Val.y = 
+				res.Value.Uint4Val.x;
+			break;
+		default:
+			Unimplemented();
+		}
+	}
+}
+
+void Convert(Result& res, VariableFormat fmt)
+{
+	if (res.Type.Fmt == fmt)
+		return;
+	if (fmt == VariableFormat::Float)
+	{
+		switch (res.Type.Fmt)
+		{
+		case VariableFormat::Uint:
+		case VariableFormat::Bool:
+			res.Value.Float4Val.x = (float)res.Value.Uint4Val.x;
+			res.Value.Float4Val.y = (float)res.Value.Uint4Val.y;
+			res.Value.Float4Val.z = (float)res.Value.Uint4Val.z;
+			res.Value.Float4Val.w = (float)res.Value.Uint4Val.w;
+			break;
+		case VariableFormat::Int:
+			res.Value.Float4Val.x = (float)res.Value.Int4Val.x;
+			res.Value.Float4Val.y = (float)res.Value.Int4Val.y;
+			res.Value.Float4Val.z = (float)res.Value.Int4Val.z;
+			res.Value.Float4Val.w = (float)res.Value.Int4Val.w;
+			break;
+		default:
+			Unimplemented();
+		}
+	}
+	else if (fmt == VariableFormat::Int)
+	{
+		switch (res.Type.Fmt)
+		{
+		case VariableFormat::Uint:
+		case VariableFormat::Bool:
+			res.Value.Int4Val.x = (i32)res.Value.Uint4Val.x;
+			res.Value.Int4Val.y = (i32)res.Value.Uint4Val.y;
+			res.Value.Int4Val.z = (i32)res.Value.Uint4Val.z;
+			res.Value.Int4Val.w = (i32)res.Value.Uint4Val.w;
+			break;
+		case VariableFormat::Float:
+			res.Value.Int4Val.x = (i32)res.Value.Float4Val.x;
+			res.Value.Int4Val.y = (i32)res.Value.Float4Val.y;
+			res.Value.Int4Val.z = (i32)res.Value.Float4Val.z;
+			res.Value.Int4Val.w = (i32)res.Value.Float4Val.w;
+			break;
+		default:
+			Unimplemented();
+		}
+	}
+	else if (fmt == VariableFormat::Uint)
+	{
+		switch (res.Type.Fmt)
+		{
+		case VariableFormat::Int:
+			res.Value.Uint4Val.x = (u32)res.Value.Int4Val.x;
+			res.Value.Uint4Val.y = (u32)res.Value.Int4Val.y;
+			res.Value.Uint4Val.z = (u32)res.Value.Int4Val.z;
+			res.Value.Uint4Val.w = (u32)res.Value.Int4Val.w;
+			break;
+		case VariableFormat::Float:
+			res.Value.Uint4Val.x = (u32)res.Value.Float4Val.x;
+			res.Value.Uint4Val.y = (u32)res.Value.Float4Val.y;
+			res.Value.Uint4Val.z = (u32)res.Value.Float4Val.z;
+			res.Value.Uint4Val.w = (u32)res.Value.Float4Val.w;
+			break;
+		default:
+			Unimplemented();
+		}
 	}
 }
 
@@ -103,7 +196,7 @@ void ExpandFloat4(Result& res)
 // -----------------------------------------------------------------------------
 void FloatLiteral::Evaluate(const EvaluationContext&, Result& res) const
 {
-	res.Type = VariableType::Float;
+	res.Type = FloatType;
 	res.Value.FloatVal = Val;
 }
 
@@ -111,11 +204,11 @@ void Subscript::Evaluate(const EvaluationContext& ec, Result& res) const
 {
 	Result subjectRes;
 	Subject->Evaluate(ec, subjectRes);
-	AstAssert(subjectRes.Type != VariableType::Bool, "Subscripts aren't usable on bool types");
-	AstAssert((Index + 1) * 4 <= TypeToSize(subjectRes.Type), "Invalid subscript for this type");
-	AstAssert(subjectRes.Type != VariableType::Float4x4,
+	AstAssert(subjectRes.Type.Fmt != VariableFormat::Bool, "Subscripts aren't usable on bool types");
+	AstAssert(Index <= subjectRes.Type.Dim, "Invalid subscript for this type");
+	AstAssert(subjectRes.Type.Fmt != VariableFormat::Float4x4,
 		"Subscripts aren't usable on Matrix types");
-	res.Type = VariableType::Float;
+	res.Type = FloatType;
 	if (Index == 0)
 		res.Value.FloatVal = subjectRes.Value.Float4Val.x;
 	else if (Index == 1)
@@ -133,27 +226,37 @@ void Multiply::Evaluate(const EvaluationContext& ec, Result& res) const
 	Result arg1Res, arg2Res;
 	Arg1->Evaluate(ec, arg1Res);
 	Arg2->Evaluate(ec, arg2Res);
-	AstAssert(arg1Res.Type != VariableType::Bool && arg2Res.Type != VariableType::Bool, 
-		"Bool multiplication not supported.");
-	if (arg1Res.Type == VariableType::Float4x4 ||
-		arg2Res.Type == VariableType::Float4x4)
+	if (arg1Res.Type.Fmt == VariableFormat::Float4x4 ||
+		arg2Res.Type.Fmt == VariableFormat::Float4x4)
 	{
-		Expect(VariableType::Float4x4, arg1Res, "lhs");
-		Expect(VariableType::Float4x4, arg2Res, "rhs");
-		AstAssert(arg1Res.Type == VariableType::Float4x4 &&
-			arg2Res.Type == VariableType::Float4x4, 
+		AstAssert(arg1Res.Type.Fmt == VariableFormat::Float4x4 &&
+			arg2Res.Type.Fmt == VariableFormat::Float4x4, 
 			"Matrix types can only be multiplied with other Matrix types");
-		res.Type = VariableType::Float4x4;
+		res.Type = Float4x4Type;
 		res.Value.Float4x4Val = arg1Res.Value.Float4x4Val * arg2Res.Value.Float4x4Val;
 		return;
 	}
-	AstAssert(arg1Res.Type == arg2Res.Type || arg1Res.Type == VariableType::Float ||
-		arg2Res.Type == VariableType::Float, "Vector size mismatch in multiply, %s and %s",
-		TypeToString(arg1Res.Type), TypeToString(arg2Res.Type));
-	ExpandFloat4(arg1Res);
-	ExpandFloat4(arg2Res);
-	res.Type = arg1Res.Type == VariableType::Float ? arg2Res.Type : arg1Res.Type;
-	res.Value.Float4Val = arg1Res.Value.Float4Val * arg2Res.Value.Float4Val;
+	VariableType outType = DetermineResultType(arg1Res.Type, arg2Res.Type);
+	Expand(arg1Res);
+	Expand(arg2Res);
+	Convert(arg1Res, outType.Fmt);
+	Convert(arg2Res, outType.Fmt);
+	res.Type = outType;
+	switch (outType.Fmt)
+	{
+	case VariableFormat::Float:
+		res.Value.Float4Val = arg1Res.Value.Float4Val * arg2Res.Value.Float4Val;
+		break;
+	case VariableFormat::Int:
+		res.Value.Int4Val = arg1Res.Value.Int4Val * arg2Res.Value.Int4Val;
+		break;
+	case VariableFormat::Uint:
+	case VariableFormat::Bool:
+		res.Value.Uint4Val = arg1Res.Value.Uint4Val * arg2Res.Value.Uint4Val;
+		break;
+	default:
+		Unimplemented();
+	}
 }
 
 void Divide::Evaluate(const EvaluationContext& ec, Result& res) const
@@ -161,18 +264,30 @@ void Divide::Evaluate(const EvaluationContext& ec, Result& res) const
 	Result arg1Res, arg2Res;
 	Arg1->Evaluate(ec, arg1Res);
 	Arg2->Evaluate(ec, arg2Res);
-	AstAssert(arg1Res.Type != VariableType::Bool && arg2Res.Type != VariableType::Bool, 
-		"Bool division not supported.");
-	AstAssert(arg1Res.Type != VariableType::Float4x4 && 
-		arg2Res.Type != VariableType::Float4x4,
+	AstAssert(arg1Res.Type.Fmt != VariableFormat::Float4x4 && 
+		arg2Res.Type.Fmt != VariableFormat::Float4x4,
 		"Matrix types not supported in divides.");
-	AstAssert(arg1Res.Type == arg2Res.Type || arg1Res.Type == VariableType::Float ||
-		arg2Res.Type == VariableType::Float, "Vector size mismatch in multiply, %s and %s",
-		TypeToString(arg1Res.Type), TypeToString(arg2Res.Type));
-	ExpandFloat4(arg1Res);
-	ExpandFloat4(arg2Res);
-	res.Type = arg1Res.Type == VariableType::Float ? arg2Res.Type : arg1Res.Type;
-	res.Value.Float4Val = arg1Res.Value.Float4Val / arg2Res.Value.Float4Val;
+	VariableType outType = DetermineResultType(arg1Res.Type, arg2Res.Type);
+	Expand(arg1Res);
+	Expand(arg2Res);
+	Convert(arg1Res, outType.Fmt);
+	Convert(arg2Res, outType.Fmt);
+	res.Type = outType;
+	switch (outType.Fmt)
+	{
+	case VariableFormat::Float:
+		res.Value.Float4Val = arg1Res.Value.Float4Val / arg2Res.Value.Float4Val;
+		break;
+	case VariableFormat::Int:
+		res.Value.Int4Val = arg1Res.Value.Int4Val / arg2Res.Value.Int4Val;
+		break;
+	case VariableFormat::Uint:
+	case VariableFormat::Bool:
+		res.Value.Uint4Val = arg1Res.Value.Uint4Val / arg2Res.Value.Uint4Val;
+		break;
+	default:
+		Unimplemented();
+	}
 }
 
 void TuneableRef::Evaluate(const EvaluationContext&, Result& res) const
@@ -200,10 +315,10 @@ void EvaluateFloat3(const EvaluationContext& ec, std::vector<Node*> args, Result
 	args[0]->Evaluate(ec, resX);
 	args[1]->Evaluate(ec, resY);
 	args[2]->Evaluate(ec, resZ);
-	Expect(VariableType::Float, resX, "arg1");
-	Expect(VariableType::Float, resY, "arg2");
-	Expect(VariableType::Float, resZ, "arg3");
-	res.Type = VariableType::Float3;
+	Expect(FloatType, resX, "arg1");
+	Expect(FloatType, resY, "arg2");
+	Expect(FloatType, resZ, "arg3");
+	res.Type = Float3Type;
 	res.Value.Float3Val.x = resX.Value.FloatVal;
 	res.Value.Float3Val.y = resY.Value.FloatVal;
 	res.Value.Float3Val.z = resZ.Value.FloatVal;
@@ -215,9 +330,9 @@ void EvaluateFloat2(const EvaluationContext& ec, std::vector<Node*> args, Result
 	Result resX, resY, resZ;
 	args[0]->Evaluate(ec, resX);
 	args[1]->Evaluate(ec, resY);
-	Expect(VariableType::Float, resX, "arg1");
-	Expect(VariableType::Float, resY, "arg2");
-	res.Type = VariableType::Float2;
+	Expect(FloatType, resX, "arg1");
+	Expect(FloatType, resY, "arg2");
+	res.Type = Float2Type;
 	res.Value.Float3Val.x = resX.Value.FloatVal;
 	res.Value.Float3Val.y = resY.Value.FloatVal;
 }
@@ -225,16 +340,16 @@ void EvaluateFloat2(const EvaluationContext& ec, std::vector<Node*> args, Result
 void EvaluateTime(const EvaluationContext& ec, std::vector<Node*> args, Result& res)
 {
 	AstAssert(args.size() == 0, "Time does not take a param");
-	res.Type = VariableType::Float;
+	res.Type = FloatType;
 	res.Value.FloatVal = ec.Time;
 }
 
 void EvaluateDisplaySize(const EvaluationContext& ec, std::vector<Node*> args, Result& res)
 {
 	AstAssert(args.size() == 0, "DisplaySize does not take a param");
-	res.Type = VariableType::Float2;
-	res.Value.Float2Val.x = (float)ec.DisplaySize.x;
-	res.Value.Float2Val.y = (float)ec.DisplaySize.y;
+	res.Type = Uint2Type;
+	res.Value.Uint4Val.x = ec.DisplaySize.x;
+	res.Value.Uint4Val.y = ec.DisplaySize.y;
 }
 
 void EvaluateLookAt(const EvaluationContext& ec, std::vector<Node*> args, Result& res)
@@ -243,9 +358,9 @@ void EvaluateLookAt(const EvaluationContext& ec, std::vector<Node*> args, Result
 	Result fromRes, toRes;
 	args[0]->Evaluate(ec, fromRes);
 	args[1]->Evaluate(ec, toRes);
-	Expect(VariableType::Float3, fromRes, "arg1 (from)");
-	Expect(VariableType::Float3, toRes, "arg2 (to)");
-	res.Type = VariableType::Float4x4;
+	Expect(Float3Type, fromRes, "arg1 (from)");
+	Expect(Float3Type, toRes, "arg2 (to)");
+	res.Type = Float4x4Type;
 	res.Value.Float4x4Val = lookAt(fromRes.Value.Float3Val, toRes.Value.Float3Val);
 }
 
@@ -257,11 +372,11 @@ void EvaluateProjection(const EvaluationContext& ec, std::vector<Node*> args, Re
 	args[1]->Evaluate(ec, aspectRes);
 	args[2]->Evaluate(ec, nearRes);
 	args[3]->Evaluate(ec, farRes);
-	Expect(VariableType::Float, fovRes, "arg1 (fov)");
-	Expect(VariableType::Float, aspectRes, "arg2 (aspect)");
-	Expect(VariableType::Float, nearRes, "arg3 (znear)");
-	Expect(VariableType::Float, farRes, "arg4 (zfar)");
-	res.Type = VariableType::Float4x4;
+	Expect(FloatType, fovRes, "arg1 (fov)");
+	Expect(FloatType, aspectRes, "arg2 (aspect)");
+	Expect(FloatType, nearRes, "arg3 (znear)");
+	Expect(FloatType, farRes, "arg4 (zfar)");
+	res.Type = Float4x4Type;
 	res.Value.Float4x4Val = projection(fovRes.Value.FloatVal, aspectRes.Value.FloatVal, 
 		nearRes.Value.FloatVal, farRes.Value.FloatVal);
 }

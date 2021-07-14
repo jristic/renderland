@@ -15,12 +15,21 @@ static_assert(sizeof(i8) == 1, "Didn't get expected size.");
 struct int2 {
 	i32 x,y;
 };
+struct int3 {
+	i32 x,y,z;
+};
+struct int4 {
+	i32 x,y,z,w;
+};
 
 struct uint2 {
 	u32 x,y;
 };
 struct uint3 {
 	u32 x,y,z;
+};
+struct uint4 {
+	u32 x,y,z,w;
 };
 
 struct float2 {
