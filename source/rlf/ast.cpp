@@ -80,7 +80,7 @@ void Expect(VariableType type, Result& res, const char* name)
 VariableType DetermineResultType(VariableType t1, VariableType t2)
 {
 	AstAssert(t1.Dim == t2.Dim || t1.Dim == 1 || t2.Dim == 1, 
-		"Vector size mismatch in multiply, %u and %u", t1.Dim, t2.Dim);
+		"Vector size mismatch in operation, %u vs. %u", t1.Dim, t2.Dim);
 	VariableType t;
 	t.Dim = t1.Dim == 1 ? t2.Dim : t1.Dim;
 	if (t1.Fmt == VariableFormat::Float || t2.Fmt == VariableFormat::Float)
@@ -101,21 +101,21 @@ void Expand(Result& res)
 	{
 		switch (res.Type.Fmt)
 		{
-		case VariableFormat::Float:
-			res.Value.Float4Val.w = res.Value.Float4Val.z = res.Value.Float4Val.y = 
-				res.Value.Float4Val.x;
+		case VariableFormat::Bool:
+			res.Value.Bool4Val.w = res.Value.Bool4Val.z = res.Value.Bool4Val.y = 
+				res.Value.Bool4Val.x;
 			break;
 		case VariableFormat::Int:
 			res.Value.Int4Val.w = res.Value.Int4Val.z = res.Value.Int4Val.y = 
 				res.Value.Int4Val.x;
 			break;
-		case VariableFormat::Bool:
-			res.Value.Uint4Val.w = res.Value.Uint4Val.z = res.Value.Uint4Val.y = 
-				res.Value.Uint4Val.x = res.Value.BoolVal ? 1 : 0;
-			break;
 		case VariableFormat::Uint:
 			res.Value.Uint4Val.w = res.Value.Uint4Val.z = res.Value.Uint4Val.y = 
 				res.Value.Uint4Val.x;
+			break;
+		case VariableFormat::Float:
+			res.Value.Float4Val.w = res.Value.Float4Val.z = res.Value.Float4Val.y = 
+				res.Value.Float4Val.x;
 			break;
 		default:
 			Unimplemented();
@@ -127,22 +127,27 @@ void Convert(Result& res, VariableFormat fmt)
 {
 	if (res.Type.Fmt == fmt)
 		return;
-	if (fmt == VariableFormat::Float)
+	if (fmt == VariableFormat::Bool)
 	{
 		switch (res.Type.Fmt)
 		{
-		case VariableFormat::Uint:
-		case VariableFormat::Bool:
-			res.Value.Float4Val.x = (float)res.Value.Uint4Val.x;
-			res.Value.Float4Val.y = (float)res.Value.Uint4Val.y;
-			res.Value.Float4Val.z = (float)res.Value.Uint4Val.z;
-			res.Value.Float4Val.w = (float)res.Value.Uint4Val.w;
-			break;
 		case VariableFormat::Int:
-			res.Value.Float4Val.x = (float)res.Value.Int4Val.x;
-			res.Value.Float4Val.y = (float)res.Value.Int4Val.y;
-			res.Value.Float4Val.z = (float)res.Value.Int4Val.z;
-			res.Value.Float4Val.w = (float)res.Value.Int4Val.w;
+			res.Value.Bool4Val.x = res.Value.Bool4Val.x ? 1 : 0;
+			res.Value.Bool4Val.y = res.Value.Bool4Val.y ? 1 : 0;
+			res.Value.Bool4Val.z = res.Value.Bool4Val.z ? 1 : 0;
+			res.Value.Bool4Val.w = res.Value.Bool4Val.w ? 1 : 0;
+			break;
+		case VariableFormat::Uint:
+			res.Value.Bool4Val.x = (i32)res.Value.Uint4Val.x;
+			res.Value.Bool4Val.y = (i32)res.Value.Uint4Val.y;
+			res.Value.Bool4Val.z = (i32)res.Value.Uint4Val.z;
+			res.Value.Bool4Val.w = (i32)res.Value.Uint4Val.w;
+			break;
+		case VariableFormat::Float:
+			res.Value.Bool4Val.x = (i32)res.Value.Float4Val.x;
+			res.Value.Bool4Val.y = (i32)res.Value.Float4Val.y;
+			res.Value.Bool4Val.z = (i32)res.Value.Float4Val.z;
+			res.Value.Bool4Val.w = (i32)res.Value.Float4Val.w;
 			break;
 		default:
 			Unimplemented();
@@ -152,8 +157,13 @@ void Convert(Result& res, VariableFormat fmt)
 	{
 		switch (res.Type.Fmt)
 		{
-		case VariableFormat::Uint:
 		case VariableFormat::Bool:
+			res.Value.Int4Val.x = res.Value.Bool4Val.x ? 1 : 0;
+			res.Value.Int4Val.y = res.Value.Bool4Val.y ? 1 : 0;
+			res.Value.Int4Val.z = res.Value.Bool4Val.z ? 1 : 0;
+			res.Value.Int4Val.w = res.Value.Bool4Val.w ? 1 : 0;
+			break;
+		case VariableFormat::Uint:
 			res.Value.Int4Val.x = (i32)res.Value.Uint4Val.x;
 			res.Value.Int4Val.y = (i32)res.Value.Uint4Val.y;
 			res.Value.Int4Val.z = (i32)res.Value.Uint4Val.z;
@@ -173,6 +183,12 @@ void Convert(Result& res, VariableFormat fmt)
 	{
 		switch (res.Type.Fmt)
 		{
+		case VariableFormat::Bool:
+			res.Value.Uint4Val.x = res.Value.Bool4Val.x ? 1 : 0;
+			res.Value.Uint4Val.y = res.Value.Bool4Val.y ? 1 : 0;
+			res.Value.Uint4Val.z = res.Value.Bool4Val.z ? 1 : 0;
+			res.Value.Uint4Val.w = res.Value.Bool4Val.w ? 1 : 0;
+			break;
 		case VariableFormat::Int:
 			res.Value.Uint4Val.x = (u32)res.Value.Int4Val.x;
 			res.Value.Uint4Val.y = (u32)res.Value.Int4Val.y;
@@ -184,6 +200,32 @@ void Convert(Result& res, VariableFormat fmt)
 			res.Value.Uint4Val.y = (u32)res.Value.Float4Val.y;
 			res.Value.Uint4Val.z = (u32)res.Value.Float4Val.z;
 			res.Value.Uint4Val.w = (u32)res.Value.Float4Val.w;
+			break;
+		default:
+			Unimplemented();
+		}
+	}
+	else if (fmt == VariableFormat::Float)
+	{
+		switch (res.Type.Fmt)
+		{
+		case VariableFormat::Bool:
+			res.Value.Float4Val.x = res.Value.Bool4Val.x ? 1.f : 0.f;
+			res.Value.Float4Val.y = res.Value.Bool4Val.y ? 1.f : 0.f;
+			res.Value.Float4Val.z = res.Value.Bool4Val.z ? 1.f : 0.f;
+			res.Value.Float4Val.w = res.Value.Bool4Val.w ? 1.f : 0.f;
+			break;
+		case VariableFormat::Int:
+			res.Value.Float4Val.x = (float)res.Value.Int4Val.x;
+			res.Value.Float4Val.y = (float)res.Value.Int4Val.y;
+			res.Value.Float4Val.z = (float)res.Value.Int4Val.z;
+			res.Value.Float4Val.w = (float)res.Value.Int4Val.w;
+			break;
+		case VariableFormat::Uint:
+			res.Value.Float4Val.x = (float)res.Value.Uint4Val.x;
+			res.Value.Float4Val.y = (float)res.Value.Uint4Val.y;
+			res.Value.Float4Val.z = (float)res.Value.Uint4Val.z;
+			res.Value.Float4Val.w = (float)res.Value.Uint4Val.w;
 			break;
 		default:
 			Unimplemented();
@@ -251,8 +293,10 @@ void Multiply::Evaluate(const EvaluationContext& ec, Result& res) const
 		res.Value.Int4Val = arg1Res.Value.Int4Val * arg2Res.Value.Int4Val;
 		break;
 	case VariableFormat::Uint:
-	case VariableFormat::Bool:
 		res.Value.Uint4Val = arg1Res.Value.Uint4Val * arg2Res.Value.Uint4Val;
+		break;
+	case VariableFormat::Bool:
+		AstError("Bool multiply has not been defined");
 		break;
 	default:
 		Unimplemented();
@@ -267,26 +311,37 @@ void Divide::Evaluate(const EvaluationContext& ec, Result& res) const
 	AstAssert(arg1Res.Type.Fmt != VariableFormat::Float4x4 && 
 		arg2Res.Type.Fmt != VariableFormat::Float4x4,
 		"Matrix types not supported in divides.");
+	AstAssert(arg1Res.Type.Fmt != VariableFormat::Bool && 
+		arg2Res.Type.Fmt != VariableFormat::Bool,
+		"Bool types not supported in divides.");
 	VariableType outType = DetermineResultType(arg1Res.Type, arg2Res.Type);
 	Expand(arg1Res);
 	Expand(arg2Res);
 	Convert(arg1Res, outType.Fmt);
 	Convert(arg2Res, outType.Fmt);
 	res.Type = outType;
-	switch (outType.Fmt)
+	for (u32 i = 0 ; i < outType.Dim ; ++i)
 	{
-	case VariableFormat::Float:
-		res.Value.Float4Val = arg1Res.Value.Float4Val / arg2Res.Value.Float4Val;
-		break;
-	case VariableFormat::Int:
-		res.Value.Int4Val = arg1Res.Value.Int4Val / arg2Res.Value.Int4Val;
-		break;
-	case VariableFormat::Uint:
-	case VariableFormat::Bool:
-		res.Value.Uint4Val = arg1Res.Value.Uint4Val / arg2Res.Value.Uint4Val;
-		break;
-	default:
-		Unimplemented();
+		switch (outType.Fmt)
+		{
+		case VariableFormat::Int:
+			AstAssert(arg2Res.Value.Int4Val.m[i] != 0, "Divide by zero");
+			res.Value.Int4Val.m[i] = arg1Res.Value.Int4Val.m[i] / 
+				arg2Res.Value.Int4Val.m[i];
+			break;
+		case VariableFormat::Uint:
+			AstAssert(arg2Res.Value.Uint4Val.m[i] != 0, "Divide by zero");
+			res.Value.Uint4Val.m[i] = arg1Res.Value.Uint4Val.m[i] / 
+				arg2Res.Value.Uint4Val.m[i];
+			break;
+		case VariableFormat::Float:
+			AstAssert(arg2Res.Value.Float4Val.m[i] != 0.f, "Divide by zero");
+			res.Value.Float4Val.m[i] = arg1Res.Value.Float4Val.m[i] / 
+				arg2Res.Value.Float4Val.m[i];
+			break;
+		default:
+			Unimplemented();
+		}
 	}
 }
 

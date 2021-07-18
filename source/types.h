@@ -12,6 +12,17 @@ typedef signed char i8;
 static_assert(sizeof(u8) == 1, "Didn't get expected size.");
 static_assert(sizeof(i8) == 1, "Didn't get expected size.");
 
+#pragma warning(disable: 4201)
+
+struct bool4 {
+	union {
+		bool m[4];
+		struct {
+			bool x,y,z,w;
+		};
+	};
+};
+
 struct int2 {
 	i32 x,y;
 };
@@ -19,7 +30,12 @@ struct int3 {
 	i32 x,y,z;
 };
 struct int4 {
-	i32 x,y,z,w;
+	union {
+		i32 m[4];
+		struct {
+			i32 x,y,z,w;
+		};
+	};
 };
 
 struct uint2 {
@@ -29,7 +45,12 @@ struct uint3 {
 	u32 x,y,z;
 };
 struct uint4 {
-	u32 x,y,z,w;
+	union {
+		u32 m[4];
+		struct {
+			u32 x,y,z,w;
+		};
+	};
 };
 
 struct float2 {
@@ -39,6 +60,12 @@ struct float3 {
 	float x,y,z;
 };
 struct float4 {
-	float x,y,z,w;
+	union {
+		float m[4];
+		struct {
+			float x,y,z,w;
+		};
+	};
 };
 
+#pragma warning(default: 4201)

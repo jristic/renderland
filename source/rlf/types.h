@@ -26,9 +26,17 @@ namespace rlf
 	}
 
 	VariableType BoolType = { VariableFormat::Bool, 1 };
+	VariableType Bool2Type = { VariableFormat::Bool, 2 };
+	VariableType Bool3Type = { VariableFormat::Bool, 3 };
+	VariableType Bool4Type = { VariableFormat::Bool, 4 };
 	VariableType IntType = { VariableFormat::Int, 1 };
+	VariableType Int2Type = { VariableFormat::Int, 2 };
+	VariableType Int3Type = { VariableFormat::Int, 3 };
+	VariableType Int4Type = { VariableFormat::Int, 4 };
 	VariableType UintType = { VariableFormat::Uint, 1 };
 	VariableType Uint2Type = { VariableFormat::Uint, 2 };
+	VariableType Uint3Type = { VariableFormat::Uint, 3 };
+	VariableType Uint4Type = { VariableFormat::Uint, 4 };
 	VariableType FloatType = { VariableFormat::Float, 1 };
 	VariableType Float2Type = { VariableFormat::Float, 2 };
 	VariableType Float3Type = { VariableFormat::Float, 3 };
@@ -40,6 +48,7 @@ namespace rlf
 		Variable() {}
 		union {
 			bool BoolVal;
+			bool4 Bool4Val;
 			i32 IntVal;
 			int4 Int4Val;
 			u32 UintVal;
