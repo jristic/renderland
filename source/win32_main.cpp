@@ -42,6 +42,8 @@ static ID3D11UnorderedAccessView*  g_mainRenderTargetUav = nullptr;
 static ID3D11Texture2D* 		g_mainDepthStencilTex = nullptr;
 static ID3D11DepthStencilView*  g_mainDepthStencilView = nullptr;
 
+char* RlfFile = nullptr;
+u32 RlfFileSize = 0;
 bool RlfCompileSuccess = false;
 std::string RlfCompileErrorMessage;
 bool RlfCompileWarning = false;
@@ -77,6 +79,44 @@ bool CheckD3DValidation(std::string& outMessage)
 	g_d3dInfoQueue->ClearStoredMessages();
 
 	return num > 0;
+}
+
+std::string RlfFileLocation(const char* filename, const char* location)
+{
+	u32 line = 1;
+	u32 chr = 0;
+	const char* lineStart = RlfFile;
+	for (const char* b = RlfFile; b < location ; ++b)
+	{
+		if (*b == '\n')
+		{
+			lineStart = b+1;
+			++line;
+			chr = 0;
+		}
+		else if (*b == '\t')
+			chr += 4;
+		else
+			++chr;
+	}
+
+	const char* lineEnd = lineStart;
+	while (lineEnd < RlfFile + RlfFileSize && *lineEnd != '\n')
+		++lineEnd;
+
+	char buf[512];
+	sprintf_s(buf, 512, "%s(%u,%u):\n%.*s \n", filename, line, chr, (u32)(lineEnd-lineStart),
+		lineStart);
+	std::string str = buf;
+	if (chr + 2 < 512)
+	{
+		for (u32 i = 0 ; i < chr ; ++i)
+			buf[i] = ' ';
+		buf[chr] = '^';
+		buf[chr+1] = '\0';
+		str += buf;
+	}
+	return str;
 }
 
 // Main code
@@ -325,7 +365,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			if (!es.ExecuteSuccess)
 			{
 				RlfCompileSuccess = false;
-				RlfCompileErrorMessage = "RLF execution error: \n" + es.ErrorMessage;
+				RlfCompileErrorMessage = "RLF execution error: \n" + es.Info.Message;
+				if (es.Info.Location)
+					RlfCompileErrorMessage += "\n" + 
+						RlfFileLocation(Cfg.FilePath, es.Info.Location);
 			}
 		}
 
@@ -427,15 +470,37 @@ void CreateShader()
 		dirPath = filePath.substr(0, pos+1);
 	}
 
+	HANDLE rlf = fileio::OpenFileOptional(filename, GENERIC_READ);
+
+	if (rlf == INVALID_HANDLE_VALUE) // file not found
+	{
+		RlfCompileSuccess = false;
+		RlfCompileErrorMessage = std::string("Couldn't find ") + filename;
+		return;
+	}
+
+	RlfFileSize = fileio::GetFileSize(rlf);
+
+	Assert(!RlfFile, "Leak");
+	RlfFile = (char*)malloc(RlfFileSize);	
+	Assert(RlfFile != nullptr, "failed to alloc");
+
+	fileio::ReadFile(rlf, RlfFile, RlfFileSize);
+
+	CloseHandle(rlf);
+
 	Assert(CurrentRenderDesc == nullptr, "leaking data");
 	rlf::ParseErrorState es = {};
-	CurrentRenderDesc = rlf::ParseFile(filename, dirPath.c_str(), &es);
+	CurrentRenderDesc = rlf::ParseBuffer(RlfFile, RlfFileSize, dirPath.c_str(), &es);
 
 	if (es.ParseSuccess == false)
 	{
 		Assert(CurrentRenderDesc == nullptr, "leaking data");
 		RlfCompileSuccess = false;
-		RlfCompileErrorMessage = std::string("Failed to parse RLF:\n") + es.ErrorMessage;
+		RlfCompileErrorMessage = std::string("Failed to parse RLF:\n") + es.Info.Message +
+			"\n" + RlfFileLocation(filename, es.Info.Location);
+		free(RlfFile);
+		RlfFile = nullptr;
 		return;
 	}
 
@@ -462,6 +527,8 @@ void CleanupShader()
 		rlf::ReleaseD3D(CurrentRenderDesc);
 		rlf::ReleaseData(CurrentRenderDesc);
 		CurrentRenderDesc = nullptr;
+		free(RlfFile);
+		RlfFile = nullptr;
 	}
 }
 

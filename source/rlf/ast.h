@@ -18,13 +18,14 @@ struct Result
 struct EvaluateErrorState
 {
 	bool EvaluateSuccess;
-	std::string ErrorMessage;
+	ErrorInfo Info;
 };
 
 struct Node 
 {
 	virtual void Evaluate(const EvaluationContext& ec, Result& res) const = 0;
 	virtual ~Node() {}
+	const char* Location;
 };
 
 void Evaluate(const EvaluationContext& ec, const Node* ast, Result& res, EvaluateErrorState& es);

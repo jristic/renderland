@@ -72,4 +72,10 @@ namespace rlf
 		};
 		return names[(u32)type.Fmt];
 	}
+
+	struct ErrorInfo
+	{
+		const char* Location;
+		std::string Message;
+	};
 }

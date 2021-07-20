@@ -817,7 +817,7 @@ void ReleaseD3D(
 // -----------------------------------------------------------------------------
 struct ExecuteException
 {
-	std::string Message;
+	ErrorInfo Info;
 };
 
 void ExecuteError(const char* str, ...)
@@ -828,9 +828,10 @@ void ExecuteError(const char* str, ...)
 	vsprintf_s(buf,512,str,ptr);
 	va_end(ptr);
 
-	ExecuteException ae;
-	ae.Message = buf;
-	throw ae;
+	ExecuteException ee;
+	ee.Info.Location = nullptr;
+	ee.Info.Message = buf;
+	throw ee;
 }
 
 #define ExecuteAssert(expression, message, ...) \
@@ -856,7 +857,8 @@ void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets,
 		if (!es.EvaluateSuccess)
 		{
 			ExecuteException ee;
-			ee.Message = "AST evaluation error: \n" + es.ErrorMessage;
+			ee.Info.Location = es.Info.Location;
+			ee.Info.Message = "AST evaluation error: " + es.Info.Message;
 			throw ee;
 		}
 		u32 typeSize = res.Type.Dim * 4;
@@ -1121,7 +1123,7 @@ void Execute(
 	catch (ExecuteException ee)
 	{
 		es->ExecuteSuccess = false;
-		es->ErrorMessage = ee.Message;
+		es->Info = ee.Info;
 	}
 }
 

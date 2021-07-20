@@ -3,40 +3,13 @@ namespace rlf {
 namespace ast {
 
 
-void EvaluateFloat3(const EvaluationContext& ec, std::vector<Node*> args, Result& res);
-void EvaluateFloat2(const EvaluationContext& ec, std::vector<Node*> args, Result& res);
-void EvaluateTime(const EvaluationContext& ec, std::vector<Node*> args, Result& res);
-void EvaluateDisplaySize(const EvaluationContext& ec, std::vector<Node*> args, Result& res);
-void EvaluateLookAt(const EvaluationContext& ec, std::vector<Node*> args, Result& res);
-void EvaluateProjection(const EvaluationContext& ec, std::vector<Node*> args, Result& res);
-
-u32 LowerHash(const char* str)
-{
-	unsigned long h = 5381;
-	unsigned const char* us = (unsigned const char *) str;
-	while(*us != '\0') {
-		h = ((h << 5) + h) + tolower(*us);
-		us++;
-	}
-	return h; 
-}
-
-typedef void (*FunctionEvaluate)(const EvaluationContext&, std::vector<Node*>, Result&);
-std::unordered_map<u32, FunctionEvaluate> FuncMap = {
-	{ LowerHash("Float2"), EvaluateFloat2 },
-	{ LowerHash("Float3"), EvaluateFloat3 },
-	{ LowerHash("Time"), EvaluateTime },
-	{ LowerHash("DisplaySize"), EvaluateDisplaySize },
-	{ LowerHash("LookAt"), EvaluateLookAt },
-	{ LowerHash("Projection"), EvaluateProjection },
-};
-
 struct AstException
 {
-	std::string Message;
+	ErrorInfo Info;
 };
 
-void Evaluate(const EvaluationContext& ec, const Node* ast, Result& res, EvaluateErrorState& es)
+void Evaluate(const EvaluationContext& ec, const Node* ast, Result& res, 
+	EvaluateErrorState& es)
 {
 	es.EvaluateSuccess = true;
 	try {
@@ -45,11 +18,11 @@ void Evaluate(const EvaluationContext& ec, const Node* ast, Result& res, Evaluat
 	catch (AstException ae)
 	{
 		es.EvaluateSuccess = false;
-		es.ErrorMessage = ae.Message;
+		es.Info = ae.Info;
 	}
 }
 
-void AstError(const char* str, ...)
+void AstError(const Node* n, const char* str, ...)
 {
 	char buf[512];
 	va_list ptr;
@@ -58,28 +31,29 @@ void AstError(const char* str, ...)
 	va_end(ptr);
 
 	AstException ae;
-	ae.Message = buf;
+	ae.Info.Location = n->Location;
+	ae.Info.Message = buf;
 	throw ae;
 }
 
-#define AstAssert(expression, message, ...) 	\
-do {											\
-	if (!(expression)) {						\
-		AstError(message, ##__VA_ARGS__);	\
-	}											\
-} while (0);									\
+#define AstAssert(node, expression, message, ...) 	\
+do {												\
+	if (!(expression)) {							\
+		AstError(node, message, ##__VA_ARGS__);		\
+	}												\
+} while (0);										\
 
 
 
-void Expect(VariableType type, Result& res, const char* name)
+void Expect(const Node* n, VariableType type, Result& res, const char* name)
 {
-	AstAssert(res.Type == type, "Expected %s to be type %s but got %s.",
+	AstAssert(n, res.Type == type, "Expected %s to be type %s but got %s.",
 		name, TypeToString(type), TypeToString(res.Type));
 }
 
-VariableType DetermineResultType(VariableType t1, VariableType t2)
+VariableType DetermineResultType(const Node* n, VariableType t1, VariableType t2)
 {
-	AstAssert(t1.Dim == t2.Dim || t1.Dim == 1 || t2.Dim == 1, 
+	AstAssert(n, t1.Dim == t2.Dim || t1.Dim == 1 || t2.Dim == 1, 
 		"Vector size mismatch in operation, %u vs. %u", t1.Dim, t2.Dim);
 	VariableType t;
 	t.Dim = t1.Dim == 1 ? t2.Dim : t1.Dim;
@@ -246,9 +220,10 @@ void Subscript::Evaluate(const EvaluationContext& ec, Result& res) const
 {
 	Result subjectRes;
 	Subject->Evaluate(ec, subjectRes);
-	AstAssert(subjectRes.Type.Fmt != VariableFormat::Bool, "Subscripts aren't usable on bool types");
-	AstAssert(Index <= subjectRes.Type.Dim, "Invalid subscript for this type");
-	AstAssert(subjectRes.Type.Fmt != VariableFormat::Float4x4,
+	AstAssert(this, subjectRes.Type.Fmt != VariableFormat::Bool,
+		"Subscripts aren't usable on bool types");
+	AstAssert(this, Index <= subjectRes.Type.Dim, "Invalid subscript for this type");
+	AstAssert(this, subjectRes.Type.Fmt != VariableFormat::Float4x4,
 		"Subscripts aren't usable on Matrix types");
 	res.Type = FloatType;
 	if (Index == 0)
@@ -271,14 +246,14 @@ void Multiply::Evaluate(const EvaluationContext& ec, Result& res) const
 	if (arg1Res.Type.Fmt == VariableFormat::Float4x4 ||
 		arg2Res.Type.Fmt == VariableFormat::Float4x4)
 	{
-		AstAssert(arg1Res.Type.Fmt == VariableFormat::Float4x4 &&
+		AstAssert(this, arg1Res.Type.Fmt == VariableFormat::Float4x4 &&
 			arg2Res.Type.Fmt == VariableFormat::Float4x4, 
 			"Matrix types can only be multiplied with other Matrix types");
 		res.Type = Float4x4Type;
 		res.Value.Float4x4Val = arg1Res.Value.Float4x4Val * arg2Res.Value.Float4x4Val;
 		return;
 	}
-	VariableType outType = DetermineResultType(arg1Res.Type, arg2Res.Type);
+	VariableType outType = DetermineResultType(this, arg1Res.Type, arg2Res.Type);
 	Expand(arg1Res);
 	Expand(arg2Res);
 	Convert(arg1Res, outType.Fmt);
@@ -296,7 +271,7 @@ void Multiply::Evaluate(const EvaluationContext& ec, Result& res) const
 		res.Value.Uint4Val = arg1Res.Value.Uint4Val * arg2Res.Value.Uint4Val;
 		break;
 	case VariableFormat::Bool:
-		AstError("Bool multiply has not been defined");
+		AstError(this, "Bool multiply has not been defined");
 		break;
 	default:
 		Unimplemented();
@@ -308,13 +283,13 @@ void Divide::Evaluate(const EvaluationContext& ec, Result& res) const
 	Result arg1Res, arg2Res;
 	Arg1->Evaluate(ec, arg1Res);
 	Arg2->Evaluate(ec, arg2Res);
-	AstAssert(arg1Res.Type.Fmt != VariableFormat::Float4x4 && 
+	AstAssert(this, arg1Res.Type.Fmt != VariableFormat::Float4x4 && 
 		arg2Res.Type.Fmt != VariableFormat::Float4x4,
 		"Matrix types not supported in divides.");
-	AstAssert(arg1Res.Type.Fmt != VariableFormat::Bool && 
+	AstAssert(this, arg1Res.Type.Fmt != VariableFormat::Bool && 
 		arg2Res.Type.Fmt != VariableFormat::Bool,
 		"Bool types not supported in divides.");
-	VariableType outType = DetermineResultType(arg1Res.Type, arg2Res.Type);
+	VariableType outType = DetermineResultType(this, arg1Res.Type, arg2Res.Type);
 	Expand(arg1Res);
 	Expand(arg2Res);
 	Convert(arg1Res, outType.Fmt);
@@ -325,17 +300,17 @@ void Divide::Evaluate(const EvaluationContext& ec, Result& res) const
 		switch (outType.Fmt)
 		{
 		case VariableFormat::Int:
-			AstAssert(arg2Res.Value.Int4Val.m[i] != 0, "Divide by zero");
+			AstAssert(this, arg2Res.Value.Int4Val.m[i] != 0, "Divide by zero");
 			res.Value.Int4Val.m[i] = arg1Res.Value.Int4Val.m[i] / 
 				arg2Res.Value.Int4Val.m[i];
 			break;
 		case VariableFormat::Uint:
-			AstAssert(arg2Res.Value.Uint4Val.m[i] != 0, "Divide by zero");
+			AstAssert(this, arg2Res.Value.Uint4Val.m[i] != 0, "Divide by zero");
 			res.Value.Uint4Val.m[i] = arg1Res.Value.Uint4Val.m[i] / 
 				arg2Res.Value.Uint4Val.m[i];
 			break;
 		case VariableFormat::Float:
-			AstAssert(arg2Res.Value.Float4Val.m[i] != 0.f, "Divide by zero");
+			AstAssert(this, arg2Res.Value.Float4Val.m[i] != 0.f, "Divide by zero");
 			res.Value.Float4Val.m[i] = arg1Res.Value.Float4Val.m[i] / 
 				arg2Res.Value.Float4Val.m[i];
 			break;
@@ -351,90 +326,121 @@ void TuneableRef::Evaluate(const EvaluationContext&, Result& res) const
 	res.Value = Tune->Value;
 }
 
-void Function::Evaluate(const EvaluationContext& ec, Result& res) const
-{
-	u32 funcHash = LowerHash(Name.c_str());
-	AstAssert(FuncMap.count(funcHash) == 1, "No function named %s exists.", Name.c_str());
-	FunctionEvaluate fi = FuncMap[funcHash];
-	fi(ec, Args, res);
-}
-
 
 // -----------------------------------------------------------------------------
 // ------------------------------ FUNCTION EVALS -------------------------------
 // -----------------------------------------------------------------------------
-void EvaluateFloat3(const EvaluationContext& ec, std::vector<Node*> args, Result& res)
+void EvaluateFloat3(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
 {
-	AstAssert(args.size() == 3, "Float3 takes 3 params.");
+	AstAssert(n, args.size() == 3, "Float3 takes 3 params.");
 	Result resX, resY, resZ;
 	args[0]->Evaluate(ec, resX);
 	args[1]->Evaluate(ec, resY);
 	args[2]->Evaluate(ec, resZ);
-	Expect(FloatType, resX, "arg1");
-	Expect(FloatType, resY, "arg2");
-	Expect(FloatType, resZ, "arg3");
+	Expect(n, FloatType, resX, "arg1");
+	Expect(n, FloatType, resY, "arg2");
+	Expect(n, FloatType, resZ, "arg3");
 	res.Type = Float3Type;
 	res.Value.Float3Val.x = resX.Value.FloatVal;
 	res.Value.Float3Val.y = resY.Value.FloatVal;
 	res.Value.Float3Val.z = resZ.Value.FloatVal;
 }
 
-void EvaluateFloat2(const EvaluationContext& ec, std::vector<Node*> args, Result& res)
+void EvaluateFloat2(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
 {
-	AstAssert(args.size() == 2, "Float2 takes 3 params.");
+	AstAssert(n, args.size() == 2, "Float2 takes 3 params.");
 	Result resX, resY, resZ;
 	args[0]->Evaluate(ec, resX);
 	args[1]->Evaluate(ec, resY);
-	Expect(FloatType, resX, "arg1");
-	Expect(FloatType, resY, "arg2");
+	Expect(n, FloatType, resX, "arg1");
+	Expect(n, FloatType, resY, "arg2");
 	res.Type = Float2Type;
 	res.Value.Float3Val.x = resX.Value.FloatVal;
 	res.Value.Float3Val.y = resY.Value.FloatVal;
 }
 
-void EvaluateTime(const EvaluationContext& ec, std::vector<Node*> args, Result& res)
+void EvaluateTime(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
 {
-	AstAssert(args.size() == 0, "Time does not take a param");
+	AstAssert(n, args.size() == 0, "Time does not take a param");
 	res.Type = FloatType;
 	res.Value.FloatVal = ec.Time;
 }
 
-void EvaluateDisplaySize(const EvaluationContext& ec, std::vector<Node*> args, Result& res)
+void EvaluateDisplaySize(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
 {
-	AstAssert(args.size() == 0, "DisplaySize does not take a param");
+	AstAssert(n, args.size() == 0, "DisplaySize does not take a param");
 	res.Type = Uint2Type;
 	res.Value.Uint4Val.x = ec.DisplaySize.x;
 	res.Value.Uint4Val.y = ec.DisplaySize.y;
 }
 
-void EvaluateLookAt(const EvaluationContext& ec, std::vector<Node*> args, Result& res)
+void EvaluateLookAt(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
 {
-	AstAssert(args.size() == 2, "LookAt takes 2 params");
+	AstAssert(n, args.size() == 2, "LookAt takes 2 params");
 	Result fromRes, toRes;
 	args[0]->Evaluate(ec, fromRes);
 	args[1]->Evaluate(ec, toRes);
-	Expect(Float3Type, fromRes, "arg1 (from)");
-	Expect(Float3Type, toRes, "arg2 (to)");
+	Expect(n, Float3Type, fromRes, "arg1 (from)");
+	Expect(n, Float3Type, toRes, "arg2 (to)");
 	res.Type = Float4x4Type;
 	res.Value.Float4x4Val = lookAt(fromRes.Value.Float3Val, toRes.Value.Float3Val);
 }
 
-void EvaluateProjection(const EvaluationContext& ec, std::vector<Node*> args, Result& res)
+void EvaluateProjection(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
 {
-	AstAssert(args.size() == 4, "Projection takes 4 params");
+	AstAssert(n, args.size() == 4, "Projection takes 4 params");
 	Result fovRes, aspectRes, nearRes, farRes;
 	args[0]->Evaluate(ec, fovRes);
 	args[1]->Evaluate(ec, aspectRes);
 	args[2]->Evaluate(ec, nearRes);
 	args[3]->Evaluate(ec, farRes);
-	Expect(FloatType, fovRes, "arg1 (fov)");
-	Expect(FloatType, aspectRes, "arg2 (aspect)");
-	Expect(FloatType, nearRes, "arg3 (znear)");
-	Expect(FloatType, farRes, "arg4 (zfar)");
+	Expect(n, FloatType, fovRes, "arg1 (fov)");
+	Expect(n, FloatType, aspectRes, "arg2 (aspect)");
+	Expect(n, FloatType, nearRes, "arg3 (znear)");
+	Expect(n, FloatType, farRes, "arg4 (zfar)");
 	res.Type = Float4x4Type;
 	res.Value.Float4x4Val = projection(fovRes.Value.FloatVal, aspectRes.Value.FloatVal, 
 		nearRes.Value.FloatVal, farRes.Value.FloatVal);
 }
+
+
+u32 LowerHash(const char* str)
+{
+	unsigned long h = 5381;
+	unsigned const char* us = (unsigned const char *) str;
+	while(*us != '\0') {
+		h = ((h << 5) + h) + tolower(*us);
+		us++;
+	}
+	return h; 
+}
+
+typedef void (*FunctionEvaluate)(const Node*, const EvaluationContext&, std::vector<Node*>,
+	Result&);
+std::unordered_map<u32, FunctionEvaluate> FuncMap = {
+	{ LowerHash("Float2"), EvaluateFloat2 },
+	{ LowerHash("Float3"), EvaluateFloat3 },
+	{ LowerHash("Time"), EvaluateTime },
+	{ LowerHash("DisplaySize"), EvaluateDisplaySize },
+	{ LowerHash("LookAt"), EvaluateLookAt },
+	{ LowerHash("Projection"), EvaluateProjection },
+};
+
+void Function::Evaluate(const EvaluationContext& ec, Result& res) const
+{
+	u32 funcHash = LowerHash(Name.c_str());
+	AstAssert(this, FuncMap.count(funcHash) == 1, "No function named %s exists.",
+		Name.c_str());
+	FunctionEvaluate fi = FuncMap[funcHash];
+	fi(this, ec, Args, res);
+}
+
 
 #undef AstAssert
 

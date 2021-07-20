@@ -4,11 +4,12 @@ namespace rlf
 	struct ParseErrorState 
 	{
 		bool ParseSuccess;
-		std::string ErrorMessage;
+		ErrorInfo Info;
 	};
 
-	RenderDescription* ParseFile(
-		const char* filename,
+	RenderDescription* ParseBuffer(
+		const char* buffer,
+		u32 bufferSize,
 		const char* workingDir,
 		ParseErrorState* errorState);
 

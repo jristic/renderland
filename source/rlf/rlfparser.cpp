@@ -256,8 +256,8 @@ u32 LowerHash(const char* str, size_t len)
 
 struct BufferIter
 {
-	char* next;
-	char* end;
+	const char* next;
+	const char* end;
 };
 
 struct ParseState 
@@ -279,15 +279,14 @@ struct ParseState
 	std::unordered_map<BufferString, ObjImport*, BufferStringHash> objMap;
 	std::unordered_map<BufferString, Tuneable*, BufferStringHash> tuneMap;
 	std::unordered_map<u32, Keyword> keyMap;
-	ParseErrorState* es;
 
-	const char* filename;
 	const char* workingDirectory;
-	char* bufferStart;
 	Token fcLUT[128];
 } *GPS;
 
-struct ParseException {};
+struct ParseException {
+	ErrorInfo Info;
+};
 
 void ParserError(const char* str, ...)
 {
@@ -298,38 +297,11 @@ void ParserError(const char* str, ...)
 	va_end(ptr);
 
 	ParseState* ps = GPS;
-	ps->es->ParseSuccess = false;
-	ps->es->ErrorMessage = buf;
+	ParseException pe = {};
+	pe.Info.Location = ps->b.next;
+	pe.Info.Message = buf;
 
-	u32 line = 1;
-	u32 chr = 0;
-	char* lineStart = ps->bufferStart;
-	for (char* b = ps->bufferStart; b < ps->b.next ; ++b)
-	{
-		if (*b == '\n')
-		{
-			lineStart = b+1;
-			++line;
-			chr = 1;
-		}
-		else
-		{
-			++chr;
-		}
-	}
-
-	sprintf_s(buf, 512, "%s(%u,%u): error: ", ps->filename, line, chr);
-	ps->es->ErrorMessage = std::string(buf) + ps->es->ErrorMessage + "\n";
-
-	char* lineEnd = lineStart;
-	while (lineEnd < ps->b.end && *lineEnd != '\n')
-		++lineEnd;
-
-	sprintf_s(buf, 512, "line: %.*s", (u32)(lineEnd-lineStart), lineStart);
-	ps->es->ErrorMessage += buf;
-	ps->es->ErrorMessage += "\n";
-
-	throw ParseException();
+	throw pe;
 }
 
 #define ParserAssert(expression, message, ...) 	\
@@ -940,6 +912,7 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 		else if (tok == Token::Identifier)
 		{
 			ParserAssert(!ast, "expected op");
+			const char* loc = b.next;
 			BufferString id = ConsumeIdentifier(b);
 			if (TryConsumeToken(Token::LParen, b))
 			{
@@ -968,6 +941,7 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 				tr->Tune = ps.tuneMap[id];
 				ast = tr;
 			}
+			ast->Location = loc;
 		}
 		else if (tok == Token::Period)
 		{
@@ -975,6 +949,7 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 			ConsumeToken(Token::Period, b);
 			ast::Subscript* sub = AllocateAst<ast::Subscript>(ps.rd);
 			sub->Subject = ast;
+			sub->Location = b.next;
 			BufferString ss = ConsumeIdentifier(b);
 			Keyword ssKey = LookupKeyword(ss);
 			if (ssKey == Keyword::X)
@@ -991,29 +966,35 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 		}
 		else if (tok == Token::ForwardSlash)
 		{
+			const char* loc = b.next;
 			b = nb; //ConsumeToken(Token::ForwardSlash, b);
 			ParserAssert(ast, "expected value")
 			ast::Divide* div = AllocateAst<ast::Divide>(ps.rd);
 			div->Arg1 = ast;
 			div->Arg2 = ConsumeAst(b, ps);
+			div->Location = loc;
 			ast = div;
 		}
 		else if (tok == Token::Asterisk)
 		{
+			const char* loc = b.next;
 			b = nb; //ConsumeToken(Token::Asterisk, b);
 			ParserAssert(ast, "expected value")
 			ast::Multiply* mul = AllocateAst<ast::Multiply>(ps.rd);
 			mul->Arg1 = ast;
 			mul->Arg2 = ConsumeAst(b, ps);
+			mul->Location = loc;
 			ast = mul;
 		}
 		else if (tok == Token::Minus || tok == Token::FloatLiteral || 
 			tok == Token::IntegerLiteral)
 		{
 			ParserAssert(!ast, "expected op")
+			const char* loc = b.next;
 			float f = ConsumeFloatLiteral(b);
 			ast::FloatLiteral* fl = AllocateAst<ast::FloatLiteral>(ps.rd);
 			fl->Val = f;
+			fl->Location = loc;
 			ast = fl;
 		}
 		else
@@ -2411,54 +2392,33 @@ void ParseMain()
 }
 
 
-RenderDescription* ParseFile(
-	const char* filename,
+RenderDescription* ParseBuffer(
+	const char* buffer,
+	u32 bufferSize,
 	const char* workingDir,
-	ParseErrorState* errorState)
+	ParseErrorState* es)
 {
-	HANDLE rlf = fileio::OpenFileOptional(filename, GENERIC_READ);
-
-	if (rlf == INVALID_HANDLE_VALUE) // file not found
-	{
-		errorState->ParseSuccess = false;
-		errorState->ErrorMessage = std::string("Couldn't find ") + filename;
-		return nullptr;
-	}
-
-	u32 rlfSize = fileio::GetFileSize(rlf);
-
-	char* rlfBuffer = (char*)malloc(rlfSize);	
-	Assert(rlfBuffer != nullptr, "failed to alloc");
-
-	fileio::ReadFile(rlf, rlfBuffer, rlfSize);
-
-	CloseHandle(rlf);
-
 	ParseState ps;
 	ps.rd = new RenderDescription();
-	ps.es = errorState;
-	ps.b = { rlfBuffer, rlfBuffer + rlfSize };
-	ps.bufferStart = rlfBuffer;
-	ps.filename = filename;
+	ps.b = { buffer, buffer + bufferSize };
 	ps.workingDirectory = workingDir;
 	ParseStateInit(&ps);
 
 	GPS = &ps;
-	errorState->ParseSuccess = true;
+	es->ParseSuccess = true;
 
 	try {
 		ParseMain();
 	}
 	catch (ParseException pe)
 	{
-		(void)pe;
-		Assert(ps.es->ParseSuccess == false, "Error not set");
+		es->ParseSuccess = false;
+		es->Info = pe.Info;
 	}
 
 	GPS = nullptr;
-	free(rlfBuffer);
 
-	if (ps.es->ParseSuccess == false)
+	if (es->ParseSuccess == false)
 	{
 		ReleaseData(ps.rd);
 		return nullptr;

@@ -30,7 +30,7 @@ namespace rlf
 	struct ExecuteErrorState
 	{
 		bool ExecuteSuccess;
-		std::string ErrorMessage;
+		ErrorInfo Info;
 	};
 
 	void Execute(
