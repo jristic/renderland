@@ -8,6 +8,26 @@ float3 operator-(const float3& lhs, const float3& rhs)
 	return res;
 }
 
+float4 operator+(const float4& lhs, const float4& rhs)
+{
+	float4 res;
+	res.x = lhs.x + rhs.x;
+	res.y = lhs.y + rhs.y;
+	res.z = lhs.z + rhs.z;
+	res.w = lhs.w + rhs.w;
+	return res;
+}
+
+float4 operator-(const float4& lhs, const float4& rhs)
+{
+	float4 res;
+	res.x = lhs.x - rhs.x;
+	res.y = lhs.y - rhs.y;
+	res.z = lhs.z - rhs.z;
+	res.w = lhs.w - rhs.w;
+	return res;
+}
+
 float4 operator*(const float4& lhs, const float4& rhs)
 {
 	float4 res;
@@ -28,6 +48,26 @@ float4 operator/(const float4& lhs, const float4& rhs)
 	return res;
 }
 
+int4 operator+(const int4& lhs, const int4& rhs)
+{
+	int4 res;
+	res.x = lhs.x + rhs.x;
+	res.y = lhs.y + rhs.y;
+	res.z = lhs.z + rhs.z;
+	res.w = lhs.w + rhs.w;
+	return res;
+}
+
+int4 operator-(const int4& lhs, const int4& rhs)
+{
+	int4 res;
+	res.x = lhs.x - rhs.x;
+	res.y = lhs.y - rhs.y;
+	res.z = lhs.z - rhs.z;
+	res.w = lhs.w - rhs.w;
+	return res;
+}
+
 int4 operator*(const int4& lhs, const int4& rhs)
 {
 	int4 res;
@@ -45,6 +85,26 @@ int4 operator/(const int4& lhs, const int4& rhs)
 	res.y = lhs.y / rhs.y;
 	res.z = lhs.z / rhs.z;
 	res.w = lhs.w / rhs.w;
+	return res;
+}
+
+uint4 operator+(const uint4& lhs, const uint4& rhs)
+{
+	uint4 res;
+	res.x = lhs.x + rhs.x;
+	res.y = lhs.y + rhs.y;
+	res.z = lhs.z + rhs.z;
+	res.w = lhs.w + rhs.w;
+	return res;
+}
+
+uint4 operator-(const uint4& lhs, const uint4& rhs)
+{
+	uint4 res;
+	res.x = lhs.x - rhs.x;
+	res.y = lhs.y - rhs.y;
+	res.z = lhs.z - rhs.z;
+	res.w = lhs.w - rhs.w;
 	return res;
 }
 

@@ -27,6 +27,7 @@ namespace rlf
 	RLF_TOKEN_ENTRY(RBracket) \
 	RLF_TOKEN_ENTRY(Comma) \
 	RLF_TOKEN_ENTRY(Equals) \
+	RLF_TOKEN_ENTRY(Plus) \
 	RLF_TOKEN_ENTRY(Minus) \
 	RLF_TOKEN_ENTRY(Semicolon) \
 	RLF_TOKEN_ENTRY(At) \
@@ -342,6 +343,7 @@ void ParseStateInit(ParseState* ps)
 	fcLUT[']'] = Token::RBracket;
 	fcLUT[','] = Token::Comma;
 	fcLUT['='] = Token::Equals;
+	fcLUT['+'] = Token::Plus;
 	fcLUT['-'] = Token::Minus;
 	fcLUT[';'] = Token::Semicolon;
 	fcLUT['@'] = Token::At;
@@ -396,6 +398,7 @@ Token PeekNextToken(
 	case Token::RBracket:
 	case Token::Comma:
 	case Token::Equals:
+	case Token::Plus:
 	case Token::Minus:
 	case Token::Semicolon:
 	case Token::At:
@@ -905,7 +908,8 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 		BufferIter nb = b;
 		SkipWhitespace(nb);
 		Token tok = PeekNextToken(nb);
-		if (tok == Token::Comma || tok == Token::RParen || tok == Token::Semicolon)
+		if (tok == Token::Comma || tok == Token::RParen || tok == Token::Semicolon ||
+			tok == Token::RParen)
 		{
 			break;
 		}
@@ -964,27 +968,30 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 				ParserError("Unexpected subscript: %.*s", ss.len, ss.base);
 			ast = sub;
 		}
-		else if (tok == Token::ForwardSlash)
+		else if (tok == Token::Plus || tok == Token::Minus || tok == Token::Asterisk || 
+			tok == Token::ForwardSlash)
 		{
 			const char* loc = b.next;
-			b = nb; //ConsumeToken(Token::ForwardSlash, b);
+			b = nb; //ConsumeToken(tok, b);
 			ParserAssert(ast, "expected value")
-			ast::Divide* div = AllocateAst<ast::Divide>(ps.rd);
-			div->Arg1 = ast;
-			div->Arg2 = ConsumeAst(b, ps);
-			div->Location = loc;
-			ast = div;
-		}
-		else if (tok == Token::Asterisk)
-		{
-			const char* loc = b.next;
-			b = nb; //ConsumeToken(Token::Asterisk, b);
-			ParserAssert(ast, "expected value")
-			ast::Multiply* mul = AllocateAst<ast::Multiply>(ps.rd);
-			mul->Arg1 = ast;
-			mul->Arg2 = ConsumeAst(b, ps);
-			mul->Location = loc;
-			ast = mul;
+			ast::BinaryOp* bop = AllocateAst<ast::BinaryOp>(ps.rd);
+			bop->Arg1 = ast;
+			bop->Arg2 = ConsumeAst(b, ps);
+			switch (tok)
+			{
+			case Token::Plus:
+				bop->OpType = ast::BinaryOp::Type::Add; break;
+			case Token::Minus:
+				bop->OpType = ast::BinaryOp::Type::Subtract; break;
+			case Token::Asterisk:
+				bop->OpType = ast::BinaryOp::Type::Multiply; break;
+			case Token::ForwardSlash:
+				bop->OpType = ast::BinaryOp::Type::Divide; break;
+			default:
+				Unimplemented();
+			}
+			bop->Location = loc;
+			ast = bop;
 		}
 		else if (tok == Token::Minus || tok == Token::FloatLiteral || 
 			tok == Token::IntegerLiteral)
@@ -996,6 +1003,13 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 			fl->Val = f;
 			fl->Location = loc;
 			ast = fl;
+		}
+		else if (tok == Token::LParen)
+		{
+			ParserAssert(!ast, "expected op")
+			b = nb; //ConsumeToken(Token::LParen, b);
+			ast = ConsumeAst(b, ps);
+			ConsumeToken(Token::RParen, b);
 		}
 		else
 			ParserError("Unexpected token given: %s", TokenNames[(u32)tok]);

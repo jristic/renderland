@@ -47,18 +47,15 @@ struct Subscript : Node
 	u32 Index;
 };
 
-struct Multiply : Node
+struct BinaryOp : Node
 {
+	enum class Type {
+		Add, Subtract, Multiply, Divide
+	};
 	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
 	Node* Arg1;
 	Node* Arg2;
-};
-
-struct Divide : Node
-{
-	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
-	Node* Arg1;
-	Node* Arg2;
+	Type OpType;
 };
 
 struct TuneableRef : Node

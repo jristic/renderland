@@ -207,6 +207,97 @@ void Convert(Result& res, VariableFormat fmt)
 	}
 }
 
+void OperatorAdd(const Node* n, const Result& arg1, const Result& arg2, Result& res)
+{
+	switch (res.Type.Fmt)
+	{
+	case VariableFormat::Float:
+		res.Value.Float4Val = arg1.Value.Float4Val + arg2.Value.Float4Val;
+		break;
+	case VariableFormat::Int:
+		res.Value.Int4Val = arg1.Value.Int4Val + arg2.Value.Int4Val;
+		break;
+	case VariableFormat::Uint:
+		res.Value.Uint4Val = arg1.Value.Uint4Val + arg2.Value.Uint4Val;
+		break;
+	case VariableFormat::Bool:
+		AstError(n, "Bool add has not been defined");
+		break;
+	default:
+		Unimplemented();
+	}
+}
+
+void OperatorSubtract(const Node* n, const Result& arg1, const Result& arg2, Result& res)
+{
+	switch (res.Type.Fmt)
+	{
+	case VariableFormat::Float:
+		res.Value.Float4Val = arg1.Value.Float4Val - arg2.Value.Float4Val;
+		break;
+	case VariableFormat::Int:
+		res.Value.Int4Val = arg1.Value.Int4Val - arg2.Value.Int4Val;
+		break;
+	case VariableFormat::Uint:
+		res.Value.Uint4Val = arg1.Value.Uint4Val - arg2.Value.Uint4Val;
+		break;
+	case VariableFormat::Bool:
+		AstError(n, "Bool subtract has not been defined");
+		break;
+	default:
+		Unimplemented();
+	}
+}
+
+void OperatorMultiply(const Node* n, const Result& arg1, const Result& arg2, Result& res)
+{
+	switch (res.Type.Fmt)
+	{
+	case VariableFormat::Float:
+		res.Value.Float4Val = arg1.Value.Float4Val * arg2.Value.Float4Val;
+		break;
+	case VariableFormat::Int:
+		res.Value.Int4Val = arg1.Value.Int4Val * arg2.Value.Int4Val;
+		break;
+	case VariableFormat::Uint:
+		res.Value.Uint4Val = arg1.Value.Uint4Val * arg2.Value.Uint4Val;
+		break;
+	case VariableFormat::Bool:
+		AstError(n, "Bool multiply has not been defined");
+		break;
+	default:
+		Unimplemented();
+	}
+}
+
+void OperatorDivide(const Node* n, const Result& arg1, const Result& arg2, Result& res)
+{
+	for (u32 i = 0 ; i < res.Type.Dim ; ++i)
+	{
+		switch (res.Type.Fmt)
+		{
+		case VariableFormat::Int:
+			AstAssert(n, arg2.Value.Int4Val.m[i] != 0, "Divide by zero");
+			res.Value.Int4Val.m[i] = arg1.Value.Int4Val.m[i] / 
+				arg2.Value.Int4Val.m[i];
+			break;
+		case VariableFormat::Uint:
+			AstAssert(n, arg2.Value.Uint4Val.m[i] != 0, "Divide by zero");
+			res.Value.Uint4Val.m[i] = arg1.Value.Uint4Val.m[i] / 
+				arg2.Value.Uint4Val.m[i];
+			break;
+		case VariableFormat::Float:
+			AstAssert(n, arg2.Value.Float4Val.m[i] != 0.f, "Divide by zero");
+			res.Value.Float4Val.m[i] = arg1.Value.Float4Val.m[i] / 
+				arg2.Value.Float4Val.m[i];
+			break;
+		case VariableFormat::Bool:
+		default:
+			Unimplemented();
+		}
+	}
+}
+
 // -----------------------------------------------------------------------------
 // ------------------------------ NODE EVALS -----------------------------------
 // -----------------------------------------------------------------------------
@@ -238,7 +329,7 @@ void Subscript::Evaluate(const EvaluationContext& ec, Result& res) const
 		Unimplemented();
 }
 
-void Multiply::Evaluate(const EvaluationContext& ec, Result& res) const
+void BinaryOp::Evaluate(const EvaluationContext& ec, Result& res) const
 {
 	Result arg1Res, arg2Res;
 	Arg1->Evaluate(ec, arg1Res);
@@ -246,6 +337,7 @@ void Multiply::Evaluate(const EvaluationContext& ec, Result& res) const
 	if (arg1Res.Type.Fmt == VariableFormat::Float4x4 ||
 		arg2Res.Type.Fmt == VariableFormat::Float4x4)
 	{
+		AstAssert(this, OpType == Type::Multiply, "Matrices can only be multiplied");
 		AstAssert(this, arg1Res.Type.Fmt == VariableFormat::Float4x4 &&
 			arg2Res.Type.Fmt == VariableFormat::Float4x4, 
 			"Matrix types can only be multiplied with other Matrix types");
@@ -253,71 +345,29 @@ void Multiply::Evaluate(const EvaluationContext& ec, Result& res) const
 		res.Value.Float4x4Val = arg1Res.Value.Float4x4Val * arg2Res.Value.Float4x4Val;
 		return;
 	}
+	if (OpType == Type::Divide)
+	{
+		AstAssert(this, arg1Res.Type.Fmt != VariableFormat::Bool && 
+			arg2Res.Type.Fmt != VariableFormat::Bool,
+			"Bool types not supported in divides.");
+	}
 	VariableType outType = DetermineResultType(this, arg1Res.Type, arg2Res.Type);
 	Expand(arg1Res);
 	Expand(arg2Res);
 	Convert(arg1Res, outType.Fmt);
 	Convert(arg2Res, outType.Fmt);
 	res.Type = outType;
-	switch (outType.Fmt)
-	{
-	case VariableFormat::Float:
-		res.Value.Float4Val = arg1Res.Value.Float4Val * arg2Res.Value.Float4Val;
-		break;
-	case VariableFormat::Int:
-		res.Value.Int4Val = arg1Res.Value.Int4Val * arg2Res.Value.Int4Val;
-		break;
-	case VariableFormat::Uint:
-		res.Value.Uint4Val = arg1Res.Value.Uint4Val * arg2Res.Value.Uint4Val;
-		break;
-	case VariableFormat::Bool:
-		AstError(this, "Bool multiply has not been defined");
-		break;
-	default:
+	if (OpType == Type::Add)
+		OperatorAdd(this, arg1Res, arg2Res, res);
+	else if (OpType == Type::Subtract)
+		OperatorSubtract(this, arg1Res, arg2Res, res);
+	else if (OpType == Type::Multiply)
+		OperatorMultiply(this, arg1Res, arg2Res, res);
+	else if (OpType == Type::Divide)
+		OperatorDivide(this, arg1Res, arg2Res, res);
+	else
 		Unimplemented();
-	}
-}
 
-void Divide::Evaluate(const EvaluationContext& ec, Result& res) const
-{
-	Result arg1Res, arg2Res;
-	Arg1->Evaluate(ec, arg1Res);
-	Arg2->Evaluate(ec, arg2Res);
-	AstAssert(this, arg1Res.Type.Fmt != VariableFormat::Float4x4 && 
-		arg2Res.Type.Fmt != VariableFormat::Float4x4,
-		"Matrix types not supported in divides.");
-	AstAssert(this, arg1Res.Type.Fmt != VariableFormat::Bool && 
-		arg2Res.Type.Fmt != VariableFormat::Bool,
-		"Bool types not supported in divides.");
-	VariableType outType = DetermineResultType(this, arg1Res.Type, arg2Res.Type);
-	Expand(arg1Res);
-	Expand(arg2Res);
-	Convert(arg1Res, outType.Fmt);
-	Convert(arg2Res, outType.Fmt);
-	res.Type = outType;
-	for (u32 i = 0 ; i < outType.Dim ; ++i)
-	{
-		switch (outType.Fmt)
-		{
-		case VariableFormat::Int:
-			AstAssert(this, arg2Res.Value.Int4Val.m[i] != 0, "Divide by zero");
-			res.Value.Int4Val.m[i] = arg1Res.Value.Int4Val.m[i] / 
-				arg2Res.Value.Int4Val.m[i];
-			break;
-		case VariableFormat::Uint:
-			AstAssert(this, arg2Res.Value.Uint4Val.m[i] != 0, "Divide by zero");
-			res.Value.Uint4Val.m[i] = arg1Res.Value.Uint4Val.m[i] / 
-				arg2Res.Value.Uint4Val.m[i];
-			break;
-		case VariableFormat::Float:
-			AstAssert(this, arg2Res.Value.Float4Val.m[i] != 0.f, "Divide by zero");
-			res.Value.Float4Val.m[i] = arg1Res.Value.Float4Val.m[i] / 
-				arg2Res.Value.Float4Val.m[i];
-			break;
-		default:
-			Unimplemented();
-		}
-	}
 }
 
 void TuneableRef::Evaluate(const EvaluationContext&, Result& res) const
