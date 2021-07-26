@@ -45,10 +45,16 @@ do {												\
 
 
 
-void Expect(const Node* n, VariableType type, Result& res, const char* name)
+void ExpectFmt(const Node* n, VariableFormat fmt, Result& res, const char* name)
 {
-	AstAssert(n, res.Type == type, "Expected %s to be type %s but got %s.",
-		name, TypeToString(type), TypeToString(res.Type));
+	AstAssert(n, res.Type.Fmt == fmt, "Expected %s to be type %s but got %s.",
+		name, TypeFmtToString(fmt), TypeFmtToString(res.Type.Fmt));
+}
+
+void ExpectDim(const Node* n, u32 dim, Result& res, const char* name)
+{
+	AstAssert(n, res.Type.Dim == dim, "Expected %s to be size %u but got %u.",
+		name, dim, res.Type.Dim);
 }
 
 VariableType DetermineResultType(const Node* n, VariableType t1, VariableType t2)
@@ -311,22 +317,15 @@ void Subscript::Evaluate(const EvaluationContext& ec, Result& res) const
 {
 	Result subjectRes;
 	Subject->Evaluate(ec, subjectRes);
-	AstAssert(this, subjectRes.Type.Fmt != VariableFormat::Bool,
-		"Subscripts aren't usable on bool types");
 	AstAssert(this, Index <= subjectRes.Type.Dim, "Invalid subscript for this type");
 	AstAssert(this, subjectRes.Type.Fmt != VariableFormat::Float4x4,
 		"Subscripts aren't usable on Matrix types");
-	res.Type = FloatType;
-	if (Index == 0)
-		res.Value.FloatVal = subjectRes.Value.Float4Val.x;
-	else if (Index == 1)
-		res.Value.FloatVal = subjectRes.Value.Float4Val.y;
-	else if (Index == 2)
-		res.Value.FloatVal = subjectRes.Value.Float4Val.z;
-	else if (Index == 3)
-		res.Value.FloatVal = subjectRes.Value.Float4Val.w;
-	else
-		Unimplemented();
+	res.Type.Fmt = subjectRes.Type.Fmt;
+	res.Type.Dim = 1;
+	Assert(Index < 4, "Invalid subscript");
+	u8* src = ((u8*)&subjectRes.Value) + 4*Index;
+	u8* dest = (u8*)&res.Value;
+	memcpy(dest, src, 4);
 }
 
 void Group::Evaluate(const EvaluationContext& ec, Result& res) const
@@ -400,9 +399,12 @@ void EvaluateFloat3(const Node* n, const EvaluationContext& ec, std::vector<Node
 	args[0]->Evaluate(ec, resX);
 	args[1]->Evaluate(ec, resY);
 	args[2]->Evaluate(ec, resZ);
-	Expect(n, FloatType, resX, "arg1");
-	Expect(n, FloatType, resY, "arg2");
-	Expect(n, FloatType, resZ, "arg3");
+	ExpectDim(n, 1, resX, "arg1");
+	ExpectDim(n, 1, resY, "arg2");
+	ExpectDim(n, 1, resZ, "arg3");
+	Convert(resX, VariableFormat::Float);
+	Convert(resY, VariableFormat::Float);
+	Convert(resZ, VariableFormat::Float);
 	res.Type = Float3Type;
 	res.Value.Float3Val.x = resX.Value.FloatVal;
 	res.Value.Float3Val.y = resY.Value.FloatVal;
@@ -416,8 +418,10 @@ void EvaluateFloat2(const Node* n, const EvaluationContext& ec, std::vector<Node
 	Result resX, resY, resZ;
 	args[0]->Evaluate(ec, resX);
 	args[1]->Evaluate(ec, resY);
-	Expect(n, FloatType, resX, "arg1");
-	Expect(n, FloatType, resY, "arg2");
+	ExpectDim(n, 1, resX, "arg1");
+	ExpectDim(n, 1, resY, "arg2");
+	Convert(resX, VariableFormat::Float);
+	Convert(resY, VariableFormat::Float);
 	res.Type = Float2Type;
 	res.Value.Float3Val.x = resX.Value.FloatVal;
 	res.Value.Float3Val.y = resY.Value.FloatVal;
@@ -447,8 +451,10 @@ void EvaluateLookAt(const Node* n, const EvaluationContext& ec, std::vector<Node
 	Result fromRes, toRes;
 	args[0]->Evaluate(ec, fromRes);
 	args[1]->Evaluate(ec, toRes);
-	Expect(n, Float3Type, fromRes, "arg1 (from)");
-	Expect(n, Float3Type, toRes, "arg2 (to)");
+	ExpectDim(n, 3, fromRes, "arg1 (from)");
+	ExpectDim(n, 3, toRes, "arg2 (to)");
+	Convert(fromRes, VariableFormat::Float);
+	Convert(toRes, VariableFormat::Float);
 	res.Type = Float4x4Type;
 	res.Value.Float4x4Val = lookAt(fromRes.Value.Float3Val, toRes.Value.Float3Val);
 }
@@ -462,10 +468,14 @@ void EvaluateProjection(const Node* n, const EvaluationContext& ec, std::vector<
 	args[1]->Evaluate(ec, aspectRes);
 	args[2]->Evaluate(ec, nearRes);
 	args[3]->Evaluate(ec, farRes);
-	Expect(n, FloatType, fovRes, "arg1 (fov)");
-	Expect(n, FloatType, aspectRes, "arg2 (aspect)");
-	Expect(n, FloatType, nearRes, "arg3 (znear)");
-	Expect(n, FloatType, farRes, "arg4 (zfar)");
+	ExpectDim(n, 1, fovRes, "arg1 (fov)");
+	ExpectDim(n, 1, aspectRes, "arg2 (aspect)");
+	ExpectDim(n, 1, nearRes, "arg3 (znear)");
+	ExpectDim(n, 1, farRes, "arg4 (zfar)");
+	Convert(fovRes, VariableFormat::Float);
+	Convert(aspectRes, VariableFormat::Float);
+	Convert(nearRes, VariableFormat::Float);
+	Convert(farRes, VariableFormat::Float);
 	res.Type = Float4x4Type;
 	res.Value.Float4x4Val = projection(fovRes.Value.FloatVal, aspectRes.Value.FloatVal, 
 		nearRes.Value.FloatVal, farRes.Value.FloatVal);

@@ -922,19 +922,17 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 			{
 				ast::Function* func = AllocateAst<ast::Function>(ps.rd);
 				func->Name = std::string(id.base, id.len);
-				while (true)
+				if (!TryConsumeToken(Token::RParen, b))
 				{
-					ast::Node* arg = ConsumeAst(b, ps);
-					if (arg)
+					while (true)
 					{
+						ast::Node* arg = ConsumeAst(b, ps);
 						func->Args.push_back(arg);
 						if (!TryConsumeToken(Token::Comma, b))
 							break;
 					}
-					else
-						break;
+					ConsumeToken(Token::RParen, b);
 				}
-				ConsumeToken(Token::RParen, b);
 				ast = func;
 			}
 			else
@@ -1033,7 +1031,7 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 		else
 			ParserError("Unexpected token given: %s", TokenNames[(u32)tok]);
 	}
-
+	ParserAssert(ast, "No expression given.");
 	return ast;
 }
 

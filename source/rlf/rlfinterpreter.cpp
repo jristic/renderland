@@ -870,8 +870,10 @@ void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets,
 		// ExecuteAssert(set.Type == res.Type, 
 		// 	"SetConstant %s does not match type, expected=%s got=%s",
 		// 	set.VariableName, TypeToString(set.Type), TypeToString(res.Type));
-		if (res.Type == BoolType)
-			*(u32*)(set.CB->BackingMemory+set.Offset) = res.Value.BoolVal ? 1 : 0;
+		if (res.Type.Fmt == VariableFormat::Bool)
+			for (u32 i = 0 ; i < res.Type.Dim ; ++i)
+				*(((u32*)(set.CB->BackingMemory+set.Offset)) + i) = 
+					res.Value.Bool4Val.m[i] ? 1 : 0;
 		else
 			memcpy(set.CB->BackingMemory+set.Offset, &res.Value, typeSize);
 	}

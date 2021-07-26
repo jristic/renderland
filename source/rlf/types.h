@@ -61,7 +61,7 @@ namespace rlf
 		};
 	};
 
-	const char* TypeToString(VariableType type)
+	const char* TypeFmtToString(VariableFormat fmt)
 	{
 		const char* names[] = {
 			"Bool",
@@ -70,7 +70,7 @@ namespace rlf
 			"Float",
 			"Float4x4",
 		};
-		return names[(u32)type.Fmt];
+		return names[(u32)fmt];
 	}
 
 	struct ErrorInfo
