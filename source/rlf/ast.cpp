@@ -333,52 +333,78 @@ void Group::Evaluate(const EvaluationContext& ec, Result& res) const
 	Sub->Evaluate(ec, res);
 }
 
-void BinaryOp::Evaluate(const EvaluationContext& ec, Result& res) const
+void BinaryOp::Evaluate(const EvaluationContext& ec, Result& outRes) const
 {
 	Assert(Ops.size() == Args.size() - 1, "Mismatched params");
-	Args.back()->Evaluate(ec, res);
-	for (size_t i = 0 ; i < Ops.size() ; ++i)
+	std::vector<Result> results(Args.size());
+	std::vector<Type> ops(Ops.rbegin(), Ops.rend());
+	for (size_t i = 0 ; i < Args.size() ; ++i)
 	{
-		i32 index = ((i32)Ops.size()) - 1 - (i32)i;
-		Type OpType = Ops[index];
-		Node* Arg2 = Args[index];
-		Result arg1Res, arg2Res;
-		arg1Res = res;
-		Arg2->Evaluate(ec, arg2Res);
-		if (arg1Res.Type.Fmt == VariableFormat::Float4x4 ||
-			arg2Res.Type.Fmt == VariableFormat::Float4x4)
-		{
-			AstAssert(this, OpType == Type::Multiply, "Matrices can only be multiplied");
-			AstAssert(this, arg1Res.Type.Fmt == VariableFormat::Float4x4 &&
-				arg2Res.Type.Fmt == VariableFormat::Float4x4, 
-				"Matrix types can only be multiplied with other Matrix types");
-			res.Type = Float4x4Type;
-			res.Value.Float4x4Val = arg1Res.Value.Float4x4Val * arg2Res.Value.Float4x4Val;
-			continue;
-		}
-		if (OpType == Type::Divide)
-		{
-			AstAssert(this, arg1Res.Type.Fmt != VariableFormat::Bool && 
-				arg2Res.Type.Fmt != VariableFormat::Bool,
-				"Bool types not supported in divides.");
-		}
-		VariableType outType = DetermineResultType(this, arg1Res.Type, arg2Res.Type);
-		Expand(arg1Res);
-		Expand(arg2Res);
-		Convert(arg1Res, outType.Fmt);
-		Convert(arg2Res, outType.Fmt);
-		res.Type = outType;
-		if (OpType == Type::Add)
-			OperatorAdd(this, arg1Res, arg2Res, res);
-		else if (OpType == Type::Subtract)
-			OperatorSubtract(this, arg1Res, arg2Res, res);
-		else if (OpType == Type::Multiply)
-			OperatorMultiply(this, arg1Res, arg2Res, res);
-		else if (OpType == Type::Divide)
-			OperatorDivide(this, arg1Res, arg2Res, res);
-		else
-			Unimplemented();
+		Node* arg = Args[Args.size() - 1 - i];
+		arg->Evaluate(ec, results[i]);
 	}
+
+	std::pair<Type,Type> OpPhase[] = {
+		{ Type::Multiply, Type::Divide },
+		{ Type::Add, Type::Subtract },
+	};
+	
+	for (u32 p = 0 ; p < 2 ; ++p)
+	{
+		auto phase = OpPhase[p];
+		for (size_t i = 0 ; i < ops.size() ; )
+		{
+			Type OpType = ops[i];
+			if (OpType != phase.first && OpType != phase.second)
+			{
+				++i;
+				continue;
+			}
+			Result res, arg1Res, arg2Res;
+			arg1Res = results[i];
+			arg2Res = results[i+1];
+			if (arg1Res.Type.Fmt == VariableFormat::Float4x4 ||
+				arg2Res.Type.Fmt == VariableFormat::Float4x4)
+			{
+				AstAssert(this, OpType == Type::Multiply, "Matrices can only be multiplied");
+				AstAssert(this, arg1Res.Type.Fmt == VariableFormat::Float4x4 &&
+					arg2Res.Type.Fmt == VariableFormat::Float4x4, 
+					"Matrix types can only be multiplied with other Matrix types");
+				res.Type = Float4x4Type;
+				res.Value.Float4x4Val = arg1Res.Value.Float4x4Val * arg2Res.Value.Float4x4Val;
+			}
+			else
+			{
+				if (OpType == Type::Divide)
+				{
+					AstAssert(this, arg1Res.Type.Fmt != VariableFormat::Bool && 
+						arg2Res.Type.Fmt != VariableFormat::Bool,
+						"Bool types not supported in divides.");
+				}
+				VariableType outType = DetermineResultType(this, arg1Res.Type, arg2Res.Type);
+				Expand(arg1Res);
+				Expand(arg2Res);
+				Convert(arg1Res, outType.Fmt);
+				Convert(arg2Res, outType.Fmt);
+				res.Type = outType;
+				if (OpType == Type::Add)
+					OperatorAdd(this, arg1Res, arg2Res, res);
+				else if (OpType == Type::Subtract)
+					OperatorSubtract(this, arg1Res, arg2Res, res);
+				else if (OpType == Type::Multiply)
+					OperatorMultiply(this, arg1Res, arg2Res, res);
+				else if (OpType == Type::Divide)
+					OperatorDivide(this, arg1Res, arg2Res, res);
+				else
+					Unimplemented();
+			}
+			results[i+1] = res;
+			results.erase(results.begin()+i);
+			ops.erase(ops.begin()+i);
+		}
+	}
+	Assert(results.size() == 1, "Should have been reduced to just one result");
+	outRes = results.front();
 }
 
 void TuneableRef::Evaluate(const EvaluationContext&, Result& res) const
