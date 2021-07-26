@@ -50,7 +50,7 @@ DrawIndexed {
 		DepthFunc = Greater;
 	};
 	SetConstantVs Matrix = 
-		projection(3.14/2, DisplaySize().x / DisplaySize().y, 10, 0.1)
+		projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 10, 0.1)
 		* 
 		lookAt(float3(2,0,0), float3(0,0,0));
 } objDraw

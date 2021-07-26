@@ -391,6 +391,33 @@ void TuneableRef::Evaluate(const EvaluationContext&, Result& res) const
 // -----------------------------------------------------------------------------
 // ------------------------------ FUNCTION EVALS -------------------------------
 // -----------------------------------------------------------------------------
+void EvaluateFloat(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
+{
+	AstAssert(n, args.size() == 1, "Float2 takes 1 param.");
+	Result resX;
+	args[0]->Evaluate(ec, resX);
+	ExpectDim(n, 1, resX, "arg1");
+	Convert(resX, VariableFormat::Float);
+	res.Type = FloatType;
+	res.Value.FloatVal = resX.Value.FloatVal;
+}
+void EvaluateFloat2(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
+{
+	AstAssert(n, args.size() == 2, "Float2 takes 2 params.");
+	Result resX, resY;
+	args[0]->Evaluate(ec, resX);
+	args[1]->Evaluate(ec, resY);
+	ExpectDim(n, 1, resX, "arg1");
+	ExpectDim(n, 1, resY, "arg2");
+	Convert(resX, VariableFormat::Float);
+	Convert(resY, VariableFormat::Float);
+	res.Type = Float2Type;
+	res.Value.Float2Val.x = resX.Value.FloatVal;
+	res.Value.Float2Val.y = resY.Value.FloatVal;
+}
+
 void EvaluateFloat3(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
 	Result& res)
 {
@@ -409,22 +436,6 @@ void EvaluateFloat3(const Node* n, const EvaluationContext& ec, std::vector<Node
 	res.Value.Float3Val.x = resX.Value.FloatVal;
 	res.Value.Float3Val.y = resY.Value.FloatVal;
 	res.Value.Float3Val.z = resZ.Value.FloatVal;
-}
-
-void EvaluateFloat2(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
-	Result& res)
-{
-	AstAssert(n, args.size() == 2, "Float2 takes 3 params.");
-	Result resX, resY, resZ;
-	args[0]->Evaluate(ec, resX);
-	args[1]->Evaluate(ec, resY);
-	ExpectDim(n, 1, resX, "arg1");
-	ExpectDim(n, 1, resY, "arg2");
-	Convert(resX, VariableFormat::Float);
-	Convert(resY, VariableFormat::Float);
-	res.Type = Float2Type;
-	res.Value.Float3Val.x = resX.Value.FloatVal;
-	res.Value.Float3Val.y = resY.Value.FloatVal;
 }
 
 void EvaluateTime(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
@@ -496,6 +507,7 @@ u32 LowerHash(const char* str)
 typedef void (*FunctionEvaluate)(const Node*, const EvaluationContext&, std::vector<Node*>,
 	Result&);
 std::unordered_map<u32, FunctionEvaluate> FuncMap = {
+	{ LowerHash("Float"), EvaluateFloat },
 	{ LowerHash("Float2"), EvaluateFloat2 },
 	{ LowerHash("Float3"), EvaluateFloat3 },
 	{ LowerHash("Time"), EvaluateTime },
