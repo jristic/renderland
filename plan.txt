@@ -24,7 +24,7 @@
 	* Tuneables: Specify shader parameters in the RLF and allow tuning via the imgui display.
 		* Support vector tuneables, including with the color editor. 
 	* future: Expand to allow declaring vars like floats, ints, vectors, matrices in RLF, reference them for SetConstants
-	* FIX: GEDMAS order of operations, left to right order of operations. 
+	* FIX: GEDMAS order of operations. 
 
 **** Expand draw pipeline support.
 	* Render to texture

@@ -1004,6 +1004,7 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 				bop->Args.push_back(ast);
 				bop->Ops.push_back(op);
 				bop->Location = loc; // TODO: location per operator
+				bop->Spec = ast::Node::Special::Operator;
 				ast = bop;
 			}
 			else
