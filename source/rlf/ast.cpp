@@ -329,45 +329,57 @@ void Subscript::Evaluate(const EvaluationContext& ec, Result& res) const
 		Unimplemented();
 }
 
+void Group::Evaluate(const EvaluationContext& ec, Result& res) const
+{
+	Sub->Evaluate(ec, res);
+}
+
 void BinaryOp::Evaluate(const EvaluationContext& ec, Result& res) const
 {
-	Result arg1Res, arg2Res;
-	Arg1->Evaluate(ec, arg1Res);
-	Arg2->Evaluate(ec, arg2Res);
-	if (arg1Res.Type.Fmt == VariableFormat::Float4x4 ||
-		arg2Res.Type.Fmt == VariableFormat::Float4x4)
+	Assert(Ops.size() == Args.size() - 1, "Mismatched params");
+	Args.back()->Evaluate(ec, res);
+	for (size_t i = 0 ; i < Ops.size() ; ++i)
 	{
-		AstAssert(this, OpType == Type::Multiply, "Matrices can only be multiplied");
-		AstAssert(this, arg1Res.Type.Fmt == VariableFormat::Float4x4 &&
-			arg2Res.Type.Fmt == VariableFormat::Float4x4, 
-			"Matrix types can only be multiplied with other Matrix types");
-		res.Type = Float4x4Type;
-		res.Value.Float4x4Val = arg1Res.Value.Float4x4Val * arg2Res.Value.Float4x4Val;
-		return;
+		i32 index = ((i32)Ops.size()) - 1 - (i32)i;
+		Type OpType = Ops[index];
+		Node* Arg2 = Args[index];
+		Result arg1Res, arg2Res;
+		arg1Res = res;
+		Arg2->Evaluate(ec, arg2Res);
+		if (arg1Res.Type.Fmt == VariableFormat::Float4x4 ||
+			arg2Res.Type.Fmt == VariableFormat::Float4x4)
+		{
+			AstAssert(this, OpType == Type::Multiply, "Matrices can only be multiplied");
+			AstAssert(this, arg1Res.Type.Fmt == VariableFormat::Float4x4 &&
+				arg2Res.Type.Fmt == VariableFormat::Float4x4, 
+				"Matrix types can only be multiplied with other Matrix types");
+			res.Type = Float4x4Type;
+			res.Value.Float4x4Val = arg1Res.Value.Float4x4Val * arg2Res.Value.Float4x4Val;
+			continue;
+		}
+		if (OpType == Type::Divide)
+		{
+			AstAssert(this, arg1Res.Type.Fmt != VariableFormat::Bool && 
+				arg2Res.Type.Fmt != VariableFormat::Bool,
+				"Bool types not supported in divides.");
+		}
+		VariableType outType = DetermineResultType(this, arg1Res.Type, arg2Res.Type);
+		Expand(arg1Res);
+		Expand(arg2Res);
+		Convert(arg1Res, outType.Fmt);
+		Convert(arg2Res, outType.Fmt);
+		res.Type = outType;
+		if (OpType == Type::Add)
+			OperatorAdd(this, arg1Res, arg2Res, res);
+		else if (OpType == Type::Subtract)
+			OperatorSubtract(this, arg1Res, arg2Res, res);
+		else if (OpType == Type::Multiply)
+			OperatorMultiply(this, arg1Res, arg2Res, res);
+		else if (OpType == Type::Divide)
+			OperatorDivide(this, arg1Res, arg2Res, res);
+		else
+			Unimplemented();
 	}
-	if (OpType == Type::Divide)
-	{
-		AstAssert(this, arg1Res.Type.Fmt != VariableFormat::Bool && 
-			arg2Res.Type.Fmt != VariableFormat::Bool,
-			"Bool types not supported in divides.");
-	}
-	VariableType outType = DetermineResultType(this, arg1Res.Type, arg2Res.Type);
-	Expand(arg1Res);
-	Expand(arg2Res);
-	Convert(arg1Res, outType.Fmt);
-	Convert(arg2Res, outType.Fmt);
-	res.Type = outType;
-	if (OpType == Type::Add)
-		OperatorAdd(this, arg1Res, arg2Res, res);
-	else if (OpType == Type::Subtract)
-		OperatorSubtract(this, arg1Res, arg2Res, res);
-	else if (OpType == Type::Multiply)
-		OperatorMultiply(this, arg1Res, arg2Res, res);
-	else if (OpType == Type::Divide)
-		OperatorDivide(this, arg1Res, arg2Res, res);
-	else
-		Unimplemented();
-
 }
 
 void TuneableRef::Evaluate(const EvaluationContext&, Result& res) const

@@ -972,26 +972,42 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 			tok == Token::ForwardSlash)
 		{
 			const char* loc = b.next;
-			b = nb; //ConsumeToken(tok, b);
 			ParserAssert(ast, "expected value")
-			ast::BinaryOp* bop = AllocateAst<ast::BinaryOp>(ps.rd);
-			bop->Arg1 = ast;
-			bop->Arg2 = ConsumeAst(b, ps);
+			b = nb; //ConsumeToken(tok, b);
+			ast::Node* arg2 = ConsumeAst(b,ps);
+			ast::BinaryOp::Type op;
 			switch (tok)
 			{
 			case Token::Plus:
-				bop->OpType = ast::BinaryOp::Type::Add; break;
+				op = ast::BinaryOp::Type::Add; break;
 			case Token::Minus:
-				bop->OpType = ast::BinaryOp::Type::Subtract; break;
+				op = ast::BinaryOp::Type::Subtract; break;
 			case Token::Asterisk:
-				bop->OpType = ast::BinaryOp::Type::Multiply; break;
+				op = ast::BinaryOp::Type::Multiply; break;
 			case Token::ForwardSlash:
-				bop->OpType = ast::BinaryOp::Type::Divide; break;
+				op = ast::BinaryOp::Type::Divide; break;
 			default:
 				Unimplemented();
 			}
-			bop->Location = loc;
-			ast = bop;
+			if (arg2->Spec == ast::Node::Special::Operator)
+			{
+				ast::BinaryOp* bop = static_cast<ast::BinaryOp*>(arg2);
+				bop->Args.push_back(ast);
+				bop->Ops.push_back(op);
+				bop->Location = loc; // TODO: location per operator
+				ast = bop;	
+			}
+			else if (arg2->Spec == ast::Node::Special::None)
+			{
+				ast::BinaryOp* bop = AllocateAst<ast::BinaryOp>(ps.rd);
+				bop->Args.push_back(arg2);
+				bop->Args.push_back(ast);
+				bop->Ops.push_back(op);
+				bop->Location = loc; // TODO: location per operator
+				ast = bop;
+			}
+			else
+				Unimplemented();
 		}
 		else if (tok == Token::Minus || tok == Token::FloatLiteral || 
 			tok == Token::IntegerLiteral)
@@ -1008,7 +1024,9 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 		{
 			ParserAssert(!ast, "expected op")
 			b = nb; //ConsumeToken(Token::LParen, b);
-			ast = ConsumeAst(b, ps);
+			ast::Group* grp = AllocateAst<ast::Group>(ps.rd);
+			grp->Sub = ConsumeAst(b, ps);
+			ast = grp;
 			ConsumeToken(Token::RParen, b);
 		}
 		else

@@ -23,9 +23,14 @@ struct EvaluateErrorState
 
 struct Node 
 {
-	virtual void Evaluate(const EvaluationContext& ec, Result& res) const = 0;
-	virtual ~Node() {}
+	enum class Special {
+		None,
+		Operator,
+	} Spec;
 	const char* Location;
+	Node() : Spec(Special::None) {}
+	virtual ~Node() {}
+	virtual void Evaluate(const EvaluationContext& ec, Result& res) const = 0;
 };
 
 void Evaluate(const EvaluationContext& ec, const Node* ast, Result& res, EvaluateErrorState& es);
@@ -47,15 +52,20 @@ struct Subscript : Node
 	u32 Index;
 };
 
+struct Group : Node
+{
+	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
+	Node* Sub;
+};
+
 struct BinaryOp : Node
 {
+	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
 	enum class Type {
 		Add, Subtract, Multiply, Divide
 	};
-	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
-	Node* Arg1;
-	Node* Arg2;
-	Type OpType;
+	std::vector<Node*> Args;
+	std::vector<Type> Ops;
 };
 
 struct TuneableRef : Node
