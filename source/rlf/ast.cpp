@@ -417,10 +417,154 @@ void TuneableRef::Evaluate(const EvaluationContext&, Result& res) const
 // -----------------------------------------------------------------------------
 // ------------------------------ FUNCTION EVALS -------------------------------
 // -----------------------------------------------------------------------------
+void EvaluateInt(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
+{
+	AstAssert(n, args.size() == 1, "Int takes 1 param.");
+	Result resX;
+	args[0]->Evaluate(ec, resX);
+	ExpectDim(n, 1, resX, "arg1");
+	Convert(resX, VariableFormat::Int);
+	res.Type = IntType;
+	res.Value.IntVal = resX.Value.IntVal;
+}
+
+void EvaluateInt2(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
+{
+	AstAssert(n, args.size() == 2, "Int2 takes 2 params.");
+	Result resX, resY;
+	args[0]->Evaluate(ec, resX);
+	args[1]->Evaluate(ec, resY);
+	ExpectDim(n, 1, resX, "arg1");
+	ExpectDim(n, 1, resY, "arg2");
+	Convert(resX, VariableFormat::Int);
+	Convert(resY, VariableFormat::Int);
+	res.Type = Int2Type;
+	res.Value.Int4Val.x = resX.Value.IntVal;
+	res.Value.Int4Val.y = resY.Value.IntVal;
+}
+
+void EvaluateInt3(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
+{
+	AstAssert(n, args.size() == 3, "Int3 takes 3 params.");
+	Result resX, resY, resZ;
+	args[0]->Evaluate(ec, resX);
+	args[1]->Evaluate(ec, resY);
+	args[2]->Evaluate(ec, resZ);
+	ExpectDim(n, 1, resX, "arg1");
+	ExpectDim(n, 1, resY, "arg2");
+	ExpectDim(n, 1, resZ, "arg3");
+	Convert(resX, VariableFormat::Int);
+	Convert(resY, VariableFormat::Int);
+	Convert(resZ, VariableFormat::Int);
+	res.Type = Int3Type;
+	res.Value.Int4Val.x = resX.Value.IntVal;
+	res.Value.Int4Val.y = resY.Value.IntVal;
+	res.Value.Int4Val.z = resZ.Value.IntVal;
+}
+
+void EvaluateInt4(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
+{
+	AstAssert(n, args.size() == 4, "Int4 takes 4 params.");
+	Result resX, resY, resZ, resW;
+	args[0]->Evaluate(ec, resX);
+	args[1]->Evaluate(ec, resY);
+	args[2]->Evaluate(ec, resZ);
+	args[3]->Evaluate(ec, resW);
+	ExpectDim(n, 1, resX, "arg1");
+	ExpectDim(n, 1, resY, "arg2");
+	ExpectDim(n, 1, resZ, "arg3");
+	ExpectDim(n, 1, resW, "arg4");
+	Convert(resX, VariableFormat::Int);
+	Convert(resY, VariableFormat::Int);
+	Convert(resZ, VariableFormat::Int);
+	Convert(resW, VariableFormat::Int);
+	res.Type = Int3Type;
+	res.Value.Int4Val.x = resX.Value.IntVal;
+	res.Value.Int4Val.y = resY.Value.IntVal;
+	res.Value.Int4Val.z = resZ.Value.IntVal;
+	res.Value.Int4Val.w = resW.Value.IntVal;
+}
+
+void EvaluateUint(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
+{
+	AstAssert(n, args.size() == 1, "Uint takes 1 param.");
+	Result resX;
+	args[0]->Evaluate(ec, resX);
+	ExpectDim(n, 1, resX, "arg1");
+	Convert(resX, VariableFormat::Uint);
+	res.Type = UintType;
+	res.Value.UintVal = resX.Value.UintVal;
+}
+
+void EvaluateUint2(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
+{
+	AstAssert(n, args.size() == 2, "Uint2 takes 2 params.");
+	Result resX, resY;
+	args[0]->Evaluate(ec, resX);
+	args[1]->Evaluate(ec, resY);
+	ExpectDim(n, 1, resX, "arg1");
+	ExpectDim(n, 1, resY, "arg2");
+	Convert(resX, VariableFormat::Uint);
+	Convert(resY, VariableFormat::Uint);
+	res.Type = Uint2Type;
+	res.Value.Uint4Val.x = resX.Value.UintVal;
+	res.Value.Uint4Val.y = resY.Value.UintVal;
+}
+
+void EvaluateUint3(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
+{
+	AstAssert(n, args.size() == 3, "Uint3 takes 3 params.");
+	Result resX, resY, resZ;
+	args[0]->Evaluate(ec, resX);
+	args[1]->Evaluate(ec, resY);
+	args[2]->Evaluate(ec, resZ);
+	ExpectDim(n, 1, resX, "arg1");
+	ExpectDim(n, 1, resY, "arg2");
+	ExpectDim(n, 1, resZ, "arg3");
+	Convert(resX, VariableFormat::Uint);
+	Convert(resY, VariableFormat::Uint);
+	Convert(resZ, VariableFormat::Uint);
+	res.Type = Uint3Type;
+	res.Value.Uint4Val.x = resX.Value.UintVal;
+	res.Value.Uint4Val.y = resY.Value.UintVal;
+	res.Value.Uint4Val.z = resZ.Value.UintVal;
+}
+
+void EvaluateUint4(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
+{
+	AstAssert(n, args.size() == 4, "Uint4 takes 4 params.");
+	Result resX, resY, resZ, resW;
+	args[0]->Evaluate(ec, resX);
+	args[1]->Evaluate(ec, resY);
+	args[2]->Evaluate(ec, resZ);
+	args[3]->Evaluate(ec, resW);
+	ExpectDim(n, 1, resX, "arg1");
+	ExpectDim(n, 1, resY, "arg2");
+	ExpectDim(n, 1, resZ, "arg3");
+	ExpectDim(n, 1, resW, "arg4");
+	Convert(resX, VariableFormat::Uint);
+	Convert(resY, VariableFormat::Uint);
+	Convert(resZ, VariableFormat::Uint);
+	Convert(resW, VariableFormat::Uint);
+	res.Type = Uint3Type;
+	res.Value.Uint4Val.x = resX.Value.UintVal;
+	res.Value.Uint4Val.y = resY.Value.UintVal;
+	res.Value.Uint4Val.z = resZ.Value.UintVal;
+	res.Value.Uint4Val.w = resW.Value.UintVal;
+}
+
 void EvaluateFloat(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 1, "Float2 takes 1 param.");
+	AstAssert(n, args.size() == 1, "Float takes 1 param.");
 	Result resX;
 	args[0]->Evaluate(ec, resX);
 	ExpectDim(n, 1, resX, "arg1");
@@ -428,6 +572,7 @@ void EvaluateFloat(const Node* n, const EvaluationContext& ec, std::vector<Node*
 	res.Type = FloatType;
 	res.Value.FloatVal = resX.Value.FloatVal;
 }
+
 void EvaluateFloat2(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
 	Result& res)
 {
@@ -464,6 +609,30 @@ void EvaluateFloat3(const Node* n, const EvaluationContext& ec, std::vector<Node
 	res.Value.Float3Val.z = resZ.Value.FloatVal;
 }
 
+void EvaluateFloat4(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
+{
+	AstAssert(n, args.size() == 4, "Float4 takes 4 params.");
+	Result resX, resY, resZ, resW;
+	args[0]->Evaluate(ec, resX);
+	args[1]->Evaluate(ec, resY);
+	args[2]->Evaluate(ec, resZ);
+	args[3]->Evaluate(ec, resW);
+	ExpectDim(n, 1, resX, "arg1");
+	ExpectDim(n, 1, resY, "arg2");
+	ExpectDim(n, 1, resZ, "arg3");
+	ExpectDim(n, 1, resW, "arg4");
+	Convert(resX, VariableFormat::Float);
+	Convert(resY, VariableFormat::Float);
+	Convert(resZ, VariableFormat::Float);
+	Convert(resW, VariableFormat::Float);
+	res.Type = Float3Type;
+	res.Value.Float4Val.x = resX.Value.FloatVal;
+	res.Value.Float4Val.y = resY.Value.FloatVal;
+	res.Value.Float4Val.z = resZ.Value.FloatVal;
+	res.Value.Float4Val.w = resW.Value.FloatVal;
+}
+
 void EvaluateTime(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
 	Result& res)
 {
@@ -479,6 +648,34 @@ void EvaluateDisplaySize(const Node* n, const EvaluationContext& ec, std::vector
 	res.Type = Uint2Type;
 	res.Value.Uint4Val.x = ec.DisplaySize.x;
 	res.Value.Uint4Val.y = ec.DisplaySize.y;
+}
+
+void EvaluateSin(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
+{
+	AstAssert(n, args.size() == 1, "Cos takes 1 param");
+	Result argRes;
+	args[0]->Evaluate(ec, argRes);
+	Convert(argRes, VariableFormat::Float);
+	for (u32 i = 0 ; i < argRes.Type.Dim ; ++i)
+	{
+		argRes.Value.Float4Val.m[i] = sin(argRes.Value.Float4Val.m[i]);
+	}
+	res = argRes;
+}
+
+void EvaluateCos(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
+{
+	AstAssert(n, args.size() == 1, "Cos takes 1 param");
+	Result argRes;
+	args[0]->Evaluate(ec, argRes);
+	Convert(argRes, VariableFormat::Float);
+	for (u32 i = 0 ; i < argRes.Type.Dim ; ++i)
+	{
+		argRes.Value.Float4Val.m[i] = cos(argRes.Value.Float4Val.m[i]);
+	}
+	res = argRes;
 }
 
 void EvaluateLookAt(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
@@ -533,11 +730,22 @@ u32 LowerHash(const char* str)
 typedef void (*FunctionEvaluate)(const Node*, const EvaluationContext&, std::vector<Node*>,
 	Result&);
 std::unordered_map<u32, FunctionEvaluate> FuncMap = {
+	{ LowerHash("Int"), EvaluateInt },
+	{ LowerHash("Int2"), EvaluateInt2 },
+	{ LowerHash("Int3"), EvaluateInt3 },
+	{ LowerHash("Int4"), EvaluateInt4 },
+	{ LowerHash("Uint"), EvaluateUint },
+	{ LowerHash("Uint2"), EvaluateUint2 },
+	{ LowerHash("Uint3"), EvaluateUint3 },
+	{ LowerHash("Uint4"), EvaluateUint4 },
 	{ LowerHash("Float"), EvaluateFloat },
 	{ LowerHash("Float2"), EvaluateFloat2 },
 	{ LowerHash("Float3"), EvaluateFloat3 },
+	{ LowerHash("Float4"), EvaluateFloat4 },
 	{ LowerHash("Time"), EvaluateTime },
 	{ LowerHash("DisplaySize"), EvaluateDisplaySize },
+	{ LowerHash("Sin"), EvaluateSin },
+	{ LowerHash("Cos"), EvaluateCos },
 	{ LowerHash("LookAt"), EvaluateLookAt },
 	{ LowerHash("Projection"), EvaluateProjection },
 };
