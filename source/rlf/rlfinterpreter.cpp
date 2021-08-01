@@ -741,10 +741,8 @@ void InitD3D(
 			D3D11_DEPTH_WRITE_MASK_ZERO;
 		desc.DepthFunc = RlfToD3d(dss->DepthFunc);
 		desc.StencilEnable = dss->StencilEnable;
-		Assert(dss->StencilReadMask <= 255, "value too big");
-		desc.StencilReadMask = (u8)dss->StencilReadMask;
-		Assert(dss->StencilWriteMask <= 255, "value too big");
-		desc.StencilWriteMask = (u8)dss->StencilWriteMask;
+		desc.StencilReadMask = dss->StencilReadMask;
+		desc.StencilWriteMask = dss->StencilWriteMask;
 		desc.FrontFace = RlfToD3d(dss->FrontFace);
 		desc.BackFace = RlfToD3d(dss->BackFace);
 		device->CreateDepthStencilState(&desc, &dss->DSSObject);
@@ -1044,9 +1042,8 @@ void ExecuteDraw(
 	ctx->RSSetViewports(8, vp);
 	ctx->IASetPrimitiveTopology(RlfToD3d(draw->Topology));
 	ctx->RSSetState(draw->RState ? draw->RState->RSObject : DefaultRasterizerState);
-	Assert(draw->StencilRef <= 255, "value too big");
 	ctx->OMSetDepthStencilState(draw->DSState ? draw->DSState->DSSObject : nullptr,
-		(u8)draw->StencilRef);
+		draw->StencilRef);
 	if (draw->Type == DrawType::Draw)
 	{
 		ctx->Draw(draw->VertexCount, 0);
@@ -1101,6 +1098,11 @@ void _Execute(
 		{
 			ctx->ClearDepthStencilView(pass.ClearDepth->Target->DSV, D3D11_CLEAR_DEPTH,
 				pass.ClearDepth->Depth, 0);
+		}
+		else if (pass.Type == PassType::ClearStencil)
+		{
+			ctx->ClearDepthStencilView(pass.ClearStencil->Target->DSV, D3D11_CLEAR_STENCIL,
+				0.f, pass.ClearStencil->Stencil);
 		}
 		else
 		{

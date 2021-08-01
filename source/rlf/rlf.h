@@ -20,6 +20,7 @@ namespace rlf
 		Dispatch,
 		ClearColor,
 		ClearDepth,
+		ClearStencil,
 	};
 	enum class SystemValue
 	{
@@ -139,8 +140,8 @@ namespace rlf
 		bool DepthWrite;
 		ComparisonFunc DepthFunc;
 		bool StencilEnable;
-		u32 StencilReadMask;
-		u32 StencilWriteMask;
+		u8 StencilReadMask;
+		u8 StencilWriteMask;
 		StencilOpDesc FrontFace;
 		StencilOpDesc BackFace;
 		ID3D11DepthStencilState* DSSObject;
@@ -268,7 +269,7 @@ namespace rlf
 		Buffer* VertexBuffer;
 		Buffer* IndexBuffer;
 		u32 VertexCount;
-		u32 StencilRef;
+		u8 StencilRef;
 		std::vector<TextureTarget> RenderTarget;
 		std::vector<TextureTarget> DepthStencil;
 		std::vector<Bind> VSBinds;
@@ -288,6 +289,11 @@ namespace rlf
 		Texture* Target;
 		float Depth;
 	};
+	struct ClearStencil
+	{
+		Texture* Target;
+		u8 Stencil;
+	};
 	struct Pass
 	{
 		PassType Type;
@@ -296,6 +302,7 @@ namespace rlf
 			Draw* Draw;
 			ClearColor* ClearColor;
 			ClearDepth* ClearDepth;
+			ClearStencil* ClearStencil;
 		};
 	};
 	struct Tuneable
@@ -313,6 +320,7 @@ namespace rlf
 		std::vector<Draw*> Draws;
 		std::vector<ClearColor*> ClearColors;
 		std::vector<ClearDepth*> ClearDepths;
+		std::vector<ClearStencil*> ClearStencils;
 		std::vector<ComputeShader*> CShaders;
 		std::vector<VertexShader*> VShaders;
 		std::vector<PixelShader*> PShaders;

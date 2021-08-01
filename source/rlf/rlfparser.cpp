@@ -70,6 +70,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(DrawIndexed) \
 	RLF_KEYWORD_ENTRY(ClearColor) \
 	RLF_KEYWORD_ENTRY(ClearDepth) \
+	RLF_KEYWORD_ENTRY(ClearStencil) \
 	RLF_KEYWORD_ENTRY(Passes) \
 	RLF_KEYWORD_ENTRY(BackBuffer) \
 	RLF_KEYWORD_ENTRY(DefaultDepth) \
@@ -153,6 +154,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(Target) \
 	RLF_KEYWORD_ENTRY(Color) \
 	RLF_KEYWORD_ENTRY(Depth) \
+	RLF_KEYWORD_ENTRY(Stencil) \
 	RLF_KEYWORD_ENTRY(SRV) \
 	RLF_KEYWORD_ENTRY(UAV) \
 	RLF_KEYWORD_ENTRY(RTV) \
@@ -564,6 +566,14 @@ u32 ConsumeUintLiteral(
 	} while (nb.next < b.next);
 
 	return val;
+}
+
+u8 ConsumeUcharLiteral(
+	BufferIter& b)
+{
+	u32 u = ConsumeUintLiteral(b);
+	ParserAssert(u < 256, "Uchar value too large to fit: %u", u);
+	return (u8)u;
 }
 
 float ConsumeFloatLiteral(
@@ -1157,6 +1167,7 @@ enum class ConsumeType
 {
 	Bool,
 	Int,
+	Uchar,
 	Uint,
 	Uint2,
 	Float,
@@ -1194,6 +1205,9 @@ void ConsumeField(BufferIter& b, T* s, ConsumeType type, size_t offset)
 		break;
 	case ConsumeType::Int:
 		*(i32*)p = ConsumeIntLiteral(b);
+		break;
+	case ConsumeType::Uchar:
+		*(u8*)p = ConsumeUcharLiteral(b);
 		break;
 	case ConsumeType::Uint:
 		*(u32*)p = ConsumeUintLiteral(b);
@@ -1409,8 +1423,8 @@ DepthStencilState* ConsumeDepthStencilStateDef(
 		StructEntryDef(DepthStencilState, Bool, DepthWrite),
 		StructEntryDef(DepthStencilState, ComparisonFunc, DepthFunc),
 		StructEntryDef(DepthStencilState, Bool, StencilEnable),
-		StructEntryDef(DepthStencilState, Uint, StencilReadMask),
-		StructEntryDef(DepthStencilState, Uint, StencilReadMask),
+		StructEntryDef(DepthStencilState, Uchar, StencilReadMask),
+		StructEntryDef(DepthStencilState, Uchar, StencilReadMask),
 		StructEntryDef(DepthStencilState, StencilOpDesc, FrontFace),
 		StructEntryDef(DepthStencilState, StencilOpDesc, BackFace),
 	};
@@ -2082,7 +2096,7 @@ Draw* ConsumeDrawDef(
 		case Keyword::StencilRef:
 		{
 			ConsumeToken(Token::Equals, b);
-			draw->StencilRef = ConsumeUintLiteral(b);
+			draw->StencilRef = ConsumeUcharLiteral(b);
 			break;
 		}
 		case Keyword::RenderTarget:
@@ -2207,6 +2221,26 @@ ClearDepth* ConsumeClearDepthDef(
 	return clear;
 }
 
+ClearStencil* ConsumeClearStencilDef(
+	BufferIter& b,
+	ParseState& ps)
+{
+	RenderDescription* rd = ps.rd;
+
+	ClearStencil* clear = new ClearStencil();
+	rd->ClearStencils.push_back(clear);
+
+	static StructEntry def[] = {
+		StructEntryDef(ClearStencil, Texture, Target),
+		StructEntryDef(ClearStencil, Uchar, Stencil),
+	};
+	constexpr Token Delim = Token::Semicolon;
+	constexpr bool TrailingRequired = true;
+	ConsumeStruct<Delim, TrailingRequired>(
+		b, clear, def, "ClearStencil");
+	return clear;
+}
+
 Pass ConsumePassRefOrDef(
 	BufferIter& b,
 	ParseState& ps)
@@ -2233,6 +2267,11 @@ Pass ConsumePassRefOrDef(
 	{
 		pass.Type = PassType::ClearDepth;
 		pass.ClearDepth = ConsumeClearDepthDef(b, ps);
+	}
+	else if (key == Keyword::ClearStencil)
+	{
+		pass.Type = PassType::ClearStencil;
+		pass.ClearStencil = ConsumeClearStencilDef(b, ps);
 	}
 	else
 	{
@@ -2392,6 +2431,18 @@ void ParseMain()
 			ps.passMap[nameId] = pass;
 			break;
 		}
+		case Keyword::ClearStencil:
+		{
+			ClearStencil* clear = ConsumeClearStencilDef(b,ps);
+			BufferString nameId = ConsumeIdentifier(b);
+			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %.*s already defined", 
+				nameId.len, nameId.base);
+			Pass pass;
+			pass.Type = PassType::ClearStencil;
+			pass.ClearStencil = clear;
+			ps.passMap[nameId] = pass;
+			break;
+		}
 		case Keyword::Passes:
 		{
 			ConsumeToken(Token::LBrace, b);
@@ -2472,6 +2523,8 @@ void ReleaseData(RenderDescription* data)
 	for (ClearColor* clear : data->ClearColors)
 		delete clear;
 	for (ClearDepth* clear : data->ClearDepths)
+		delete clear;
+	for (ClearStencil* clear : data->ClearStencils)
 		delete clear;
 	for (ComputeShader* cs : data->CShaders)
 		delete cs;

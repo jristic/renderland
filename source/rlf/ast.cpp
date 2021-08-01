@@ -653,15 +653,15 @@ void EvaluateDisplaySize(const Node* n, const EvaluationContext& ec, std::vector
 void EvaluateSin(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 1, "Cos takes 1 param");
+	AstAssert(n, args.size() == 1, "Sin takes 1 param");
 	Result argRes;
 	args[0]->Evaluate(ec, argRes);
 	Convert(argRes, VariableFormat::Float);
+	res.Type = argRes.Type;
 	for (u32 i = 0 ; i < argRes.Type.Dim ; ++i)
 	{
-		argRes.Value.Float4Val.m[i] = sin(argRes.Value.Float4Val.m[i]);
+		res.Value.Float4Val.m[i] = sin(argRes.Value.Float4Val.m[i]);
 	}
-	res = argRes;
 }
 
 void EvaluateCos(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
@@ -671,11 +671,11 @@ void EvaluateCos(const Node* n, const EvaluationContext& ec, std::vector<Node*> 
 	Result argRes;
 	args[0]->Evaluate(ec, argRes);
 	Convert(argRes, VariableFormat::Float);
+	res.Type = argRes.Type;
 	for (u32 i = 0 ; i < argRes.Type.Dim ; ++i)
 	{
-		argRes.Value.Float4Val.m[i] = cos(argRes.Value.Float4Val.m[i]);
+		res.Value.Float4Val.m[i] = cos(argRes.Value.Float4Val.m[i]);
 	}
-	res = argRes;
 }
 
 void EvaluateLookAt(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
