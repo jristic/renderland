@@ -38,13 +38,8 @@ DrawIndexed {
 		ShaderPath = "vertex.hlsl";
 		EntryPoint = "VSMain";
 	};
-	PShader = PixelShader {
-		ShaderPath = "pixel.hlsl";
-		EntryPoint = "PSMain";
-	};
 	VertexBuffer = verts;
 	IndexBuffer = indices;
-	RenderTarget = RT;
 	DepthStencil = DSV;
 	DSState = DepthStencilState {
 		StencilEnable = true;
@@ -58,6 +53,28 @@ DrawIndexed {
 		* 
 		lookAt(float3(1.5,0,0), float3(0,0,0));
 } objDraw
+
+Draw {
+	VShader = VertexShader {
+		ShaderPath = "other.hlsl";
+		EntryPoint = "VSMain";
+	};
+	PShader = PixelShader {
+		ShaderPath = "other.hlsl";
+		EntryPoint = "PSMain";
+	};
+	VertexCount = 3;
+	RenderTarget = RT;
+	DepthStencil = DSV;
+	DSState = DepthStencilState {
+		DepthEnable = false;
+		StencilEnable = true;
+		FrontFace = {
+			StencilFunc = Equal;
+		};
+	};
+	StencilRef = 1;
+} simpleDraw
 
 Dispatch {
 	Shader = ComputeShader {
@@ -76,5 +93,6 @@ Passes {
 	ClearDepth{ Target=DSV; Depth=1; },
 	ClearStencil{ Target=DSV; Stencil=0; },
 	objDraw,
+	simpleDraw,
 	copy
 }

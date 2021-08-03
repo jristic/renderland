@@ -572,6 +572,12 @@ void InitD3D(
 
 	for (Draw* draw : rd->Draws)
 	{
+		if (!draw->VShader)
+		{
+			errorState->InitSuccess = false;
+			errorState->ErrorMessage = "Null vertex shader on draw not permitted.";
+			return;
+		}
 		ID3D11ShaderReflection* reflector = draw->VShader->Reflector;
 		for (Bind& bind : draw->VSBinds)
 		{
@@ -583,17 +589,20 @@ void InitD3D(
 			draw->VShader->ShaderPath, errorState);
 		if (errorState->InitSuccess == false)
 			return;
-		reflector = draw->PShader->Reflector;
-		for (Bind& bind : draw->PSBinds)
+		if (draw->PShader)
 		{
-			ResolveBind(bind, reflector, draw->PShader->ShaderPath, errorState);
+			reflector = draw->PShader->Reflector;
+			for (Bind& bind : draw->PSBinds)
+			{
+				ResolveBind(bind, reflector, draw->PShader->ShaderPath, errorState);
+				if (errorState->InitSuccess == false)
+					return;
+			}
+			PrepareConstants(reflector, draw->PSCBs, draw->PSConstants,
+				draw->PShader->ShaderPath, errorState);
 			if (errorState->InitSuccess == false)
 				return;
 		}
-		PrepareConstants(reflector, draw->PSCBs, draw->PSConstants,
-			draw->PShader->ShaderPath, errorState);
-		if (errorState->InitSuccess == false)
-			return;
 	}
 
 	for (Buffer* buf : rd->Buffers)
@@ -949,7 +958,7 @@ void ExecuteDraw(
 	ID3D11DeviceContext* ctx = ec->D3dCtx;
 	ctx->VSSetShader(draw->VShader->ShaderObject, nullptr, 0);
 	ctx->IASetInputLayout(draw->VShader->InputLayout);
-	ctx->PSSetShader(draw->PShader->ShaderObject, nullptr, 0);
+	ctx->PSSetShader(draw->PShader ? draw->PShader->ShaderObject : nullptr, nullptr, 0);
 	ExecuteSetConstants(ec, draw->VSConstants, draw->VSCBs);
 	ExecuteSetConstants(ec, draw->PSConstants, draw->PSCBs);
 	for (const ConstantBuffer& buf : draw->VSCBs)
@@ -1029,13 +1038,19 @@ void ExecuteDraw(
 		if (target.Type == BindType::SystemValue)
 		{
 			if (target.System == SystemValue::DefaultDepth)
+			{
 				dsView = ec->DefaultDepthView;
+				vp[rtCount].Width = (float)ec->DisplaySize.x;
+				vp[rtCount].Height = (float)ec->DisplaySize.y;
+			}
 			else
 				Unimplemented();
 		}
 		else
 		{
 			dsView = target.Texture->DSV;
+			vp[0].Width = (float)target.Texture->Size.x;
+			vp[0].Height = (float)target.Texture->Size.y;
 		}
 	}
 	ctx->OMSetRenderTargets(8, rtViews, dsView);

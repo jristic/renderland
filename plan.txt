@@ -28,6 +28,8 @@
 **** Expand draw pipeline support.
 	* Render to texture
 		* need some way to size rendertarget based on backbuffer
+	* Access depth/stencil through SRV
+		* Typeless format on a resource with a SRV that has a typed format.  
 	* Viewport.
 	* Blend state.
 	* Multiple RT support. 
@@ -37,7 +39,7 @@
 	* Multiple vertex buffer support. 
 	* MSAA support.
 
-* Sample: Stencil usage. 
+* Sample: Shadow volumes.
 * Sample: Compute-generated vertex buffer for a draw
 * Sample: Shadow-sampling methods comparison. 
 * Sample: Clustered lighting.
