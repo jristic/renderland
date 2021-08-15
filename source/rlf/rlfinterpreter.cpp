@@ -1052,6 +1052,8 @@ void ExecuteDraw(
 			vp[0].Width = (float)target.Texture->Size.x;
 			vp[0].Height = (float)target.Texture->Size.y;
 		}
+		vp[0].MinDepth = 0.0f;
+		vp[0].MaxDepth = 1.0f;
 	}
 	ctx->OMSetRenderTargets(8, rtViews, dsView);
 	ctx->RSSetViewports(8, vp);
@@ -1067,11 +1069,13 @@ void ExecuteDraw(
 	{
 		Buffer* ib = draw->IndexBuffer;
 		Buffer* vb = draw->VertexBuffer;
+		ExecuteAssert(ib, "DrawIndexed must have an index buffer");
 		ctx->IASetIndexBuffer(ib->BufferObject, ib->ElementSize == 2 ? 
 			DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT, 0);
 		u32 offset = 0;
-		ctx->IASetVertexBuffers(0, 1, &vb->BufferObject, &vb->ElementSize, 
-			&offset);
+		if (vb)
+			ctx->IASetVertexBuffers(0, 1, &vb->BufferObject, &vb->ElementSize, 
+				&offset);
 		ctx->DrawIndexed(ib->ElementCount, 0, 0);
 	}
 	else
