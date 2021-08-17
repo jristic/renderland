@@ -29,7 +29,8 @@
 	* Render to texture
 		* need some way to size rendertarget based on backbuffer
 	* Access depth/stencil through SRV
-		* Typeless format on a resource with a SRV that has a typed format.  
+		* Typeless format on a resource with a SRV that has a typed format.
+	* Raw buffer support for updating vertex buffers from compute.  
 	* Viewport.
 	* Blend state.
 	* Multiple RT support. 
@@ -39,12 +40,17 @@
 	* Multiple vertex buffer support. 
 	* MSAA support.
 
-* Sample: Shadow volumes.
-* Sample: Compute-generated vertex buffer for a draw
-* Sample: Shadow-sampling methods comparison. 
-* Sample: Clustered lighting.
-* Sample: Compute-based culling with draw-indirect.
-* Sample: Mirror reflection. 
-* Sample: Compute fluid simulation. 
-* Sample: Compute sorted triangles for transparency rendering. 
-* Sample: Deferred rendering with gbuffers.
+*** UI:
+	* Switch to the dearimgui docking branch.
+	* Event-viewer style list of the passes in a frame. 
+	* Debug viz tools for seeing the contents of textures/buffers/rendertargets/depthstencils at any given point in the frame. 
+
+Samples:
+	* Compute-generated vertex buffer for a draw -> Sphere with an undulating surface. 
+	* Shadow-sampling methods comparison. 
+	* Clustered lighting.
+	* Compute-based culling with draw-indirect.
+	* Mirror reflection. 
+	* Compute fluid simulation. 
+	* Compute sorted triangles for transparency rendering. 
+	* Deferred rendering with gbuffers.
