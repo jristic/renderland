@@ -68,10 +68,11 @@ struct BinaryOp : Node
 	std::vector<Type> Ops;
 };
 
-struct TuneableRef : Node
+struct VariableRef : Node
 {
 	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
-	Tuneable* Tune;
+	bool isTuneable;
+	void* M;
 };
 
 struct Function : Node

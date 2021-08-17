@@ -848,6 +848,34 @@ do {											\
 	}											\
 } while (0);									\
 
+void EvaluateConstants(ExecuteContext* ec, std::vector<Constant*>& cnsts)
+{
+	ast::EvaluationContext evCtx;
+	evCtx.DisplaySize = ec->DisplaySize;
+	evCtx.Time = ec->Time;
+	for (Constant* cnst : cnsts)
+	{
+		ast::Result res;
+		ast::EvaluateErrorState es;
+		ast::Evaluate(evCtx, cnst->Expr, res, es);
+		if (!es.EvaluateSuccess)
+		{
+			ExecuteException ee;
+			ee.Info.Location = es.Info.Location;
+			ee.Info.Message = "AST evaluation error: " + es.Info.Message;
+			throw ee;
+		}
+		ExecuteAssert( (cnst->Type.Fmt != VariableFormat::Float4x4 && 
+			res.Type.Fmt != VariableFormat::Float4x4) || cnst->Type.Fmt == res.Type.Fmt,
+			"Constant %s expected type (%s) is not compatible with actual type (%s)",
+			cnst->Name, TypeFmtToString(cnst->Type.Fmt), TypeFmtToString(res.Type.Fmt));
+		ExecuteAssert(cnst->Type.Dim == res.Type.Dim,
+			"Constant %s size (%u) doe not match actual size (%u)",
+			cnst->Name, cnst->Type.Dim, res.Type.Dim);
+		Convert(res, cnst->Type.Fmt);
+		cnst->Value = res.Value;
+	}
+}
 
 void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets, 
 	std::vector<ConstantBuffer>& buffers)
@@ -1089,6 +1117,8 @@ void _Execute(
 	RenderDescription* rd)
 {
 	ID3D11DeviceContext* ctx = ec->D3dCtx;
+
+	EvaluateConstants(ec, rd->Constants);
 
 	// Clear state so we aren't polluted by previous program drawing or previous 
 	//	execution. 

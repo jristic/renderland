@@ -305,6 +305,13 @@ namespace rlf
 			ClearStencil* ClearStencil;
 		};
 	};
+	struct Constant
+	{
+		const char* Name;
+		ast::Node* Expr;
+		VariableType Type;
+		Variable Value;
+	};
 	struct Tuneable
 	{
 		const char* Name;
@@ -330,6 +337,7 @@ namespace rlf
 		std::vector<RasterizerState*> RasterizerStates;
 		std::vector<DepthStencilState*> DepthStencilStates;
 		std::vector<ObjImport*> Objs;
+		std::vector<Constant*> Constants;
 		std::vector<Tuneable*> Tuneables;
 		std::set<std::string> Strings;
 		std::vector<void*> Mems;

@@ -23,7 +23,6 @@
 * Constant buffers and constant filling
 	* Tuneables: Specify shader parameters in the RLF and allow tuning via the imgui display.
 		* Support vector tuneables, including with the color editor. 
-	* future: Expand to allow declaring vars like floats, ints, vectors, matrices in RLF, reference them for SetConstants
 
 **** Expand draw pipeline support.
 	* Render to texture

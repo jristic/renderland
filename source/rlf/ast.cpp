@@ -407,10 +407,20 @@ void BinaryOp::Evaluate(const EvaluationContext& ec, Result& outRes) const
 	outRes = results.front();
 }
 
-void TuneableRef::Evaluate(const EvaluationContext&, Result& res) const
+void VariableRef::Evaluate(const EvaluationContext&, Result& res) const
 {
-	res.Type = Tune->Type;
-	res.Value = Tune->Value;
+	if (isTuneable)
+	{
+		Tuneable* tune = (Tuneable*)M;
+		res.Type = tune->Type;
+		res.Value = tune->Value;
+	}
+	else
+	{
+		Constant* cnst = (Constant*)M;
+		res.Type = cnst->Type;
+		res.Value = cnst->Value;
+	}
 }
 
 

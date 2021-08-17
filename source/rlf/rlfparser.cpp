@@ -129,6 +129,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(Index) \
 	RLF_KEYWORD_ENTRY(U16) \
 	RLF_KEYWORD_ENTRY(Float) \
+	RLF_KEYWORD_ENTRY(Float4x4) \
 	RLF_KEYWORD_ENTRY(Bool) \
 	RLF_KEYWORD_ENTRY(Int) \
 	RLF_KEYWORD_ENTRY(Uint) \
@@ -191,6 +192,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(Y) \
 	RLF_KEYWORD_ENTRY(Z) \
 	RLF_KEYWORD_ENTRY(W) \
+	RLF_KEYWORD_ENTRY(Constant) \
 	RLF_KEYWORD_ENTRY(Tuneable) \
 
 #define RLF_KEYWORD_ENTRY(name) name,
@@ -280,7 +282,11 @@ struct ParseState
 	std::unordered_map<BufferString, RasterizerState*, BufferStringHash> rsMap;
 	std::unordered_map<BufferString, DepthStencilState*, BufferStringHash> dssMap;
 	std::unordered_map<BufferString, ObjImport*, BufferStringHash> objMap;
-	std::unordered_map<BufferString, Tuneable*, BufferStringHash> tuneMap;
+	struct Var {
+		bool tuneable;
+		void* m;
+	};
+	std::unordered_map<BufferString, Var, BufferStringHash> varMap;
 	std::unordered_map<u32, Keyword> keyMap;
 
 	const char* workingDirectory;
@@ -947,11 +953,13 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 			}
 			else
 			{
-				ast::TuneableRef* tr = AllocateAst<ast::TuneableRef>(ps.rd);
-				ParserAssert(ps.tuneMap.count(id) == 1, "Tuneable %.*s not defined.",
+				ParserAssert(ps.varMap.count(id) == 1, "Variable %.*s not defined.",
 					id.len, id.base);
-				tr->Tune = ps.tuneMap[id];
-				ast = tr;
+				ParseState::Var& v = ps.varMap[id];
+				ast::VariableRef* vr = AllocateAst<ast::VariableRef>(ps.rd);
+				vr->isTuneable = v.tuneable;
+				vr->M = v.m;
+				ast = vr;
 			}
 			ast->Location = loc;
 		}
@@ -1105,9 +1113,12 @@ Tuneable* ConsumeTuneable(BufferIter& b, ParseState& ps)
 
 	BufferString nameId = ConsumeIdentifier(b);
 	tune->Name = AddStringToDescriptionData(nameId, ps.rd);
-	ParserAssert(ps.tuneMap.count(nameId) == 0, "Tuneable %.*s already defined", 
+	ParserAssert(ps.varMap.count(nameId) == 0, "Variable %.*s already defined", 
 		nameId.len, nameId.base);
-	ps.tuneMap[nameId] = tune;
+	ParseState::Var v;
+	v.tuneable = true;
+	v.m = tune;
+	ps.varMap[nameId] = v;
 
 	bool hasRange = false;
 
@@ -1158,6 +1169,52 @@ Tuneable* ConsumeTuneable(BufferIter& b, ParseState& ps)
 	ConsumeToken(Token::Semicolon, b);
 
 	return tune;
+}
+
+Constant* ConsumeConstant(BufferIter& b, ParseState& ps)
+{
+	Constant* cnst = new Constant();
+	ps.rd->Constants.push_back(cnst);
+
+	BufferString typeId = ConsumeIdentifier(b);
+	Keyword typeKey = LookupKeyword(typeId);
+	switch (typeKey)
+	{
+	case Keyword::Float:
+		cnst->Type = FloatType;
+		break;
+	case Keyword::Float4x4:
+		cnst->Type = Float4x4Type;
+		break;
+	case Keyword::Bool:
+		cnst->Type = BoolType;
+		break;
+	case Keyword::Int:
+		cnst->Type = IntType;
+		break;
+	case Keyword::Uint:
+		cnst->Type = UintType;
+		break;
+	default:
+		ParserError("Unexpected Constant type: %.*s", typeId.len, typeId.base);
+	}
+
+	BufferString nameId = ConsumeIdentifier(b);
+	cnst->Name = AddStringToDescriptionData(nameId, ps.rd);
+	ParserAssert(ps.varMap.count(nameId) == 0, "Variable %.*s already defined", 
+		nameId.len, nameId.base);
+
+	ConsumeToken(Token::Equals, b);
+	cnst->Expr = ConsumeAst(b,ps);
+	
+	ParseState::Var v;
+	v.tuneable = false;
+	v.m = cnst;
+	ps.varMap[nameId] = v;
+
+	ConsumeToken(Token::Semicolon, b);
+
+	return cnst;
 }
 
 // -----------------------------------------------------------------------------
@@ -2464,6 +2521,11 @@ void ParseMain()
 			ConsumeTuneable(b,ps);
 			break;
 		}
+		case Keyword::Constant:
+		{
+			ConsumeConstant(b,ps);
+			break;
+		}
 		default:
 			ParserError("Unexpected structure: %.*s", id.len, id.base);
 		}
@@ -2544,6 +2606,8 @@ void ReleaseData(RenderDescription* data)
 		delete dss;
 	for (ObjImport* obj : data->Objs)
 		delete obj;
+	for (Constant* c : data->Constants)
+		delete c;
 	for (Tuneable* t : data->Tuneables)
 		delete t;
 	for (void* mem : data->Mems)

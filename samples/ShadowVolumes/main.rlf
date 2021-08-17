@@ -1,4 +1,9 @@
 
+Constant float4x4 ProjView = 
+	projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 0.1, 10)
+	* 
+	lookAt(float3(1,1,0), float3(0,0,0));
+
 Buffer {
 	ElementSize = 12;
 	ElementCount = 4;
@@ -85,10 +90,7 @@ DrawIndexed {
 	VertexBuffer = verts;
 	IndexBuffer = indices;
 	DepthStencil = DSV;
-	SetConstantVs Matrix = 
-		projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 0.1, 10)
-		* 
-		lookAt(float3(1,1,0), float3(0,0,0));
+	SetConstantVs Matrix = ProjView;
 } drawFloorDepth
 
 DrawIndexed {
@@ -100,10 +102,7 @@ DrawIndexed {
 	IndexBuffer = indices;
 	DepthStencil = DSV;
 	BindVS VB = blocker;
-	SetConstantVs Matrix = 
-		projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 0.1, 10)
-		* 
-		lookAt(float3(1,1,0), float3(0,0,0));
+	SetConstantVs Matrix = ProjView;
 } drawBlockerDepth
 
 DrawIndexed {
@@ -126,10 +125,7 @@ DrawIndexed {
 		};
 	};
 	BindVS VB = volumes;
-	SetConstantVs Matrix = 
-		projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 0.1, 10)
-		* 
-		lookAt(float3(1,1,0), float3(0,0,0));
+	SetConstantVs Matrix = ProjView;
 } applyVolumes
 
 DrawIndexed {
@@ -155,10 +151,7 @@ DrawIndexed {
 		};
 	};
 	StencilRef = 0;
-	SetConstantVs Matrix = 
-		projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 0.1, 10)
-		* 
-		lookAt(float3(1,1,0), float3(0,0,0));
+	SetConstantVs Matrix = ProjView;
 } drawFloorColor
 
 DrawIndexed {
@@ -184,10 +177,7 @@ DrawIndexed {
 	};
 	StencilRef = 0;
 	BindVS VB = blocker;
-	SetConstantVs Matrix = 
-		projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 0.1, 10)
-		* 
-		lookAt(float3(1,1,0), float3(0,0,0));
+	SetConstantVs Matrix = ProjView;
 } drawBlockerColor
 
 Dispatch {
