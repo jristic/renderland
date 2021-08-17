@@ -1,0 +1,216 @@
+
+Buffer {
+	ElementSize = 12;
+	ElementCount = 4;
+	Flags = { Vertex };
+	InitData = float {
+		1.0, 0.0, 1.0,
+		1.0, 0.0, -1.0,
+		-1.0, 0.0, 1.0,
+		-1.0, 0.0, -1.0
+	};
+} verts
+
+Buffer {
+	ElementSize = 2;
+	ElementCount = 6;
+	Flags = { Index };
+	InitData = u16 {
+		0, 1, 2,
+		2, 1, 3
+	};
+} indices
+
+Buffer {
+	ElementSize = 12;
+	ElementCount = 4;
+} blocker
+
+Buffer {
+	ElementSize = 12;
+	ElementCount = 8;
+} volumes
+
+Buffer {
+	ElementSize = 2;
+	ElementCount = 24;
+	Flags = { Index };
+	InitData = u16 {
+		0, 4, 1,
+		1, 4, 5,
+		1, 5, 3,
+		3, 5, 7,
+		3, 7, 2,
+		2, 7, 6,
+		2, 6, 0,
+		0, 6, 4
+	};
+} volumeIndices
+
+Sampler {
+	Filter = { All = Point };
+	AddressMode = { UVW=Clamp };
+} PointSampler
+
+Texture {
+	Format = R8G8B8A8_UNORM;
+	Size = {1024,1024};
+	Flags = { RTV, SRV };
+} RT
+
+Texture {
+	Format = D24_UNORM_S8_UINT;
+	Size = {1024,1024};
+	Flags = { DSV };
+} DSV
+
+
+Dispatch {
+	Shader = ComputeShader {
+		ShaderPath = "shaders.hlsl";
+		EntryPoint = "CSGenerateBlockerAndShadow";
+	};
+	Groups = {1,1,1};
+	Bind VBOut = blocker;
+	Bind ShadowOut = volumes;
+	setconstant Time = Time();
+} generateBlocker
+
+DrawIndexed {
+	Topology = TriList;
+	VShader = VertexShader {
+		ShaderPath = "shaders.hlsl";
+		EntryPoint = "VSMain";
+	};
+	VertexBuffer = verts;
+	IndexBuffer = indices;
+	DepthStencil = DSV;
+	SetConstantVs Matrix = 
+		projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 0.1, 10)
+		* 
+		lookAt(float3(1,1,0), float3(0,0,0));
+} drawFloorDepth
+
+DrawIndexed {
+	Topology = TriList;
+	VShader = VertexShader {
+		ShaderPath = "shaders.hlsl";
+		EntryPoint = "VSMainWithBuffer";
+	};
+	IndexBuffer = indices;
+	DepthStencil = DSV;
+	BindVS VB = blocker;
+	SetConstantVs Matrix = 
+		projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 0.1, 10)
+		* 
+		lookAt(float3(1,1,0), float3(0,0,0));
+} drawBlockerDepth
+
+DrawIndexed {
+	Topology = TriList;
+	VShader = VertexShader {
+		ShaderPath = "shaders.hlsl";
+		EntryPoint = "VSMainWithBuffer";
+	};
+	IndexBuffer = volumeIndices;
+	DepthStencil = DSV;
+	DSState = DepthStencilState {
+		DepthWrite = false;
+		DepthFunc = LessEqual;
+		StencilEnable = true;
+		FrontFace = {
+			StencilPassOp = Incr;
+		};
+		BackFace = {
+			StencilPassOp = Decr;
+		};
+	};
+	BindVS VB = volumes;
+	SetConstantVs Matrix = 
+		projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 0.1, 10)
+		* 
+		lookAt(float3(1,1,0), float3(0,0,0));
+} applyVolumes
+
+DrawIndexed {
+	Topology = TriList;
+	VShader = VertexShader {
+		ShaderPath = "shaders.hlsl";
+		EntryPoint = "VSMain";
+	};
+	PShader = PixelShader {
+		ShaderPath = "shaders.hlsl";
+		EntryPoint = "PSMain";
+	};
+	VertexBuffer = verts;
+	IndexBuffer = indices;
+	RenderTarget = RT;
+	DepthStencil = DSV;
+	DSState = DepthStencilState {
+		DepthWrite = false;
+		StencilEnable = true;
+		DepthFunc = LessEqual;
+		FrontFace = {
+			StencilFunc = Equal;
+		};
+	};
+	StencilRef = 0;
+	SetConstantVs Matrix = 
+		projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 0.1, 10)
+		* 
+		lookAt(float3(1,1,0), float3(0,0,0));
+} drawFloorColor
+
+DrawIndexed {
+	Topology = TriList;
+	VShader = VertexShader {
+		ShaderPath = "shaders.hlsl";
+		EntryPoint = "VSMainWithBuffer";
+	};
+	PShader = PixelShader {
+		ShaderPath = "shaders.hlsl";
+		EntryPoint = "PSMain";
+	};
+	IndexBuffer = indices;
+	RenderTarget = RT;
+	DepthStencil = DSV;
+	DSState = DepthStencilState {
+		DepthWrite = false;
+		StencilEnable = true;
+		DepthFunc = LessEqual;
+		FrontFace = {
+			StencilFunc = Equal;
+		};
+	};
+	StencilRef = 0;
+	BindVS VB = blocker;
+	SetConstantVs Matrix = 
+		projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 0.1, 10)
+		* 
+		lookAt(float3(1,1,0), float3(0,0,0));
+} drawBlockerColor
+
+Dispatch {
+	Shader = ComputeShader {
+		ShaderPath = "shaders.hlsl";
+		EntryPoint = "CSCopy";
+	};
+	ThreadPerPixel = true; 
+	Bind InTexture = RT;
+	Bind OutTexture = @BackBuffer;
+	Bind Sampler= PointSampler;
+	setconstant TextureSize = DisplaySize();
+} blitOut
+
+Passes {
+	ClearColor{ Target=RT; Color={0,0,0,1}; },
+	ClearDepth{ Target=DSV; Depth=1; },
+	ClearStencil{ Target=DSV; Stencil=0; },
+	generateBlocker,
+	drawFloorDepth,
+	drawBlockerDepth,
+	applyVolumes,
+	drawFloorColor,
+	drawBlockerColor,
+	blitOut
+}
