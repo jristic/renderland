@@ -66,6 +66,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(DepthStencilState) \
 	RLF_KEYWORD_ENTRY(ObjImport) \
 	RLF_KEYWORD_ENTRY(Dispatch) \
+	RLF_KEYWORD_ENTRY(DispatchIndirect) \
 	RLF_KEYWORD_ENTRY(Draw) \
 	RLF_KEYWORD_ENTRY(DrawIndexed) \
 	RLF_KEYWORD_ENTRY(ClearColor) \
@@ -2310,10 +2311,11 @@ Pass ConsumePassRefOrDef(
 		pass.Type = PassType::Dispatch;
 		pass.Dispatch = ConsumeDispatchDef(b, ps);
 	}
-	else if (key == Keyword::Draw)
+	else if (key == Keyword::Draw || key == Keyword::DrawIndexed)
 	{
 		pass.Type = PassType::Draw;
 		pass.Draw = ConsumeDrawDef(b, ps);
+		pass.Draw->Type = (key == Keyword::Draw) ? DrawType::Draw : DrawType::DrawIndexed;
 	}
 	else if (key == Keyword::ClearColor)
 	{
