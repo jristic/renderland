@@ -73,6 +73,7 @@ namespace rlf
 	{
 		BufferFlag_Vertex = 1,
 		BufferFlag_Index = 2,
+		BufferFlag_IndirectArgs = 4,
 	};
 	enum TextureFlag
 	{
@@ -246,6 +247,9 @@ namespace rlf
 		ComputeShader* Shader;
 		bool ThreadPerPixel;
 		uint3 Groups;
+		bool Indirect;
+		Buffer* IndirectArgs;
+		u32 IndirectArgsOffset;
 		std::vector<Bind> Binds;
 		std::vector<SetConstant> Constants;
 		std::vector<ConstantBuffer> CBs;

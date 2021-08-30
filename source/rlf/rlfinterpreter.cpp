@@ -617,8 +617,12 @@ void InitD3D(
 		desc.Usage = D3D11_USAGE_DEFAULT;
 		desc.BindFlags = RlfToD3d(buf->Flags);
 		desc.CPUAccessFlags = 0;
-		desc.MiscFlags = buf->Flags ? 0 : D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
 		desc.StructureByteStride = buf->ElementSize;
+
+		const u32 vif = BufferFlag_Vertex | BufferFlag_Index;
+		desc.MiscFlags = buf->Flags ? 0 : D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+		desc.MiscFlags |= (buf->Flags & BufferFlag_IndirectArgs) ? 
+			D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS : 0;
 
 		HRESULT hr = device->CreateBuffer(&desc, initData.pSysMem ? &initData : nullptr,
 			&buf->BufferObject);
@@ -967,16 +971,23 @@ void ExecuteDispatch(
 			Assert(false, "invalid type %d", bind.Type);
 		}
 	}
-	uint3 groups = dc->Groups;
-	if (dc->ThreadPerPixel && ec->DisplaySize.x != 0 && ec->DisplaySize.y != 0)
+	if (dc->Indirect)
 	{
-		uint3 tgs = dc->Shader->ThreadGroupSize;
-		groups.x = (u32)((ec->DisplaySize.x - 1) / tgs.x) + 1;
-		groups.y = (u32)((ec->DisplaySize.y - 1) / tgs.y) + 1;
-		groups.z = 1;
+		ctx->DispatchIndirect(dc->IndirectArgs->BufferObject, dc->IndirectArgsOffset);
 	}
+	else
+	{
+		uint3 groups = dc->Groups;
+		if (dc->ThreadPerPixel && ec->DisplaySize.x != 0 && ec->DisplaySize.y != 0)
+		{
+			uint3 tgs = dc->Shader->ThreadGroupSize;
+			groups.x = (u32)((ec->DisplaySize.x - 1) / tgs.x) + 1;
+			groups.y = (u32)((ec->DisplaySize.y - 1) / tgs.y) + 1;
+			groups.z = 1;
+		}
 
-	ctx->Dispatch(groups.x, groups.y, groups.z);
+		ctx->Dispatch(groups.x, groups.y, groups.z);
+	}
 }
 
 void ExecuteDraw(

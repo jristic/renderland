@@ -107,6 +107,8 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(Shader) \
 	RLF_KEYWORD_ENTRY(ThreadPerPixel) \
 	RLF_KEYWORD_ENTRY(Groups) \
+	RLF_KEYWORD_ENTRY(IndirectArgs) \
+	RLF_KEYWORD_ENTRY(IndirectArgsOffset) \
 	RLF_KEYWORD_ENTRY(Bind) \
 	RLF_KEYWORD_ENTRY(SetConstant) \
 	RLF_KEYWORD_ENTRY(Topology) \
@@ -129,6 +131,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(Vertex) \
 	RLF_KEYWORD_ENTRY(Index) \
 	RLF_KEYWORD_ENTRY(U16) \
+	RLF_KEYWORD_ENTRY(U32) \
 	RLF_KEYWORD_ENTRY(Float) \
 	RLF_KEYWORD_ENTRY(Float4x4) \
 	RLF_KEYWORD_ENTRY(Bool) \
@@ -796,8 +799,9 @@ T ConsumeFlags(BufferIter& b, FlagsEntry<T> (&def)[DefSize], const char* name)
 BufferFlag ConsumeBufferFlag(BufferIter& b)
 {
 	static FlagsEntry<BufferFlag> def[] = {
-		Keyword::Vertex,	BufferFlag_Vertex,
-		Keyword::Index,		BufferFlag_Index,
+		Keyword::Vertex,		BufferFlag_Vertex,
+		Keyword::Index,			BufferFlag_Index,
+		Keyword::IndirectArgs,	BufferFlag_IndirectArgs,
 	};
 	return ConsumeFlags(b, def, "BufferFlag");
 }
@@ -1794,6 +1798,7 @@ Buffer* ConsumeBufferDef(
 	rd->Buffers.push_back(buf);
 
 	std::vector<u16> initDataU16;
+	std::vector<u32> initDataU32;
 	std::vector<float> initDataFloat;
 	bool initToZero = false;
 
@@ -1866,6 +1871,21 @@ Buffer* ConsumeBufferDef(
 						ConsumeToken(Token::Comma, b);
 				}
 			}
+			else if (key == Keyword::U32)
+			{
+				ConsumeToken(Token::LBrace, b);
+
+				while (true)
+				{
+					u32 val = ConsumeUintLiteral(b);
+					initDataU32.push_back(val);
+
+					if (TryConsumeToken(Token::RBrace, b))
+						break;
+					else 
+						ConsumeToken(Token::Comma, b);
+				}
+			}
 			else if (ps.objMap.count(id) > 0)
 			{
 				obj = ps.objMap[id];
@@ -1921,7 +1941,7 @@ Buffer* ConsumeBufferDef(
 	{
 		u32 bufSize = buf->ElementSize * buf->ElementCount;
 		ParserAssert(bufSize > 0, "Buffer size not given");
-		if (initToZero || initDataU16.size() > 0 || initDataFloat.size() > 0)
+		if (initToZero || initDataU16.size() > 0 || initDataU32.size() > 0 || initDataFloat.size() > 0)
 		{
 			float* data = (float*)malloc(bufSize);
 			AddMemToDescriptionData(data, rd);
@@ -1943,6 +1963,12 @@ Buffer* ConsumeBufferDef(
 			ParserAssert(bufSize == initDataU16.size() * sizeof(u16), 
 				"Buffer/init-data size mismatch.");
 			memcpy(buf->InitData, initDataU16.data(), bufSize);
+		}
+		else if (initDataU32.size() > 0)
+		{
+			ParserAssert(bufSize == initDataU32.size() * sizeof(u32), 
+				"Buffer/init-data size mismatch.");
+			memcpy(buf->InitData, initDataU32.data(), bufSize);
 		}
 	}
 
@@ -2045,6 +2071,23 @@ Dispatch* ConsumeDispatchDef(
 			ConsumeToken(Token::Comma, b);
 			dc->Groups.z = ConsumeUintLiteral(b);
 			ConsumeToken(Token::RBrace, b);
+			break;
+		}
+		case Keyword::IndirectArgs:
+		{
+			ConsumeToken(Token::Equals, b);
+			BufferString id = ConsumeIdentifier(b);
+			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
+				id.len, id.base);
+			ParseState::Resource& res = ps.resMap[id];
+			ParserAssert(res.type == BindType::Buffer, "Indirect args must be a buffer");
+			dc->IndirectArgs = reinterpret_cast<Buffer*>(res.m);
+			break;
+		}
+		case Keyword::IndirectArgsOffset:
+		{
+			ConsumeToken(Token::Equals, b);
+			dc->IndirectArgsOffset = ConsumeUintLiteral(b);
 			break;
 		}
 		case Keyword::Bind:
@@ -2306,10 +2349,11 @@ Pass ConsumePassRefOrDef(
 	BufferString id = ConsumeIdentifier(b);
 	Keyword key = LookupKeyword(id);
 	Pass pass;
-	if (key == Keyword::Dispatch)
+	if (key == Keyword::Dispatch || key == Keyword::DispatchIndirect)
 	{
 		pass.Type = PassType::Dispatch;
 		pass.Dispatch = ConsumeDispatchDef(b, ps);
+		pass.Dispatch->Indirect = (key == Keyword::DispatchIndirect);
 	}
 	else if (key == Keyword::Draw || key == Keyword::DrawIndexed)
 	{
@@ -2441,8 +2485,10 @@ void ParseMain()
 			break;
 		}
 		case Keyword::Dispatch:
+		case Keyword::DispatchIndirect:
 		{
 			Dispatch* dc = ConsumeDispatchDef(b, ps);
+			dc->Indirect = (key == Keyword::DispatchIndirect);
 			BufferString nameId = ConsumeIdentifier(b);
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %.*s already defined", 
 				nameId.len, nameId.base);

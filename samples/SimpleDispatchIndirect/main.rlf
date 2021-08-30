@@ -1,0 +1,20 @@
+
+Buffer {
+	ElementSize = 12;
+	ElementCount = 1;
+	Flags = {IndirectArgs};
+	InitData = u32 { 40, 40, 1 };
+} iargs
+
+Passes {
+	DispatchIndirect {
+		Shader = ComputeShader {
+			ShaderPath = "main.hlsl";
+			EntryPoint = "CSMain";
+		};
+		IndirectArgs = iargs;
+		IndirectArgsOffset = 0;
+		Bind OutTexture = @BackBuffer;
+		setconstant TextureSize = DisplaySize();
+	}
+}
