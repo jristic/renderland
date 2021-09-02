@@ -29,11 +29,13 @@ Buffer {
 Buffer {
 	ElementSize = 12;
 	ElementCount = 4;
+	Flags = { Structured };
 } blocker
 
 Buffer {
 	ElementSize = 12;
 	ElementCount = 8;
+	Flags = { Structured };
 } volumes
 
 Buffer {

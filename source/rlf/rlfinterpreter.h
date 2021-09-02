@@ -10,6 +10,7 @@ namespace rlf
 
 	void InitD3D(
 		ID3D11Device* device,
+		ID3D11InfoQueue* infoQueue,
 		RenderDescription* rd,
 		const char* workingDirectory,
 		InitErrorState* errorState);

@@ -505,7 +505,7 @@ void CreateShader()
 	}
 
 	rlf::InitErrorState ies = {};
-	rlf::InitD3D(g_pd3dDevice, CurrentRenderDesc, dirPath.c_str(), &ies);
+	rlf::InitD3D(g_pd3dDevice, g_d3dInfoQueue, CurrentRenderDesc, dirPath.c_str(), &ies);
 
 	if (ies.InitSuccess == false)
 	{

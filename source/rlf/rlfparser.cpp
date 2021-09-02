@@ -130,6 +130,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(False) \
 	RLF_KEYWORD_ENTRY(Vertex) \
 	RLF_KEYWORD_ENTRY(Index) \
+	RLF_KEYWORD_ENTRY(Structured) \
 	RLF_KEYWORD_ENTRY(U16) \
 	RLF_KEYWORD_ENTRY(U32) \
 	RLF_KEYWORD_ENTRY(Float) \
@@ -801,6 +802,7 @@ BufferFlag ConsumeBufferFlag(BufferIter& b)
 	static FlagsEntry<BufferFlag> def[] = {
 		Keyword::Vertex,		BufferFlag_Vertex,
 		Keyword::Index,			BufferFlag_Index,
+		Keyword::Structured,	BufferFlag_Structured,
 		Keyword::IndirectArgs,	BufferFlag_IndirectArgs,
 	};
 	return ConsumeFlags(b, def, "BufferFlag");

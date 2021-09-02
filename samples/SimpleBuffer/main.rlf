@@ -2,6 +2,7 @@
 Buffer {
 	ElementSize = 16;
 	ElementCount = 32;
+	Flags = { Structured };
 	InitToZero = true;
 } Points
 

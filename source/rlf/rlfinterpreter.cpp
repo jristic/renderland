@@ -2,6 +2,67 @@
 namespace rlf
 {
 
+// -----------------------------------------------------------------------------
+// ------------------------------ INITIALIZATION -------------------------------
+// -----------------------------------------------------------------------------
+struct InitException
+{
+	ErrorInfo Info;
+};
+
+void InitError(const char* str, ...)
+{
+	char buf[512];
+	va_list ptr;
+	va_start(ptr,str);
+	vsprintf_s(buf,512,str,ptr);
+	va_end(ptr);
+
+	InitException ie;
+	ie.Info.Location = nullptr;
+	ie.Info.Message = buf;
+	throw ie;
+}
+
+static ID3D11InfoQueue*	gInfoQueue = nullptr;
+
+void CheckHresult(HRESULT hr, const char* desc)
+{
+	if (hr == S_OK)
+		return;
+	std::string mes = "Failed to create ";
+	mes += desc;
+	mes += ". See D3D error message:\n";
+	UINT64 num = gInfoQueue->GetNumStoredMessages();
+	for (u32 i = 0 ; i < num ; ++i)
+	{
+		size_t messageLength;
+		HRESULT hrr = gInfoQueue->GetMessage(i, nullptr, &messageLength);
+		Assert(hrr == S_FALSE, "Failed to get message, hr=%x", hr);
+		D3D11_MESSAGE* message = (D3D11_MESSAGE*)malloc(messageLength);
+		gInfoQueue->GetMessage(i, message, &messageLength);
+		mes += message->pDescription;
+		mes += "\n";
+		free(message);
+	}
+	gInfoQueue->ClearStoredMessages();
+
+	if (num > 0)
+	{
+		InitException ie;
+		ie.Info.Location = nullptr;
+		ie.Info.Message = mes.c_str();
+		throw ie;
+	}
+}
+
+#define InitAssert(expression, message, ...) \
+do {										\
+	if (!(expression)) {					\
+		InitError(message, ##__VA_ARGS__);	\
+	}										\
+} while (0);								\
+
 static ID3D11RasterizerState*   DefaultRasterizerState = nullptr;
 
 D3D11_FILTER RlfToD3d(FilterMode fm)
@@ -74,13 +135,23 @@ D3D11_CULL_MODE RlfToD3d(CullMode cm)
 	return cms[(u32)cm];
 }
 
-u32 RlfToD3d(BufferFlag flags)
+u32 RlfToD3d_Bind(BufferFlag flags)
 {
 	u32 f = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 	if (flags & BufferFlag_Vertex)
 		f |= D3D11_BIND_VERTEX_BUFFER;
 	if (flags & BufferFlag_Index)
 		f |= D3D11_BIND_INDEX_BUFFER;
+	return f;
+}
+
+u32 RlfToD3d_Misc(BufferFlag flags)
+{
+	u32 f = 0;
+	if (flags & BufferFlag_Structured) 
+		f |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+	if (flags & BufferFlag_IndirectArgs) 
+		f |= D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
 	return f;
 }
 
@@ -462,7 +533,7 @@ void PrepareConstants(
 	}
 }
 
-void InitD3D(
+void InitMain(
 	ID3D11Device* device,
 	RenderDescription* rd,
 	const char* workingDirectory,
@@ -478,7 +549,6 @@ void InitD3D(
 	}
 	
 	std::string dirPath = workingDirectory;
-	errorState->InitSuccess = true;
 
 	for (ComputeShader* cs : rd->CShaders)
 	{
@@ -615,26 +685,23 @@ void InitD3D(
 		D3D11_BUFFER_DESC desc;
 		desc.ByteWidth = bufSize;
 		desc.Usage = D3D11_USAGE_DEFAULT;
-		desc.BindFlags = RlfToD3d(buf->Flags);
+		desc.BindFlags = RlfToD3d_Bind(buf->Flags);
 		desc.CPUAccessFlags = 0;
 		desc.StructureByteStride = buf->ElementSize;
-
-		const u32 vif = BufferFlag_Vertex | BufferFlag_Index;
-		desc.MiscFlags = buf->Flags ? 0 : D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-		desc.MiscFlags |= (buf->Flags & BufferFlag_IndirectArgs) ? 
-			D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS : 0;
+		desc.MiscFlags = RlfToD3d_Misc(buf->Flags); 
 
 		HRESULT hr = device->CreateBuffer(&desc, initData.pSysMem ? &initData : nullptr,
 			&buf->BufferObject);
-		Assert(hr == S_OK, "failed to create buffer, hr=%x", hr);
+		CheckHresult(hr, "Buffer");
 
-		if (buf->Flags == 0)
+		const u32 viif = BufferFlag_Vertex | BufferFlag_Index | BufferFlag_IndirectArgs;
+		if ((buf->Flags & viif) == 0)
 		{
 			hr = device->CreateShaderResourceView(buf->BufferObject, nullptr, &buf->SRV);
-			Assert(hr == S_OK, "failed to create SRV, hr=%x", hr);
+			CheckHresult(hr, "SRV");
 
 			hr = device->CreateUnorderedAccessView(buf->BufferObject, nullptr, &buf->UAV);
-			Assert(hr == S_OK, "failed to create UAV, hr=%x", hr);
+			CheckHresult(hr, "SRV");
 		}
 	}
 
@@ -759,6 +826,26 @@ void InitD3D(
 		desc.FrontFace = RlfToD3d(dss->FrontFace);
 		desc.BackFace = RlfToD3d(dss->BackFace);
 		device->CreateDepthStencilState(&desc, &dss->DSSObject);
+	}
+}
+
+void InitD3D(
+	ID3D11Device* device,
+	ID3D11InfoQueue* infoQueue,
+	RenderDescription* rd,
+	const char* workingDirectory,
+	InitErrorState* errorState)
+{
+	gInfoQueue = infoQueue;
+	errorState->InitSuccess = true;
+	errorState->InitWarning = false;
+	try {
+		InitMain(device, rd, workingDirectory, errorState);
+	}
+	catch (InitException ie)
+	{
+		errorState->InitSuccess = false;
+		errorState->ErrorMessage = ie.Info.Message;
 	}
 }
 

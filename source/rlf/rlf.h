@@ -73,7 +73,8 @@ namespace rlf
 	{
 		BufferFlag_Vertex = 1,
 		BufferFlag_Index = 2,
-		BufferFlag_IndirectArgs = 4,
+		BufferFlag_Structured = 4,
+		BufferFlag_IndirectArgs = 8,
 	};
 	enum TextureFlag
 	{
