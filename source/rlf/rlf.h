@@ -5,13 +5,18 @@
 
 namespace rlf
 {
+	enum class ResourceType
+	{
+		Invalid,
+		Buffer,
+		Texture,
+	};
 	enum class BindType
 	{
 		Invalid,
 		SystemValue,
-		Buffer,
-		Texture,
 		Sampler,
+		View,
 	};
 	enum class PassType
 	{
@@ -187,8 +192,6 @@ namespace rlf
 		void* InitData;
 		BufferFlag Flags;
 		ID3D11Buffer* BufferObject;
-		ID3D11ShaderResourceView* SRV;
-		ID3D11UnorderedAccessView* UAV;
 	};
 	struct Texture
 	{
@@ -197,10 +200,6 @@ namespace rlf
 		const char* DDSPath;
 		TextureFlag Flags;
 		ID3D11Texture2D* TextureObject;
-		ID3D11ShaderResourceView* SRV;
-		ID3D11UnorderedAccessView* UAV;
-		ID3D11RenderTargetView* RTV;
-		ID3D11DepthStencilView* DSV;
 	};
 	struct Sampler
 	{
@@ -213,15 +212,38 @@ namespace rlf
 		float MaxLOD;
 		ID3D11SamplerState* SamplerObject;
 	};
+	enum class ViewType 
+	{
+		Auto,
+		SRV,
+		UAV,
+		RTV,
+		DSV,
+	};
+	struct View
+	{
+		ViewType Type;
+		ResourceType ResourceType;
+		union {
+			Buffer* Buffer;
+			Texture* Texture;
+		};
+		TextureFormat Format;
+		union {
+			ID3D11ShaderResourceView* SRVObject;
+			ID3D11UnorderedAccessView* UAVObject;
+			ID3D11RenderTargetView* RTVObject;
+			ID3D11DepthStencilView* DSVObject;
+		};
+	};
 	struct Bind
 	{
 		const char* BindTarget;
 		BindType Type;
 		union {
 			SystemValue SystemBind;
-			Buffer* BufferBind;
-			Texture* TextureBind;
 			Sampler* SamplerBind;
+			View* ViewBind;
 		};
 		bool IsOutput;
 		u32 BindIndex;
@@ -257,10 +279,10 @@ namespace rlf
 	};
 	struct TextureTarget
 	{
-		BindType Type;
+		bool IsSystem;
 		union {
 			SystemValue System;
-			Texture* Texture;
+			View* View;
 		};
 	};
 	struct Draw
@@ -286,17 +308,17 @@ namespace rlf
 	};
 	struct ClearColor
 	{
-		Texture* Target;
+		View* Target;
 		float4 Color;
 	};
 	struct ClearDepth
 	{
-		Texture* Target;
+		View* Target;
 		float Depth;
 	};
 	struct ClearStencil
 	{
-		Texture* Target;
+		View* Target;
 		u8 Stencil;
 	};
 	struct Pass
@@ -339,6 +361,7 @@ namespace rlf
 		std::vector<Buffer*> Buffers;
 		std::vector<Texture*> Textures;
 		std::vector<Sampler*> Samplers;
+		std::vector<View*> Views;
 		std::vector<RasterizerState*> RasterizerStates;
 		std::vector<DepthStencilState*> DepthStencilStates;
 		std::vector<ObjImport*> Objs;

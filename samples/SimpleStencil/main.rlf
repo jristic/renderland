@@ -29,7 +29,7 @@ Texture {
 	Format = D24_UNORM_S8_UINT;
 	Size = {1024,1024};
 	Flags = { DSV };
-} DSV
+} DS
 
 
 DrawIndexed {
@@ -40,7 +40,7 @@ DrawIndexed {
 	};
 	VertexBuffer = verts;
 	IndexBuffer = indices;
-	DepthStencil = DSV;
+	DepthStencil = DS;
 	DSState = DepthStencilState {
 		StencilEnable = true;
 		FrontFace = {
@@ -65,7 +65,7 @@ Draw {
 	};
 	VertexCount = 3;
 	RenderTarget = RT;
-	DepthStencil = DSV;
+	DepthStencil = DS;
 	DSState = DepthStencilState {
 		DepthEnable = false;
 		StencilEnable = true;
@@ -90,8 +90,8 @@ Dispatch {
 
 Passes {
 	ClearColor{ Target=RT; Color={0,0,0,1}; },
-	ClearDepth{ Target=DSV; Depth=1; },
-	ClearStencil{ Target=DSV; Stencil=0; },
+	ClearDepth{ Target=DS; Depth=1; },
+	ClearStencil{ Target=DS; Stencil=0; },
 	objDraw,
 	simpleDraw,
 	copy

@@ -107,6 +107,7 @@ namespace rlf
 #define RLF_TEXTUREFORMAT_ENTRY(name) name,
 enum class TextureFormat
 {
+	Invalid,
 	RLF_TEXTUREFORMAT_TUPLE
 	_Count
 };
@@ -114,12 +115,14 @@ enum class TextureFormat
 
 #define RLF_TEXTUREFORMAT_ENTRY(name) #name,
 static const char* TextureFormatName[] = {
+	"<Invalid>",
 	RLF_TEXTUREFORMAT_TUPLE
 };
 #undef RLF_TEXTUREFORMAT_ENTRY
 
 #define RLF_TEXTUREFORMAT_ENTRY(name) DXGI_FORMAT_##name,
 static DXGI_FORMAT D3DTextureFormat[] = {
+	DXGI_FORMAT_UNKNOWN,
 	RLF_TEXTUREFORMAT_TUPLE
 };
 #undef RLF_TEXTUREFORMAT_ENTRY

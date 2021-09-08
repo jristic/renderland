@@ -1,16 +1,24 @@
 
 Buffer {
-	ElementSize = 12;
-	ElementCount = 1;
+	ElementSize = 4;
+	ElementCount = 3;
 	Flags = {IndirectArgs};
-	InitData = u32 { 40, 40, 1 };
 } iargs
 
 Passes {
+	Dispatch {
+		Shader = ComputeShader {
+			ShaderPath = "main.hlsl";
+			EntryPoint = "ProducerMain";
+		};
+		Groups = { 1, 1, 1 };
+		Bind OutArgs = UAV { Resource=iargs; Format=R32_UINT; };
+		setconstant Time = time();
+	},
 	DispatchIndirect {
 		Shader = ComputeShader {
 			ShaderPath = "main.hlsl";
-			EntryPoint = "CSMain";
+			EntryPoint = "ConsumerMain";
 		};
 		IndirectArgs = iargs;
 		IndirectArgsOffset = 0;

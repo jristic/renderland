@@ -47,13 +47,10 @@ void CheckHresult(HRESULT hr, const char* desc)
 	}
 	gInfoQueue->ClearStoredMessages();
 
-	if (num > 0)
-	{
-		InitException ie;
-		ie.Info.Location = nullptr;
-		ie.Info.Message = mes.c_str();
-		throw ie;
-	}
+	InitException ie;
+	ie.Info.Location = nullptr;
+	ie.Info.Message = mes.c_str();
+	throw ie;
 }
 
 #define InitAssert(expression, message, ...) \
@@ -368,12 +365,21 @@ void ResolveBind(Bind& bind, ID3D11ShaderReflection* reflector, const char* path
 	switch (desc.Type)
 	{
 	case D3D_SIT_TEXTURE:
-	case D3D_SIT_SAMPLER:
 	case D3D_SIT_STRUCTURED:
+		InitAssert(bind.Type == BindType::SystemValue || bind.Type == BindType::View && 
+			(bind.ViewBind->Type == ViewType::Auto || bind.ViewBind->Type == ViewType::SRV),
+			"Mismatched bind to SRV slot.")
+		bind.IsOutput = false;
+		break;
+	case D3D_SIT_SAMPLER:
+		InitAssert(bind.Type == BindType::Sampler, "Mismatched bind to Sampler slot.")
 		bind.IsOutput = false;
 		break;
 	case D3D_SIT_UAV_RWTYPED:
 	case D3D_SIT_UAV_RWSTRUCTURED:
+		InitAssert(bind.Type == BindType::SystemValue || bind.Type == BindType::View && 
+			(bind.ViewBind->Type == ViewType::Auto || bind.ViewBind->Type == ViewType::UAV),
+			"Mismatched bind to UAV slot.")
 		bind.IsOutput = true;
 		break;
 	case D3D_SIT_BYTEADDRESS:
@@ -385,6 +391,13 @@ void ResolveBind(Bind& bind, ID3D11ShaderReflection* reflector, const char* path
 	case D3D_SIT_TBUFFER:
 	default:
 		Assert(false, "Unhandled type %d", desc.Type);
+	}
+	if (bind.Type == BindType::View && bind.ViewBind->Type == ViewType::Auto)
+	{
+		if (bind.IsOutput)
+			bind.ViewBind->Type = ViewType::UAV;
+		else
+			bind.ViewBind->Type = ViewType::SRV;
 	}
 }
 
@@ -693,16 +706,6 @@ void InitMain(
 		HRESULT hr = device->CreateBuffer(&desc, initData.pSysMem ? &initData : nullptr,
 			&buf->BufferObject);
 		CheckHresult(hr, "Buffer");
-
-		const u32 viif = BufferFlag_Vertex | BufferFlag_Index | BufferFlag_IndirectArgs;
-		if ((buf->Flags & viif) == 0)
-		{
-			hr = device->CreateShaderResourceView(buf->BufferObject, nullptr, &buf->SRV);
-			CheckHresult(hr, "SRV");
-
-			hr = device->CreateUnorderedAccessView(buf->BufferObject, nullptr, &buf->UAV);
-			CheckHresult(hr, "SRV");
-		}
 	}
 
 	for (Texture* tex : rd->Textures)
@@ -715,7 +718,7 @@ void InitMain(
 			if (dds == INVALID_HANDLE_VALUE) // file not found
 			{
 				errorState->InitSuccess = false;
-				errorState->ErrorMessage = std::string("Couldn't find dds file: ") + 
+				errorState->ErrorMessage = std::string("Couldn't find DDS file: ") + 
 					ddsPath;
 				return;
 			}
@@ -732,10 +735,13 @@ void InitMain(
 			DirectX::ScratchImage scratch;
 			DirectX::LoadFromDDSMemory(ddsBuffer, ddsSize, DirectX::DDS_FLAGS_NONE, 
 				&meta, scratch);
-			HRESULT hr = DirectX::CreateShaderResourceViewEx(device, scratch.GetImages(),
+			ID3D11Resource* res;
+			HRESULT hr = DirectX::CreateTextureEx(device, scratch.GetImages(),
 				scratch.GetImageCount(), meta, D3D11_USAGE_IMMUTABLE, 
-				D3D11_BIND_SHADER_RESOURCE, 0, 0, false, &tex->SRV);
-			Assert(hr == S_OK, "Failed to create SRV, hr=%x", hr);
+				D3D11_BIND_SHADER_RESOURCE, 0, 0, false, &res);
+			Assert(hr == S_OK, "Failed to create texture from DDS, hr=%x", hr);
+			hr = res->QueryInterface(IID_ID3D11Texture2D, (void**)&tex->TextureObject);
+			Assert(hr == S_OK, "Failed to query texture object, hr=%x", hr);
 		}
 		else
 		{
@@ -753,28 +759,82 @@ void InitMain(
 			desc.MiscFlags = 0;
 
 			HRESULT hr = device->CreateTexture2D(&desc, nullptr, &tex->TextureObject);
-			Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
+			CheckHresult(hr, "Texture");
+		}
+	}
 
-			if (tex->Flags & TextureFlag_SRV)
+	for (View* v : rd->Views)
+	{
+		ID3D11Resource* res = nullptr;
+		if (v->ResourceType == ResourceType::Buffer)
+			res = v->Buffer->BufferObject;
+		else if (v->ResourceType == ResourceType::Texture)
+			res = v->Texture->TextureObject;
+		else
+			Unimplemented();
+		DXGI_FORMAT fmt = D3DTextureFormat[(u32)v->Format];
+		if (v->Type == ViewType::SRV)
+		{
+			D3D11_SHADER_RESOURCE_VIEW_DESC vd;
+			vd.Format = fmt;
+			if (v->ResourceType == ResourceType::Buffer)
 			{
-				hr = device->CreateShaderResourceView(tex->TextureObject, nullptr, &tex->SRV);
-				Assert(hr == S_OK, "failed to create SRV, hr=%x", hr);
+				vd.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+				vd.Buffer.FirstElement = 0;
+				vd.Buffer.NumElements = v->Buffer->ElementCount;
 			}
-			if (tex->Flags & TextureFlag_UAV)
+			else if (v->ResourceType == ResourceType::Texture)
 			{
-				hr = device->CreateUnorderedAccessView(tex->TextureObject, nullptr, &tex->UAV);
-				Assert(hr == S_OK, "failed to create UAV, hr=%x", hr);
+				vd.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+				vd.Texture2D.MostDetailedMip = 0;
+				vd.Texture2D.MipLevels = (u32)-1;
 			}
-			if (tex->Flags & TextureFlag_RTV)
+			else 
+				Unimplemented();
+			HRESULT hr = device->CreateShaderResourceView(res, &vd, &v->SRVObject);
+			CheckHresult(hr, "SRV");
+		}
+		else if (v->Type == ViewType::UAV)
+		{
+			D3D11_UNORDERED_ACCESS_VIEW_DESC vd;
+			vd.Format = fmt;
+			if (v->ResourceType == ResourceType::Buffer)
 			{
-				hr = device->CreateRenderTargetView(tex->TextureObject, nullptr, &tex->RTV);
-				Assert(hr == S_OK, "failed to create RTV, hr=%x", hr);
+				vd.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+				vd.Buffer.FirstElement = 0;
+				vd.Buffer.NumElements = v->Buffer->ElementCount;
+				vd.Buffer.Flags = 0;
 			}
-			if (tex->Flags & TextureFlag_DSV)
+			else if (v->ResourceType == ResourceType::Texture)
 			{
-				hr = device->CreateDepthStencilView(tex->TextureObject, nullptr, &tex->DSV);
-				Assert(hr == S_OK, "failed to create DSV, hr=%x", hr);
+				vd.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+				vd.Texture2D.MipSlice = 0;
 			}
+			else 
+				Unimplemented();
+			HRESULT hr = device->CreateUnorderedAccessView(res, &vd, &v->UAVObject);
+			CheckHresult(hr, "UAV");
+		}
+		if (v->Type == ViewType::RTV)
+		{
+			D3D11_RENDER_TARGET_VIEW_DESC vd;
+			vd.Format = fmt;
+			Assert(v->ResourceType == ResourceType::Texture, "Invalid");
+			vd.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+			vd.Texture2D.MipSlice = 0;
+			HRESULT hr = device->CreateRenderTargetView(res, &vd, &v->RTVObject);
+			CheckHresult(hr, "RTV");
+		}
+		if (v->Type == ViewType::DSV)
+		{
+			D3D11_DEPTH_STENCIL_VIEW_DESC vd;
+			vd.Format = fmt;
+			Assert(v->ResourceType == ResourceType::Texture, "Invalid");
+			vd.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+			vd.Texture2D.MipSlice = 0;
+			vd.Flags = 0;
+			HRESULT hr = device->CreateDepthStencilView(res, &vd, &v->DSVObject);
+			CheckHresult(hr, "DSV");
 		}
 	}
 
@@ -871,18 +931,33 @@ void ReleaseD3D(
 
 	for (Buffer* buf : rd->Buffers)
 	{
-		SafeRelease(buf->UAV);
-		SafeRelease(buf->SRV);
 		SafeRelease(buf->BufferObject);
 	}
 
 	for (Texture* tex : rd->Textures)
 	{
-		SafeRelease(tex->UAV);
-		SafeRelease(tex->SRV);
-		SafeRelease(tex->RTV);
-		SafeRelease(tex->DSV);
 		SafeRelease(tex->TextureObject);
+	}
+
+	for (View* v : rd->Views)
+	{
+		switch (v->Type)
+		{
+		case ViewType::SRV:
+			SafeRelease(v->SRVObject);
+			break;
+		case ViewType::UAV:
+			SafeRelease(v->UAVObject);
+			break;
+		case ViewType::RTV:
+			SafeRelease(v->RTVObject);
+			break;
+		case ViewType::DSV:
+			SafeRelease(v->DSVObject);
+			break;
+		default:
+			Unimplemented();
+		}
 	}
 
 	for (Sampler* s : rd->Samplers)
@@ -1031,25 +1106,25 @@ void ExecuteDispatch(
 		switch (bind.Type)
 		{
 		case BindType::SystemValue:
+			Assert(bind.IsOutput, "Invalid");
 			if (bind.SystemBind == SystemValue::BackBuffer)
 				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &ec->MainRtUav, 
 					&initialCount);
 			else
 				Assert(false, "unhandled");
 			break;
-		case BindType::Buffer:
+		case BindType::View:
 			if (bind.IsOutput)
-				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &bind.BufferBind->UAV, 
+			{
+				Assert(bind.ViewBind->Type == ViewType::UAV, "Invalid");
+				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &bind.ViewBind->UAVObject, 
 					&initialCount);
+			}
 			else
-				ctx->CSSetShaderResources(bind.BindIndex, 1, &bind.BufferBind->SRV);
-			break;
-		case BindType::Texture:
-			if (bind.IsOutput)
-				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &bind.TextureBind->UAV, 
-					&initialCount);
-			else
-				ctx->CSSetShaderResources(bind.BindIndex, 1, &bind.TextureBind->SRV);
+			{
+				Assert(bind.ViewBind->Type == ViewType::SRV, "Invalid");
+				ctx->CSSetShaderResources(bind.BindIndex, 1, &bind.ViewBind->SRVObject);
+			}
 			break;
 		case BindType::Sampler:
 			ctx->CSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->SamplerObject);
@@ -1099,12 +1174,12 @@ void ExecuteDraw(
 	{
 		switch (bind.Type)
 		{
-		case BindType::Buffer:
-			ctx->VSSetShaderResources(bind.BindIndex, 1, &bind.BufferBind->SRV);
+		case BindType::View:
+		{
+			Assert(bind.ViewBind->Type == ViewType::SRV, "Invalid");
+			ctx->VSSetShaderResources(bind.BindIndex, 1, &bind.ViewBind->SRVObject);
 			break;
-		case BindType::Texture:
-			ctx->VSSetShaderResources(bind.BindIndex, 1, &bind.TextureBind->SRV);
-			break;
+		}
 		case BindType::Sampler:
 			ctx->VSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->SamplerObject);
 			break;
@@ -1117,12 +1192,12 @@ void ExecuteDraw(
 	{
 		switch (bind.Type)
 		{
-		case BindType::Buffer:
-			ctx->PSSetShaderResources(bind.BindIndex, 1, &bind.BufferBind->SRV);
+		case BindType::View:
+		{
+			Assert(bind.ViewBind->Type == ViewType::SRV, "Invalid");
+			ctx->PSSetShaderResources(bind.BindIndex, 1, &bind.ViewBind->SRVObject);
 			break;
-		case BindType::Texture:
-			ctx->PSSetShaderResources(bind.BindIndex, 1, &bind.TextureBind->SRV);
-			break;
+		}
 		case BindType::Sampler:
 			ctx->PSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->SamplerObject);
 			break;
@@ -1136,7 +1211,7 @@ void ExecuteDraw(
 	u32 rtCount = 0;
 	for (TextureTarget target : draw->RenderTarget)
 	{
-		if (target.Type == BindType::SystemValue)
+		if (target.IsSystem)
 		{
 			if (target.System == SystemValue::BackBuffer)
 			{
@@ -1149,9 +1224,11 @@ void ExecuteDraw(
 		}
 		else
 		{
-			vp[rtCount].Width = (float)target.Texture->Size.x;
-			vp[rtCount].Height = (float)target.Texture->Size.y;
-			rtViews[rtCount] = target.Texture->RTV;
+			Assert(target.View->Type == ViewType::RTV, "Invalid");
+			Assert(target.View->ResourceType == ResourceType::Texture, "Invalid");
+			rtViews[rtCount] = target.View->RTVObject;
+			vp[rtCount].Width = (float)target.View->Texture->Size.x;
+			vp[rtCount].Height = (float)target.View->Texture->Size.y;
 		}
 		vp[rtCount].MinDepth = 0.0f;
 		vp[rtCount].MaxDepth = 1.0f;
@@ -1161,7 +1238,7 @@ void ExecuteDraw(
 	ID3D11DepthStencilView* dsView = nullptr;
 	for (TextureTarget target : draw->DepthStencil)
 	{
-		if (target.Type == BindType::SystemValue)
+		if (target.IsSystem)
 		{
 			if (target.System == SystemValue::DefaultDepth)
 			{
@@ -1174,9 +1251,11 @@ void ExecuteDraw(
 		}
 		else
 		{
-			dsView = target.Texture->DSV;
-			vp[0].Width = (float)target.Texture->Size.x;
-			vp[0].Height = (float)target.Texture->Size.y;
+			Assert(target.View->Type == ViewType::DSV, "Invalid");
+			Assert(target.View->ResourceType == ResourceType::Texture, "Invalid");
+			dsView = target.View->DSVObject;
+			vp[0].Width = (float)target.View->Texture->Size.x;
+			vp[0].Height = (float)target.View->Texture->Size.y;
 		}
 		vp[0].MinDepth = 0.0f;
 		vp[0].MaxDepth = 1.0f;
@@ -1239,16 +1318,16 @@ void _Execute(
 			{
 				color.x, color.y, color.z, color.w
 			};
-			ctx->ClearRenderTargetView(pass.ClearColor->Target->RTV, clear_color);
+			ctx->ClearRenderTargetView(pass.ClearColor->Target->RTVObject, clear_color);
 		}
 		else if (pass.Type == PassType::ClearDepth)
 		{
-			ctx->ClearDepthStencilView(pass.ClearDepth->Target->DSV, D3D11_CLEAR_DEPTH,
+			ctx->ClearDepthStencilView(pass.ClearDepth->Target->DSVObject, D3D11_CLEAR_DEPTH,
 				pass.ClearDepth->Depth, 0);
 		}
 		else if (pass.Type == PassType::ClearStencil)
 		{
-			ctx->ClearDepthStencilView(pass.ClearStencil->Target->DSV, D3D11_CLEAR_STENCIL,
+			ctx->ClearDepthStencilView(pass.ClearStencil->Target->DSVObject, D3D11_CLEAR_STENCIL,
 				0.f, pass.ClearStencil->Stencil);
 		}
 		else

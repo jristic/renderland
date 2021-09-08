@@ -39,6 +39,12 @@
 	* Multiple vertex buffer support. 
 	* MSAA support.
 
+*** Cleanup:
+	* Handle various errors in specifying views/resources (mainly providing the wrong kind).
+	* Have InitD3D use InitAssert instead of all the returning. 
+	* Refactor system values.
+	* Texture flag cleanup -> SRV/UAV/RTV/DSV can be determined from usage. or keep it explicit?
+
 *** UI:
 	* Switch to the dearimgui docking branch.
 	* Event-viewer style list of the passes in a frame. 

@@ -29,7 +29,7 @@ Texture {
 	Format = D16_UNORM;
 	Size = {1024,1024};
 	Flags = { DSV };
-} DSV
+} DS
 
 
 DrawIndexed {
@@ -45,7 +45,7 @@ DrawIndexed {
 	VertexBuffer = verts;
 	IndexBuffer = indices;
 	RenderTarget = RT;
-	DepthStencil = DSV;
+	DepthStencil = DS;
 	DSState = DepthStencilState {
 		DepthFunc = Greater;
 	};
@@ -69,7 +69,7 @@ Dispatch {
 
 Passes {
 	ClearColor{ Target=RT; Color={0,0,0,1}; },
-	ClearDepth{ Target=DSV; Depth=0; },
+	ClearDepth{ Target=DS; Depth=0; },
 	objDraw,
 	copy
 }

@@ -199,6 +199,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(W) \
 	RLF_KEYWORD_ENTRY(Constant) \
 	RLF_KEYWORD_ENTRY(Tuneable) \
+	RLF_KEYWORD_ENTRY(Resource) \
 
 #define RLF_KEYWORD_ENTRY(name) name,
 enum class Keyword
@@ -278,8 +279,14 @@ struct ParseState
 	std::unordered_map<BufferString, ComputeShader*, BufferStringHash> csMap;
 	std::unordered_map<BufferString, VertexShader*, BufferStringHash> vsMap;
 	std::unordered_map<BufferString, PixelShader*, BufferStringHash> psMap;
+	enum class ResType {
+		Sampler,
+		Buffer,
+		Texture,
+		View,
+	};
 	struct Resource {
-		BindType type;
+		ResType type;
 		void* m;
 	};
 	std::unordered_map<BufferString, Resource, BufferStringHash> resMap;
@@ -373,7 +380,7 @@ void ParseStateInit(ParseState* ps)
 	} 
 	fcLUT['_'] = Token::Identifier;
 
-	for (u32 i = 0 ; i < (u32)TextureFormat::_Count ; ++i)
+	for (u32 i = (u32)TextureFormat::Invalid+1 ; i < (u32)TextureFormat::_Count ; ++i)
 	{
 		TextureFormat fmt = (TextureFormat)i;
 		const char* str = TextureFormatName[i];
@@ -892,6 +899,122 @@ AddressModeUVW ConsumeAddressModeUVW(BufferIter& b)
 	return addr;
 }
 
+View* ConsumeViewDef(BufferIter& b, ParseState& ps, ViewType vt)
+{
+	View* v = new View();
+	ps.rd->Views.push_back(v);
+	v->Type = vt;
+	ConsumeToken(Token::LBrace, b);
+	while (true)
+	{
+		if (TryConsumeToken(Token::RBrace, b))
+			break;
+
+		BufferString id = ConsumeIdentifier(b);
+		Keyword key = LookupKeyword(id);
+		ConsumeToken(Token::Equals, b);
+		if (key == Keyword::Resource)
+		{
+			BufferString rid = ConsumeIdentifier(b);
+			ParserAssert(ps.resMap.count(rid) != 0, "Couldn't find resource %.*s", 
+				rid.len, rid.base);
+			ParseState::Resource& res = ps.resMap[rid];
+			if (res.type == ParseState::ResType::Buffer)
+			{
+				v->ResourceType = ResourceType::Buffer;
+				v->Buffer = (Buffer*)res.m;
+			}
+			else if (res.type == ParseState::ResType::Texture)
+			{
+				v->ResourceType = ResourceType::Texture;
+				v->Texture = (Texture*)res.m;
+			}
+			else
+			{
+				ParserError("Referenced resource (%.*s) must be Texture or Buffer.", 
+					rid.len, rid.base);
+			}
+		}
+		else if (key == Keyword::Format)
+		{
+			BufferString formatId = ConsumeIdentifier(b);
+			ParserAssert(GPS->fmtMap.count(formatId) != 0, "Couldn't find format %.*s", 
+				formatId.len, formatId.base);
+			v->Format = GPS->fmtMap[formatId];
+		}
+		else 
+		{
+			ParserError("Unexpected field (%.*s)", id.len, id.base);
+		}
+
+		ConsumeToken(Token::Semicolon, b);
+	}
+	ParserAssert(v->ResourceType != ResourceType::Invalid, 
+		"Resource on View must be set.");
+	return v;
+}
+
+View* ConsumeViewRefOrDef(BufferIter& b, ParseState& ps, BufferString id)
+{
+	View* v = nullptr;
+
+	Keyword key = LookupKeyword(id);
+	if (key == Keyword::SRV)
+	{
+		v = ConsumeViewDef(b,ps, ViewType::SRV);
+	}
+	else if (key == Keyword::UAV)
+	{
+		v = ConsumeViewDef(b,ps, ViewType::UAV);
+	}
+	else if (key == Keyword::RTV)
+	{
+		v = ConsumeViewDef(b,ps, ViewType::RTV);
+	}
+	else if (key == Keyword::DSV)
+	{
+		v = ConsumeViewDef(b,ps, ViewType::DSV);
+	}
+	else
+	{
+		ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
+			id.len, id.base);
+		ParseState::Resource& res = ps.resMap[id];
+		if (res.type == ParseState::ResType::View)
+		{
+			v = (View*)res.m;
+		}
+		else if (res.type == ParseState::ResType::Buffer)
+		{
+			v = new View();
+			ps.rd->Views.push_back(v);
+			v->Type = ViewType::Auto;
+			v->ResourceType = ResourceType::Buffer;
+			v->Buffer = (Buffer*)res.m;
+			v->Format = TextureFormat::Invalid;
+		}
+		else if (res.type == ParseState::ResType::Texture)
+		{
+			v = new View();
+			ps.rd->Views.push_back(v);
+			v->Type = ViewType::Auto;
+			v->ResourceType = ResourceType::Texture;
+			v->Texture = (Texture*)res.m;
+			v->Format = TextureFormat::Invalid;
+		}
+		else if (res.type == ParseState::ResType::Sampler)
+		{
+			// NOTE: Valid but not handled here.
+		}
+		else
+		{
+			Unimplemented();
+		}
+	}
+
+	return v;
+}
+
 Bind ConsumeBind(BufferIter& b, ParseState& ps)
 {
 	BufferString bindName = ConsumeIdentifier(b);
@@ -906,11 +1029,31 @@ Bind ConsumeBind(BufferIter& b, ParseState& ps)
 	else
 	{
 		BufferString id = ConsumeIdentifier(b);
-		ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
-			id.len, id.base);
-		ParseState::Resource& res = ps.resMap[id];
-		bind.Type = res.type;
-		bind.BufferBind = reinterpret_cast<Buffer*>(res.m);
+		View* v = ConsumeViewRefOrDef(b, ps, id);
+		if (v)
+		{
+			ParserAssert(v->Type == ViewType::SRV || v->Type == ViewType::UAV ||
+				v->Type == ViewType::Auto, "Referenced view (%.*s) must be SRV/UAV/Auto.",
+				id.len, id.base);
+			bind.Type = BindType::View;
+			bind.ViewBind = v;
+		}
+		else
+		{
+			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
+				id.len, id.base);
+			ParseState::Resource& res = ps.resMap[id];
+			if (res.type == ParseState::ResType::Sampler)
+			{
+				bind.Type = BindType::Sampler;
+				bind.SamplerBind = (Sampler*)res.m;
+			}
+			else
+			{
+				ParserError("Referenced resource (%.*s) must be SRV/UAV/Auto, or sampler.", 
+					id.len, id.base);
+			}
+		}
 	}
 	return bind;
 }
@@ -1333,7 +1476,7 @@ void ConsumeField(BufferIter& b, T* s, ConsumeType type, size_t offset)
 		ParserAssert(GPS->resMap.count(id) != 0, "Couldn't find resource %.*s", 
 			id.len, id.base);
 		ParseState::Resource& res = GPS->resMap[id];
-		ParserAssert(res.type == BindType::Texture, "Resource must be texture");
+		ParserAssert(res.type == ParseState::ResType::Texture, "Resource must be texture");
 		*(Texture**)p = reinterpret_cast<Texture*>(res.m);
 		break;
 	}
@@ -2082,7 +2225,8 @@ Dispatch* ConsumeDispatchDef(
 			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
 				id.len, id.base);
 			ParseState::Resource& res = ps.resMap[id];
-			ParserAssert(res.type == BindType::Buffer, "Indirect args must be a buffer");
+			ParserAssert(res.type == ParseState::ResType::Buffer, 
+				"Resource (%.*s) must be a buffer", id.len, id.base);
 			dc->IndirectArgs = reinterpret_cast<Buffer*>(res.m);
 			break;
 		}
@@ -2175,7 +2319,8 @@ Draw* ConsumeDrawDef(
 			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
 				id.len, id.base);
 			ParseState::Resource& res = ps.resMap[id];
-			ParserAssert(res.type == BindType::Buffer, "Resourse must be a buffer");
+			ParserAssert(res.type == ParseState::ResType::Buffer, 
+				"Resource (%.*s) must be a buffer", id.len, id.base);
 			draw->VertexBuffer = reinterpret_cast<Buffer*>(res.m);
 			break;
 		}
@@ -2186,7 +2331,8 @@ Draw* ConsumeDrawDef(
 			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
 				id.len, id.base);
 			ParseState::Resource& res = ps.resMap[id];
-			ParserAssert(res.type == BindType::Buffer, "Resourse must be a buffer");
+			ParserAssert(res.type == ParseState::ResType::Buffer, 
+				"Resource (%.*s) must be a buffer", id.len, id.base);
 			draw->IndexBuffer = reinterpret_cast<Buffer*>(res.m);
 			break;
 		}
@@ -2208,40 +2354,42 @@ Draw* ConsumeDrawDef(
 			TextureTarget target;
 			if (TryConsumeToken(Token::At, b))
 			{
-				target.Type = BindType::SystemValue;
+				target.IsSystem = true;
 				target.System = ConsumeSystemValue(b);
 			}
 			else
 			{
-				target.Type = BindType::Texture;
+				target.IsSystem = false;
 				BufferString id = ConsumeIdentifier(b);
-				ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
-					id.len, id.base);
-				ParseState::Resource& res = ps.resMap[id];
-				ParserAssert(res.type == BindType::Texture, "RenderTarget must be texture");
-				target.Texture = reinterpret_cast<Texture*>(res.m);
+				View* v = ConsumeViewRefOrDef(b, ps, id);
+				ParserAssert(v, "RenderTarget must be a RTV.");
+				if (v->Type == ViewType::Auto)
+					v->Type = ViewType::RTV;
+				ParserAssert(v->Type == ViewType::RTV, "RenderTarget must be a RTV.");
+				target.View = v;
 			}
 			draw->RenderTarget.push_back(target);
 			break;
 		}
 		case Keyword::DepthStencil:
 		{
-			TextureTarget target;
 			ConsumeToken(Token::Equals, b);
+			TextureTarget target;
 			if (TryConsumeToken(Token::At, b))
 			{
-				target.Type = BindType::SystemValue;
+				target.IsSystem = true;
 				target.System = ConsumeSystemValue(b);
 			}
 			else
 			{
-				target.Type = BindType::Texture;
+				target.IsSystem = false;
 				BufferString id = ConsumeIdentifier(b);
-				ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
-					id.len, id.base);
-				ParseState::Resource& res = ps.resMap[id];
-				ParserAssert(res.type == BindType::Texture, "DepthStencil must be texture");
-				target.Texture = reinterpret_cast<Texture*>(res.m);
+				View* v = ConsumeViewRefOrDef(b, ps, id);
+				ParserAssert(v, "DepthStencil must be a DSV.");
+				if (v->Type == ViewType::Auto)
+					v->Type = ViewType::DSV;
+				ParserAssert(v->Type == ViewType::DSV, "DepthStencil must be a DSV.");
+				target.View = v;
 			}
 			draw->DepthStencil.push_back(target);
 			break;
@@ -2290,17 +2438,50 @@ ClearColor* ConsumeClearColorDef(
 {
 	RenderDescription* rd = ps.rd;
 
+	ConsumeToken(Token::LBrace, b);
+
 	ClearColor* clear = new ClearColor();
 	rd->ClearColors.push_back(clear);
 
-	static StructEntry def[] = {
-		StructEntryDef(ClearColor, Texture, Target),
-		StructEntryDef(ClearColor, Float4, Color),
-	};
-	constexpr Token Delim = Token::Semicolon;
-	constexpr bool TrailingRequired = true;
-	ConsumeStruct<Delim, TrailingRequired>(
-		b, clear, def, "ClearColor");
+	while (true)
+	{
+		BufferString fieldId = ConsumeIdentifier(b);
+		ConsumeToken(Token::Equals, b);
+		Keyword key = LookupKeyword(fieldId);
+
+		if (key == Keyword::Target)
+		{
+			BufferString id = ConsumeIdentifier(b);
+			View* v = ConsumeViewRefOrDef(b, ps, id);
+			ParserAssert(v, "Target must be a RTV.");
+			if (v->Type == ViewType::Auto)
+				v->Type = ViewType::RTV;
+			ParserAssert(v->Type == ViewType::RTV, "Target must be a RTV.");
+			clear->Target = v;
+		}
+		else if (key == Keyword::Color)
+		{
+			ConsumeToken(Token::LBrace, b);
+			clear->Color.x = ConsumeFloatLiteral(b);
+			ConsumeToken(Token::Comma, b);
+			clear->Color.y = ConsumeFloatLiteral(b);
+			ConsumeToken(Token::Comma, b);
+			clear->Color.z = ConsumeFloatLiteral(b);
+			ConsumeToken(Token::Comma, b);
+			clear->Color.w = ConsumeFloatLiteral(b);
+			ConsumeToken(Token::RBrace, b);
+		}
+		else 
+		{
+			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+		}
+
+		ConsumeToken(Token::Semicolon, b);
+		if (TryConsumeToken(Token::RBrace, b))
+			break;
+	}
+
+	ParserAssert(clear->Target, "Target must be set.");
 	return clear;
 }
 
@@ -2310,17 +2491,42 @@ ClearDepth* ConsumeClearDepthDef(
 {
 	RenderDescription* rd = ps.rd;
 
+	ConsumeToken(Token::LBrace, b);
+
 	ClearDepth* clear = new ClearDepth();
 	rd->ClearDepths.push_back(clear);
 
-	static StructEntry def[] = {
-		StructEntryDef(ClearDepth, Texture, Target),
-		StructEntryDef(ClearDepth, Float, Depth),
-	};
-	constexpr Token Delim = Token::Semicolon;
-	constexpr bool TrailingRequired = true;
-	ConsumeStruct<Delim, TrailingRequired>(
-		b, clear, def, "ClearDepth");
+	while (true)
+	{
+		BufferString fieldId = ConsumeIdentifier(b);
+		ConsumeToken(Token::Equals, b);
+		Keyword key = LookupKeyword(fieldId);
+
+		if (key == Keyword::Target)
+		{
+			BufferString id = ConsumeIdentifier(b);
+			View* v = ConsumeViewRefOrDef(b, ps, id);
+			ParserAssert(v, "Target must be a DSV.");
+			if (v->Type == ViewType::Auto)
+				v->Type = ViewType::DSV;
+			ParserAssert(v->Type == ViewType::DSV, "Target must be a DSV.");
+			clear->Target = v;
+		}
+		else if (key == Keyword::Depth)
+		{
+			clear->Depth = ConsumeFloatLiteral(b);
+		}
+		else 
+		{
+			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+		}
+
+		ConsumeToken(Token::Semicolon, b);
+		if (TryConsumeToken(Token::RBrace, b))
+			break;
+	}
+
+	ParserAssert(clear->Target, "Target must be set.");
 	return clear;
 }
 
@@ -2330,17 +2536,42 @@ ClearStencil* ConsumeClearStencilDef(
 {
 	RenderDescription* rd = ps.rd;
 
+	ConsumeToken(Token::LBrace, b);
+
 	ClearStencil* clear = new ClearStencil();
 	rd->ClearStencils.push_back(clear);
 
-	static StructEntry def[] = {
-		StructEntryDef(ClearStencil, Texture, Target),
-		StructEntryDef(ClearStencil, Uchar, Stencil),
-	};
-	constexpr Token Delim = Token::Semicolon;
-	constexpr bool TrailingRequired = true;
-	ConsumeStruct<Delim, TrailingRequired>(
-		b, clear, def, "ClearStencil");
+	while (true)
+	{
+		BufferString fieldId = ConsumeIdentifier(b);
+		ConsumeToken(Token::Equals, b);
+		Keyword key = LookupKeyword(fieldId);
+
+		if (key == Keyword::Target)
+		{
+			BufferString id = ConsumeIdentifier(b);
+			View* v = ConsumeViewRefOrDef(b, ps, id);
+			ParserAssert(v, "Target must be a DSV.");
+			if (v->Type == ViewType::Auto)
+				v->Type = ViewType::DSV;
+			ParserAssert(v->Type == ViewType::DSV, "Target must be a DSV.");
+			clear->Target = v;
+		}
+		else if (key == Keyword::Stencil)
+		{
+			clear->Stencil = ConsumeUcharLiteral(b);
+		}
+		else 
+		{
+			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+		}
+
+		ConsumeToken(Token::Semicolon, b);
+		if (TryConsumeToken(Token::RBrace, b))
+			break;
+	}
+
+	ParserAssert(clear->Target, "Target must be set.");
 	return clear;
 }
 
@@ -2433,7 +2664,7 @@ void ParseMain()
 			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %.*s already defined", 
 				nameId.len, nameId.base);
 			ParseState::Resource& res = ps.resMap[nameId];
-			res.type = BindType::Buffer;
+			res.type = ParseState::ResType::Buffer;
 			res.m = buf;
 			break;
 		}
@@ -2444,7 +2675,7 @@ void ParseMain()
 			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %.*s already defined",
 				nameId.len, nameId.base);
 			ParseState::Resource& res = ps.resMap[nameId];
-			res.type = BindType::Texture;
+			res.type = ParseState::ResType::Texture;
 			res.m = tex;
 			break;
 		}
@@ -2455,8 +2686,52 @@ void ParseMain()
 			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %.*s already defined",
 				nameId.len, nameId.base);
 			ParseState::Resource& res = ps.resMap[nameId];
-			res.type = BindType::Sampler;
+			res.type = ParseState::ResType::Sampler;
 			res.m = s;
+			break;
+		}
+		case Keyword::SRV:
+		{
+			View* v = ConsumeViewDef(b,ps, ViewType::SRV);
+			BufferString nameId = ConsumeIdentifier(b);
+			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %.*s already defined",
+				nameId.len, nameId.base);
+			ParseState::Resource& res = ps.resMap[nameId];
+			res.type = ParseState::ResType::View;
+			res.m = v;
+			break;
+		}
+		case Keyword::UAV:
+		{
+			View* v = ConsumeViewDef(b,ps, ViewType::UAV);
+			BufferString nameId = ConsumeIdentifier(b);
+			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %.*s already defined",
+				nameId.len, nameId.base);
+			ParseState::Resource& res = ps.resMap[nameId];
+			res.type = ParseState::ResType::View;
+			res.m = v;
+			break;
+		}
+		case Keyword::RTV:
+		{
+			View* v = ConsumeViewDef(b,ps, ViewType::RTV);
+			BufferString nameId = ConsumeIdentifier(b);
+			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %.*s already defined",
+				nameId.len, nameId.base);
+			ParseState::Resource& res = ps.resMap[nameId];
+			res.type = ParseState::ResType::View;
+			res.m = v;
+			break;
+		}
+		case Keyword::DSV:
+		{
+			View* v = ConsumeViewDef(b,ps, ViewType::DSV);
+			BufferString nameId = ConsumeIdentifier(b);
+			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %.*s already defined",
+				nameId.len, nameId.base);
+			ParseState::Resource& res = ps.resMap[nameId];
+			res.type = ParseState::ResType::View;
+			res.m = v;
 			break;
 		}
 		case Keyword::RasterizerState:
@@ -2650,6 +2925,8 @@ void ReleaseData(RenderDescription* data)
 		delete tex;
 	for (Sampler* s : data->Samplers)
 		delete s;
+	for (View* v : data->Views)
+		delete v;
 	for (RasterizerState* rs : data->RasterizerStates)
 		delete rs;
 	for (DepthStencilState* dss : data->DepthStencilStates)
