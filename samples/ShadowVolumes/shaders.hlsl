@@ -57,18 +57,29 @@ void CSGenerateShadowVolumes(uint3 DTid : SV_DispatchThreadID)
 	VBOut[DTid.x] = 1;
 }
 
-Texture2D<float4> InTexture;
+Texture2D<float> Depth;
+Texture2D<uint2> Stencil;
 RWTexture2D<float4> OutTexture;
 SamplerState Sampler;
 
 [numthreads(8,8,1)]
-void CSCopy(uint3 DTid : SV_DispatchThreadID)
+void CSResolve(uint3 DTid : SV_DispatchThreadID)
 {
 	if (any(DTid.xy > uint2(TextureSize)))
 		return;
 
-	float4 val = InTexture.SampleLevel(Sampler, DTid.xy/TextureSize, 0);
+	uint mips;
+	uint2 dims;
+	Depth.GetDimensions(0, dims.x, dims.y, mips);
 
-	OutTexture[DTid.xy] = val;
+	float2 loadCoords = DTid.xy / TextureSize * dims;	
+
+	float depth = Depth.Load(float3(loadCoords,0));
+	uint stencil = Stencil.Load(float3(loadCoords,0)).g;
+
+	float s = depth < 1 ? 1-depth + 0.3 : 0;
+	float inShadow = stencil == 0 ? s : s*0.5;
+
+	OutTexture[DTid.xy] = float4(inShadow.xxx, 1);
 }
 

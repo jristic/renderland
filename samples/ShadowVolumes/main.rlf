@@ -66,10 +66,25 @@ Texture {
 } RT
 
 Texture {
-	Format = D24_UNORM_S8_UINT;
+	Format = R24G8_TYPELESS;
 	Size = {1024,1024};
-	Flags = { DSV };
+	Flags = { SRV, DSV };
 } DS
+
+DSV {
+	Resource = DS;
+	Format = D24_UNORM_S8_UINT;
+} depthStencilView
+
+SRV {
+	Resource = DS;
+	Format = R24_UNORM_X8_TYPELESS;
+} depthSrv
+
+SRV {
+	Resource = DS;
+	Format = X24_TYPELESS_G8_UINT;
+} stencilSrv
 
 
 Dispatch {
@@ -91,7 +106,7 @@ DrawIndexed {
 	};
 	VertexBuffer = verts;
 	IndexBuffer = indices;
-	DepthStencil = DS;
+	DepthStencil = depthStencilView;
 	SetConstantVs Matrix = ProjView;
 } drawFloorDepth
 
@@ -102,7 +117,7 @@ DrawIndexed {
 		EntryPoint = "VSMainWithBuffer";
 	};
 	IndexBuffer = indices;
-	DepthStencil = DS;
+	DepthStencil = depthStencilView;
 	BindVS VB = blocker;
 	SetConstantVs Matrix = ProjView;
 } drawBlockerDepth
@@ -114,7 +129,7 @@ DrawIndexed {
 		EntryPoint = "VSMainWithBuffer";
 	};
 	IndexBuffer = volumeIndices;
-	DepthStencil = DS;
+	DepthStencil = depthStencilView;
 	DSState = DepthStencilState {
 		DepthWrite = false;
 		DepthFunc = LessEqual;
@@ -143,7 +158,7 @@ DrawIndexed {
 	VertexBuffer = verts;
 	IndexBuffer = indices;
 	RenderTarget = RT;
-	DepthStencil = DS;
+	DepthStencil = depthStencilView;
 	DSState = DepthStencilState {
 		DepthWrite = false;
 		StencilEnable = true;
@@ -168,7 +183,7 @@ DrawIndexed {
 	};
 	IndexBuffer = indices;
 	RenderTarget = RT;
-	DepthStencil = DS;
+	DepthStencil = depthStencilView;
 	DSState = DepthStencilState {
 		DepthWrite = false;
 		StencilEnable = true;
@@ -185,24 +200,23 @@ DrawIndexed {
 Dispatch {
 	Shader = ComputeShader {
 		ShaderPath = "shaders.hlsl";
-		EntryPoint = "CSCopy";
+		EntryPoint = "CSResolve";
 	};
 	ThreadPerPixel = true; 
-	Bind InTexture = RT;
+	bind Depth = depthSrv;
+	bind Stencil = stencilSrv;
 	Bind OutTexture = @BackBuffer;
-	Bind Sampler= PointSampler;
 	setconstant TextureSize = DisplaySize();
-} blitOut
+} resolve
 
 Passes {
 	ClearColor{ Target=RT; Color={0,0,0,1}; },
-	ClearDepth{ Target=DS; Depth=1; },
-	ClearStencil{ Target=DS; Stencil=0; },
+	ClearDepth{ Target=depthStencilView; Depth=1; },
+	ClearStencil{ Target=depthStencilView; Stencil=0; },
 	generateBlocker,
 	drawFloorDepth,
 	drawBlockerDepth,
 	applyVolumes,
 	drawFloorColor,
-	drawBlockerColor,
-	blitOut
+	resolve
 }

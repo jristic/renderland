@@ -815,7 +815,7 @@ void InitMain(
 			HRESULT hr = device->CreateUnorderedAccessView(res, &vd, &v->UAVObject);
 			CheckHresult(hr, "UAV");
 		}
-		if (v->Type == ViewType::RTV)
+		else if (v->Type == ViewType::RTV)
 		{
 			D3D11_RENDER_TARGET_VIEW_DESC vd;
 			vd.Format = fmt;
@@ -825,7 +825,7 @@ void InitMain(
 			HRESULT hr = device->CreateRenderTargetView(res, &vd, &v->RTVObject);
 			CheckHresult(hr, "RTV");
 		}
-		if (v->Type == ViewType::DSV)
+		else if (v->Type == ViewType::DSV)
 		{
 			D3D11_DEPTH_STENCIL_VIEW_DESC vd;
 			vd.Format = fmt;
@@ -836,6 +836,8 @@ void InitMain(
 			HRESULT hr = device->CreateDepthStencilView(res, &vd, &v->DSVObject);
 			CheckHresult(hr, "DSV");
 		}
+		else
+			Unimplemented();
 	}
 
 	for (Sampler* s : rd->Samplers)
@@ -954,6 +956,10 @@ void ReleaseD3D(
 			break;
 		case ViewType::DSV:
 			SafeRelease(v->DSVObject);
+			break;
+		case ViewType::Auto:
+			// NOTE: intentional do-nothing, if Auto hasn't been replaced then an object
+			//	was never created.
 			break;
 		default:
 			Unimplemented();
