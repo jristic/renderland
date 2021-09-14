@@ -200,6 +200,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(Constant) \
 	RLF_KEYWORD_ENTRY(Tuneable) \
 	RLF_KEYWORD_ENTRY(Resource) \
+	RLF_KEYWORD_ENTRY(Raw) \
 
 #define RLF_KEYWORD_ENTRY(name) name,
 enum class Keyword
@@ -811,6 +812,7 @@ BufferFlag ConsumeBufferFlag(BufferIter& b)
 		Keyword::Index,			BufferFlag_Index,
 		Keyword::Structured,	BufferFlag_Structured,
 		Keyword::IndirectArgs,	BufferFlag_IndirectArgs,
+		Keyword::Raw,			BufferFlag_Raw,
 	};
 	return ConsumeFlags(b, def, "BufferFlag");
 }

@@ -27,9 +27,6 @@
 **** Expand draw pipeline support.
 	* Render to texture
 		* need some way to size rendertarget based on backbuffer
-	* Access depth/stencil through SRV
-		* Typeless format on a resource with a SRV that has a typed format.
-	* Raw buffer support for updating vertex buffers from compute.  
 	* Viewport.
 	* Blend state.
 	* Multiple RT support. 

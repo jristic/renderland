@@ -149,6 +149,8 @@ u32 RlfToD3d_Misc(BufferFlag flags)
 		f |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
 	if (flags & BufferFlag_IndirectArgs) 
 		f |= D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
+	if (flags & BufferFlag_Raw)
+		f |= D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
 	return f;
 }
 
@@ -366,6 +368,7 @@ void ResolveBind(Bind& bind, ID3D11ShaderReflection* reflector, const char* path
 	{
 	case D3D_SIT_TEXTURE:
 	case D3D_SIT_STRUCTURED:
+	case D3D_SIT_BYTEADDRESS:
 		InitAssert(bind.Type == BindType::SystemValue || bind.Type == BindType::View && 
 			(bind.ViewBind->Type == ViewType::Auto || bind.ViewBind->Type == ViewType::SRV),
 			"Mismatched bind to SRV slot.")
@@ -377,13 +380,12 @@ void ResolveBind(Bind& bind, ID3D11ShaderReflection* reflector, const char* path
 		break;
 	case D3D_SIT_UAV_RWTYPED:
 	case D3D_SIT_UAV_RWSTRUCTURED:
+	case D3D_SIT_UAV_RWBYTEADDRESS:
 		InitAssert(bind.Type == BindType::SystemValue || bind.Type == BindType::View && 
 			(bind.ViewBind->Type == ViewType::Auto || bind.ViewBind->Type == ViewType::UAV),
 			"Mismatched bind to UAV slot.")
 		bind.IsOutput = true;
 		break;
-	case D3D_SIT_BYTEADDRESS:
-	case D3D_SIT_UAV_RWBYTEADDRESS:
 	case D3D_SIT_UAV_APPEND_STRUCTURED:
 	case D3D_SIT_UAV_CONSUME_STRUCTURED:
 	case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
@@ -779,9 +781,19 @@ void InitMain(
 			vd.Format = fmt;
 			if (v->ResourceType == ResourceType::Buffer)
 			{
-				vd.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
-				vd.Buffer.FirstElement = 0;
-				vd.Buffer.NumElements = v->Buffer->ElementCount;
+				if (v->Buffer->Flags & BufferFlag_Raw)
+				{
+					vd.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
+					vd.BufferEx.FirstElement = 0;
+					vd.BufferEx.NumElements = v->Buffer->ElementCount;
+					vd.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
+				}
+				else
+				{
+					vd.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+					vd.Buffer.FirstElement = 0;
+					vd.Buffer.NumElements = v->Buffer->ElementCount;
+				}
 			}
 			else if (v->ResourceType == ResourceType::Texture)
 			{
@@ -803,7 +815,8 @@ void InitMain(
 				vd.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
 				vd.Buffer.FirstElement = 0;
 				vd.Buffer.NumElements = v->Buffer->ElementCount;
-				vd.Buffer.Flags = 0;
+				vd.Buffer.Flags = v->Buffer->Flags & BufferFlag_Raw ? 
+					D3D11_BUFFER_UAV_FLAG_RAW : 0;
 			}
 			else if (v->ResourceType == ResourceType::Texture)
 			{

@@ -1,0 +1,28 @@
+
+Buffer {
+	ElementSize = 4;
+	ElementCount = 3;
+	Flags = {IndirectArgs, Raw};
+} iargs
+
+Passes {
+	Dispatch {
+		Shader = ComputeShader {
+			ShaderPath = "alt_raw.hlsl";
+			EntryPoint = "ProducerMain";
+		};
+		Groups = { 1, 1, 1 };
+		Bind OutArgs = UAV { Resource=iargs; Format=R32_TYPELESS; };
+		setconstant Time = time();
+	},
+	DispatchIndirect {
+		Shader = ComputeShader {
+			ShaderPath = "main.hlsl";
+			EntryPoint = "ConsumerMain";
+		};
+		IndirectArgs = iargs;
+		IndirectArgsOffset = 0;
+		Bind OutTexture = @BackBuffer;
+		setconstant TextureSize = DisplaySize();
+	}
+}
