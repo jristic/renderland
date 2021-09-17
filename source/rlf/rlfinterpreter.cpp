@@ -785,14 +785,16 @@ void InitMain(
 				{
 					vd.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
 					vd.BufferEx.FirstElement = 0;
-					vd.BufferEx.NumElements = v->Buffer->ElementCount;
+					vd.BufferEx.NumElements = v->NumElements > 0 ? v->NumElements :
+						v->Buffer->ElementCount;
 					vd.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
 				}
 				else
 				{
 					vd.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
 					vd.Buffer.FirstElement = 0;
-					vd.Buffer.NumElements = v->Buffer->ElementCount;
+					vd.Buffer.NumElements = v->NumElements > 0 ? v->NumElements :
+						v->Buffer->ElementCount;
 				}
 			}
 			else if (v->ResourceType == ResourceType::Texture)
@@ -814,7 +816,8 @@ void InitMain(
 			{
 				vd.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
 				vd.Buffer.FirstElement = 0;
-				vd.Buffer.NumElements = v->Buffer->ElementCount;
+				vd.Buffer.NumElements = v->NumElements > 0 ? v->NumElements : 
+					v->Buffer->ElementCount;
 				vd.Buffer.Flags = v->Buffer->Flags & BufferFlag_Raw ? 
 					D3D11_BUFFER_UAV_FLAG_RAW : 0;
 			}
@@ -1285,6 +1288,11 @@ void ExecuteDraw(
 	ctx->RSSetState(draw->RState ? draw->RState->RSObject : DefaultRasterizerState);
 	ctx->OMSetDepthStencilState(draw->DSState ? draw->DSState->DSSObject : nullptr,
 		draw->StencilRef);
+	u32 offset = 0;
+	Buffer* vb = draw->VertexBuffer;
+	if (vb)
+		ctx->IASetVertexBuffers(0, 1, &vb->BufferObject, &vb->ElementSize, 
+			&offset);
 	if (draw->Type == DrawType::Draw)
 	{
 		ctx->Draw(draw->VertexCount, 0);
@@ -1292,14 +1300,9 @@ void ExecuteDraw(
 	else if (draw->Type == DrawType::DrawIndexed)
 	{
 		Buffer* ib = draw->IndexBuffer;
-		Buffer* vb = draw->VertexBuffer;
 		ExecuteAssert(ib, "DrawIndexed must have an index buffer");
 		ctx->IASetIndexBuffer(ib->BufferObject, ib->ElementSize == 2 ? 
 			DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT, 0);
-		u32 offset = 0;
-		if (vb)
-			ctx->IASetVertexBuffers(0, 1, &vb->BufferObject, &vb->ElementSize, 
-				&offset);
 		ctx->DrawIndexed(ib->ElementCount, 0, 0);
 	}
 	else

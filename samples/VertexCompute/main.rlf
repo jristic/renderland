@@ -1,0 +1,41 @@
+
+Buffer {
+	ElementSize = 12;
+	ElementCount = 4;
+	Flags = { Vertex, Raw };
+} verts
+
+Dispatch {
+	Shader = ComputeShader {
+		ShaderPath = "shaders.hlsl";
+		EntryPoint = "CSMain";
+	};
+	Groups = {1,1,1};
+	bind OutVerts = UAV { Resource=verts; Format=R32_TYPELESS; NumElements=12; };
+	setconstant Time = time();
+} updateVerts
+
+Draw {
+	Topology = LineStrip;
+	VShader = VertexShader {
+		ShaderPath = "vertex.hlsl";
+		EntryPoint = "VSMain";
+	};
+	PShader = PixelShader {
+		ShaderPath = "pixel.hlsl";
+		EntryPoint = "PSMain";
+	};
+	VertexBuffer = verts;
+	VertexCount = 4;
+	RenderTarget = @BackBuffer;
+	DepthStencil = @DefaultDepth;
+	SetConstantVs Matrix = 
+		projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 0.1, 10)
+		* 
+		lookAt(float3(2,1,0), float3(0,0,0));
+} objDraw
+
+Passes {
+	updateVerts,
+	objDraw
+}

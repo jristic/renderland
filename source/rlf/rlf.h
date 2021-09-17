@@ -230,6 +230,7 @@ namespace rlf
 			Texture* Texture;
 		};
 		TextureFormat Format;
+		u32 NumElements;
 		union {
 			ID3D11ShaderResourceView* SRVObject;
 			ID3D11UnorderedAccessView* UAVObject;

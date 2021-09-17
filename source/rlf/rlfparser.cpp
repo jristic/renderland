@@ -131,6 +131,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(Vertex) \
 	RLF_KEYWORD_ENTRY(Index) \
 	RLF_KEYWORD_ENTRY(Structured) \
+	RLF_KEYWORD_ENTRY(Raw) \
 	RLF_KEYWORD_ENTRY(U16) \
 	RLF_KEYWORD_ENTRY(U32) \
 	RLF_KEYWORD_ENTRY(Float) \
@@ -200,7 +201,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(Constant) \
 	RLF_KEYWORD_ENTRY(Tuneable) \
 	RLF_KEYWORD_ENTRY(Resource) \
-	RLF_KEYWORD_ENTRY(Raw) \
+	RLF_KEYWORD_ENTRY(NumElements) \
 
 #define RLF_KEYWORD_ENTRY(name) name,
 enum class Keyword
@@ -943,6 +944,10 @@ View* ConsumeViewDef(BufferIter& b, ParseState& ps, ViewType vt)
 			ParserAssert(GPS->fmtMap.count(formatId) != 0, "Couldn't find format %.*s", 
 				formatId.len, formatId.base);
 			v->Format = GPS->fmtMap[formatId];
+		}
+		else if (key == Keyword::NumElements)
+		{
+			v->NumElements = ConsumeUintLiteral(b);
 		}
 		else 
 		{
