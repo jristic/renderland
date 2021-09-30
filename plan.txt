@@ -31,8 +31,8 @@
 	* Blend state.
 	* Multiple RT support. 
 	* Instancing for draws.
-	* Indirect dispatch and draws.
-		* will need to implment append and consume buffers as well.
+	* Indirect draws.
+	* Append and consume buffers.
 	* Multiple vertex buffer support. 
 	* MSAA support.
 
@@ -48,7 +48,6 @@
 	* Debug viz tools for seeing the contents of textures/buffers/rendertargets/depthstencils at any given point in the frame. 
 
 Samples:
-	* Compute-generated vertex buffer for a draw -> Sphere with an undulating surface. 
 	* Shadow-sampling methods comparison. 
 	* Clustered lighting.
 	* Compute-based culling with draw-indirect.

@@ -1,22 +1,33 @@
 
+constant uint VertCount = 482;
+
+ObjImport {
+	ObjPath = "sphere.obj";
+} sphere
+
 Buffer {
-	ElementSize = 12;
-	ElementCount = 4;
 	Flags = { Vertex, Raw };
+	InitData = sphere.vertices;
 } verts
+
+Buffer {
+	Flags = {Index};
+	InitData = sphere.indices;
+} indices
 
 Dispatch {
 	Shader = ComputeShader {
 		ShaderPath = "shaders.hlsl";
 		EntryPoint = "CSMain";
 	};
-	Groups = {1,1,1};
-	bind OutVerts = UAV { Resource=verts; Format=R32_TYPELESS; NumElements=12; };
+	Groups = {8,1,1};
+	bind OutVerts = UAV { Resource=verts; Format=R32_TYPELESS; NumElements=3856; };
 	setconstant Time = time();
+	setconstant VertCount = VertCount;
 } updateVerts
 
-Draw {
-	Topology = LineStrip;
+DrawIndexed {
+	Topology = TriList;
 	VShader = VertexShader {
 		ShaderPath = "vertex.hlsl";
 		EntryPoint = "VSMain";
@@ -26,7 +37,7 @@ Draw {
 		EntryPoint = "PSMain";
 	};
 	VertexBuffer = verts;
-	VertexCount = 4;
+	IndexBuffer = indices;
 	RenderTarget = @BackBuffer;
 	DepthStencil = @DefaultDepth;
 	SetConstantVs Matrix = 

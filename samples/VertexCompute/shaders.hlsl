@@ -2,9 +2,19 @@
 RWByteAddressBuffer OutVerts;
 
 float Time;
+uint VertCount;
 
-[numthreads(4,1,1)]
+[numthreads(64,1,1)]
 void CSMain(uint3 DTid : SV_DispatchThreadID)
 {
-	OutVerts.Store3(DTid.x*12, asuint(float3(0, sin(Time+DTid.x), DTid.x)));
+	if (DTid.x >= VertCount)
+		return;
+	uint byteOffset = DTid.x * 4 * 8;
+	float3 pos = asfloat(OutVerts.Load3(byteOffset));
+
+	pos = normalize(pos);
+	float amt = (pos.x*573.9 + pos.y*337.3 + pos.z*97.3 + Time*0.1) % 0.1;
+	pos = (1 + amt) * pos;
+
+	OutVerts.Store3(byteOffset, asuint(pos));
 }
