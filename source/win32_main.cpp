@@ -313,7 +313,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 					if (tune->Type == rlf::BoolType)
 						ImGui::Checkbox(tune->Name, &tune->Value.BoolVal);
 					else if (tune->Type == rlf::FloatType)
-						ImGui::DragFloat(tune->Name, &tune->Value.FloatVal, 1.f,
+						ImGui::DragFloat(tune->Name, &tune->Value.FloatVal, 0.01f,
+							tune->Min.FloatVal, tune->Max.FloatVal);
+					else if (tune->Type == rlf::Float3Type)
+						ImGui::DragFloat3(tune->Name, (float*)&tune->Value.Float4Val.m, 0.01f,
 							tune->Min.FloatVal, tune->Max.FloatVal);
 					else if (tune->Type == rlf::IntType)
 						ImGui::DragInt(tune->Name, &tune->Value.IntVal, 1.f, 

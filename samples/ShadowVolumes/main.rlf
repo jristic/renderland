@@ -4,6 +4,8 @@ Constant float4x4 ProjView =
 	* 
 	lookAt(float3(1,1,0), float3(0,0,0));
 
+Tuneable float3 LightPos[-2,2] = 0,1,0;
+
 Buffer {
 	ElementSize = 12;
 	ElementCount = 4;
@@ -96,6 +98,7 @@ Dispatch {
 	Bind VBOut = blocker;
 	Bind ShadowOut = volumes;
 	setconstant Time = Time();
+	setconstant LightPos = LightPos;
 } generateBlocker
 
 DrawIndexed {

@@ -135,6 +135,7 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(U16) \
 	RLF_KEYWORD_ENTRY(U32) \
 	RLF_KEYWORD_ENTRY(Float) \
+	RLF_KEYWORD_ENTRY(Float3) \
 	RLF_KEYWORD_ENTRY(Float4x4) \
 	RLF_KEYWORD_ENTRY(Bool) \
 	RLF_KEYWORD_ENTRY(Int) \
@@ -1223,23 +1224,27 @@ SetConstant ConsumeSetConstant(BufferIter& b, ParseState& ps)
 
 void ConsumeVariable(VariableType type, Variable& var, BufferIter& b)
 {
-	Assert(type.Dim == 1, "Unhandled");
-	switch (type.Fmt)
+	for (u32 i = 0 ; i < type.Dim ; ++i)
 	{
-	case VariableFormat::Float:
-		var.FloatVal = ConsumeFloatLiteral(b);
-		break;
-	case VariableFormat::Bool:
-		var.BoolVal = ConsumeBool(b);
-		break;
-	case VariableFormat::Int:
-		var.IntVal = ConsumeIntLiteral(b);
-		break;
-	case VariableFormat::Uint:
-		var.UintVal = ConsumeUintLiteral(b);
-		break;
-	default:
-		Unimplemented();
+		if (i != 0)
+			ConsumeToken(Token::Comma, b);
+		switch (type.Fmt)
+		{
+		case VariableFormat::Float:
+			var.Float4Val.m[i] = ConsumeFloatLiteral(b);
+			break;
+		case VariableFormat::Bool:
+			var.Bool4Val.m[i] = ConsumeBool(b);
+			break;
+		case VariableFormat::Int:
+			var.Int4Val.m[i] = ConsumeIntLiteral(b);
+			break;
+		case VariableFormat::Uint:
+			var.Uint4Val.m[i] = ConsumeUintLiteral(b);
+			break;
+		default:
+			Unimplemented();
+		}
 	}
 }
 
@@ -1254,6 +1259,9 @@ Tuneable* ConsumeTuneable(BufferIter& b, ParseState& ps)
 	{
 	case Keyword::Float:
 		tune->Type = FloatType;
+		break;
+	case Keyword::Float3:
+		tune->Type = Float3Type;
 		break;
 	case Keyword::Bool:
 		tune->Type = BoolType;
@@ -1282,9 +1290,11 @@ Tuneable* ConsumeTuneable(BufferIter& b, ParseState& ps)
 	if (tune->Type != BoolType && TryConsumeToken(Token::LBracket,b))
 	{
 		hasRange = true;
-		ConsumeVariable(tune->Type, tune->Min, b);
+		VariableType mmType = tune->Type;
+		mmType.Dim = 1;
+		ConsumeVariable(mmType, tune->Min, b);
 		ConsumeToken(Token::Comma,b);
-		ConsumeVariable(tune->Type, tune->Max, b);
+		ConsumeVariable(mmType, tune->Max, b);
 		ConsumeToken(Token::RBracket,b);
 	}
 

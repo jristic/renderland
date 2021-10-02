@@ -30,6 +30,8 @@ float4 PSMain_Black(float4 pos : SV_Position) : SV_Target0
 	return float4(1-(pos.zzz*pos.z), 1);
 }
 
+float3 LightPos;
+
 RWStructuredBuffer<float3> VBOut;
 RWStructuredBuffer<float3> ShadowOut;
 [numthreads(4,1,1)]
@@ -46,9 +48,8 @@ void CSGenerateBlockerAndShadow(uint3 DTid : SV_DispatchThreadID)
 	coords.x = cost*x - sint*z;
 	coords.z = sint*x + cost*z;
 	VBOut[DTid.x] = coords;
-	float3 lightPos = float3(0,1,0);
 	ShadowOut[DTid.x] = coords;
-	ShadowOut[4+DTid.x] = coords + 4*(coords-lightPos);
+	ShadowOut[4+DTid.x] = coords + 4*(coords-LightPos);
 }
 
 [numthreads(1,1,1)]

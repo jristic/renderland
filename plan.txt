@@ -20,10 +20,6 @@
 	* Some way to only run a pass on the first frame, for instance. 
 	* Some way to choose which shader to run based on some condition. 
 
-* Constant buffers and constant filling
-	* Tuneables: Specify shader parameters in the RLF and allow tuning via the imgui display.
-		* Support vector tuneables, including with the color editor. 
-
 **** Expand draw pipeline support.
 	* Render to texture
 		* need some way to size rendertarget based on backbuffer
@@ -41,10 +37,12 @@
 	* Have InitD3D use InitAssert instead of all the returning. 
 	* Refactor system values.
 	* Texture flag cleanup -> SRV/UAV/RTV/DSV can be determined from usage. or keep it explicit?
+	* Make obj parsing handle not having normals or UVs. 
 
 *** UI:
 	* Switch to the dearimgui docking branch.
 	* Event-viewer style list of the passes in a frame. 
+	* Tuneables panel.
 	* Debug viz tools for seeing the contents of textures/buffers/rendertargets/depthstencils at any given point in the frame. 
 
 Samples:
