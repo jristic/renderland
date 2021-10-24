@@ -216,14 +216,7 @@ ID3DBlob* CommonCompileShader(const char* path, const char* profile,
 	const char * entry, InitErrorState* errorState)
 {
 	HANDLE shader = fileio::OpenFileOptional(path, GENERIC_READ);
-
-	if (shader == INVALID_HANDLE_VALUE) // file not found
-	{
-		errorState->InitSuccess = false;
-		errorState->ErrorMessage = std::string("Couldn't find shader file: ") + 
-			path;
-		return nullptr;
-	}
+	InitAssert(shader != INVALID_HANDLE_VALUE, "Couldn't find shader file: %s", path);
 
 	u32 shaderSize = fileio::GetFileSize(shader);
 
@@ -242,20 +235,17 @@ ID3DBlob* CommonCompileShader(const char* path, const char* profile,
 
 	free(shaderBuffer);
 
-	errorState->InitSuccess = (hr == S_OK);
+	bool success = (hr == S_OK);
 
-	if (!errorState->InitSuccess)
+	if (!success)
 	{
 		Assert(errorBlob != nullptr, "No error info given for shader compile fail.");
 		char* errorText = (char*)errorBlob->GetBufferPointer();
-		errorState->ErrorMessage = std::string("Failed to compile shader:\n") +
-			errorText;
 
 		Assert(shaderBlob == nullptr, "leak");
-
 		SafeRelease(errorBlob);
 
-		return nullptr;
+		InitError("Failed to compile shader:\n %s", errorText);
 	}
 
 	// check for warnings
@@ -349,20 +339,14 @@ void CreateInputLayout(ID3D11Device* device, VertexShader* shader, ID3DBlob* blo
 	}
 }
 
-void ResolveBind(Bind& bind, ID3D11ShaderReflection* reflector, const char* path,
-	InitErrorState* errorState)
+void ResolveBind(Bind& bind, ID3D11ShaderReflection* reflector, const char* path)
 {
 	D3D11_SHADER_INPUT_BIND_DESC desc;
 	HRESULT hr = reflector->GetResourceBindingDescByName(bind.BindTarget, 
 		&desc);
 	Assert(hr == S_OK || hr == E_INVALIDARG, "unhandled error, hr=%x", hr);
-	if (hr == E_INVALIDARG)
-	{
-		errorState->InitSuccess = false;
-		errorState->ErrorMessage = std::string("Could not find resource ") +
-			bind.BindTarget + " in shader " + path;
-		return;
-	}
+	InitAssert(hr != E_INVALIDARG, "Couldn't find resource %s in shader %s", 
+		bind.BindTarget, path);
 	bind.BindIndex = desc.BindPoint;
 	switch (desc.Type)
 	{
@@ -405,7 +389,7 @@ void ResolveBind(Bind& bind, ID3D11ShaderReflection* reflector, const char* path
 
 void PrepareConstants(
 	ID3D11ShaderReflection* reflector, std::vector<ConstantBuffer>& buffers, 
-	std::vector<SetConstant>& sets, const char* path, InitErrorState* errorState)
+	std::vector<SetConstant>& sets, const char* path)
 {
 	D3D11_SHADER_DESC sd;
 	reflector->GetDesc(&sd);
@@ -487,13 +471,7 @@ void PrepareConstants(
 				}
 			}
 		}
-		if (!cvar)
-		{
-			errorState->InitSuccess = false;
-			errorState->ErrorMessage = std::string("Could not find constant ") +
-				set.VariableName + " in shader " + path;
-			return;
-		} 
+		Assert(cvar, "Couldn't find constant %s in shader %s", set.VariableName, path);
 		D3D11_SHADER_VARIABLE_DESC vd;
 		cvar->GetDesc(&vd);
 		set.Offset = vd.StartOffset;
@@ -571,12 +549,6 @@ void InitMain(
 		ID3DBlob* shaderBlob = CommonCompileShader(shaderPath.c_str(), "cs_5_0", 
 			cs->EntryPoint, errorState);
 
-		if (errorState->InitSuccess == false)
-		{
-			Assert(shaderBlob == nullptr, "leak");
-			return;
-		}
-
 		HRESULT hr = device->CreateComputeShader(shaderBlob->GetBufferPointer(), 
 			shaderBlob->GetBufferSize(), NULL, &cs->ShaderObject);
 		Assert(hr == S_OK, "Failed to create shader, hr=%x", hr);
@@ -597,12 +569,6 @@ void InitMain(
 		ID3DBlob* shaderBlob = CommonCompileShader(shaderPath.c_str(), "vs_5_0", 
 			vs->EntryPoint, errorState);
 
-		if (errorState->InitSuccess == false)
-		{
-			Assert(shaderBlob == nullptr, "leak");
-			return;
-		}
-
 		HRESULT hr = device->CreateVertexShader(shaderBlob->GetBufferPointer(), 
 			shaderBlob->GetBufferSize(), NULL, &vs->ShaderObject);
 		Assert(hr == S_OK, "Failed to create shader, hr=%x", hr);
@@ -622,12 +588,6 @@ void InitMain(
 		ID3DBlob* shaderBlob = CommonCompileShader(shaderPath.c_str(), "ps_5_0", 
 			ps->EntryPoint, errorState);
 
-		if (errorState->InitSuccess == false)
-		{
-			Assert(shaderBlob == nullptr, "leak");
-			return;
-		}
-
 		HRESULT hr = device->CreatePixelShader(shaderBlob->GetBufferPointer(), 
 			shaderBlob->GetBufferSize(), NULL, &ps->ShaderObject);
 		Assert(hr == S_OK, "Failed to create shader, hr=%x", hr);
@@ -645,48 +605,30 @@ void InitMain(
 		ID3D11ShaderReflection* reflector = dc->Shader->Reflector;
 		for (Bind& bind : dc->Binds)
 		{
-			ResolveBind(bind, reflector, dc->Shader->ShaderPath, errorState);
-			if (errorState->InitSuccess == false)
-				return;
+			ResolveBind(bind, reflector, dc->Shader->ShaderPath);
 		}
-		PrepareConstants(reflector, dc->CBs, dc->Constants, dc->Shader->ShaderPath, 
-			errorState);
-		if (errorState->InitSuccess == false)
-			return;
+		PrepareConstants(reflector, dc->CBs, dc->Constants, dc->Shader->ShaderPath);
 	}
 
 	for (Draw* draw : rd->Draws)
 	{
-		if (!draw->VShader)
-		{
-			errorState->InitSuccess = false;
-			errorState->ErrorMessage = "Null vertex shader on draw not permitted.";
-			return;
-		}
+		InitAssert(draw->VShader, "Null vertex shader on draw not permitted.");
 		ID3D11ShaderReflection* reflector = draw->VShader->Reflector;
 		for (Bind& bind : draw->VSBinds)
 		{
-			ResolveBind(bind, reflector, draw->VShader->ShaderPath, errorState);
-			if (errorState->InitSuccess == false)
-				return;
+			ResolveBind(bind, reflector, draw->VShader->ShaderPath);
 		}
 		PrepareConstants(reflector, draw->VSCBs, draw->VSConstants,
-			draw->VShader->ShaderPath, errorState);
-		if (errorState->InitSuccess == false)
-			return;
+			draw->VShader->ShaderPath);
 		if (draw->PShader)
 		{
 			reflector = draw->PShader->Reflector;
 			for (Bind& bind : draw->PSBinds)
 			{
-				ResolveBind(bind, reflector, draw->PShader->ShaderPath, errorState);
-				if (errorState->InitSuccess == false)
-					return;
+				ResolveBind(bind, reflector, draw->PShader->ShaderPath);
 			}
 			PrepareConstants(reflector, draw->PSCBs, draw->PSConstants,
-				draw->PShader->ShaderPath, errorState);
-			if (errorState->InitSuccess == false)
-				return;
+				draw->PShader->ShaderPath);
 		}
 	}
 
@@ -716,14 +658,8 @@ void InitMain(
 		{
 			std::string ddsPath = dirPath + tex->DDSPath;
 			HANDLE dds = fileio::OpenFileOptional(ddsPath.c_str(), GENERIC_READ);
-
-			if (dds == INVALID_HANDLE_VALUE) // file not found
-			{
-				errorState->InitSuccess = false;
-				errorState->ErrorMessage = std::string("Couldn't find DDS file: ") + 
-					ddsPath;
-				return;
-			}
+			InitAssert(dds != INVALID_HANDLE_VALUE, "Couldn't find DDS file: %s", 
+				ddsPath.c_str());
 
 			u32 ddsSize = fileio::GetFileSize(dds);
 			char* ddsBuffer = (char*)malloc(ddsSize);
