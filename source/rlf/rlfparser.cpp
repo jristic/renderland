@@ -135,11 +135,19 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(U16) \
 	RLF_KEYWORD_ENTRY(U32) \
 	RLF_KEYWORD_ENTRY(Float) \
+	RLF_KEYWORD_ENTRY(Float2) \
 	RLF_KEYWORD_ENTRY(Float3) \
+	RLF_KEYWORD_ENTRY(Float4) \
 	RLF_KEYWORD_ENTRY(Float4x4) \
 	RLF_KEYWORD_ENTRY(Bool) \
 	RLF_KEYWORD_ENTRY(Int) \
+	RLF_KEYWORD_ENTRY(Int2) \
+	RLF_KEYWORD_ENTRY(Int3) \
+	RLF_KEYWORD_ENTRY(Int4) \
 	RLF_KEYWORD_ENTRY(Uint) \
+	RLF_KEYWORD_ENTRY(Uint2) \
+	RLF_KEYWORD_ENTRY(Uint3) \
+	RLF_KEYWORD_ENTRY(Uint4) \
 	RLF_KEYWORD_ENTRY(PointList) \
 	RLF_KEYWORD_ENTRY(LineList) \
 	RLF_KEYWORD_ENTRY(LineStrip) \
@@ -1083,7 +1091,7 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 		SkipWhitespace(nb);
 		Token tok = PeekNextToken(nb);
 		if (tok == Token::Comma || tok == Token::RParen || tok == Token::Semicolon ||
-			tok == Token::RParen)
+			tok == Token::RBrace)
 		{
 			break;
 		}
@@ -1124,7 +1132,7 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 		else if (tok == Token::Period)
 		{
 			ParserAssert(ast, "expected value")
-			ConsumeToken(Token::Period, b);
+			b = nb; //ConsumeToken(Token::Period, b);
 			ast::Subscript* sub = AllocateAst<ast::Subscript>(ps.rd);
 			sub->Subject = ast;
 			sub->Location = b.next;
@@ -1204,6 +1212,23 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 			ast = grp;
 			ConsumeToken(Token::RParen, b);
 		}
+		else if (tok == Token::LBrace)
+		{
+			ParserAssert(!ast, "expected op");
+			const char* loc = b.next;
+			b = nb; //ConsumeToken(Token::LBrace, b);
+			ast::Join* join = AllocateAst<ast::Join>(ps.rd);
+			while (true)
+			{
+				ast::Node* arg = ConsumeAst(b, ps);
+				join->Comps.push_back(arg);
+				if (!TryConsumeToken(Token::Comma, b))
+					break;
+			}
+			join->Location = loc;
+			ast = join;
+			ConsumeToken(Token::RBrace, b);
+		}
 		else
 			ParserError("Unexpected token given: %s", TokenNames[(u32)tok]);
 	}
@@ -1248,33 +1273,64 @@ void ConsumeVariable(VariableType type, Variable& var, BufferIter& b)
 	}
 }
 
+VariableType LookupVariableType(BufferString id)
+{
+	VariableType type = BoolType;
+	Keyword key = LookupKeyword(id);
+	switch (key)
+	{
+	case Keyword::Float:
+		type = FloatType;
+		break;
+	case Keyword::Float2:
+		type = Float2Type;
+		break;
+	case Keyword::Float3:
+		type = Float3Type;
+		break;
+	case Keyword::Float4:
+		type = Float4Type;
+		break;
+	case Keyword::Bool:
+		type = BoolType;
+		break;
+	case Keyword::Int:
+		type = IntType;
+		break;
+	case Keyword::Int2:
+		type = Int2Type;
+		break;
+	case Keyword::Int3:
+		type = Int3Type;
+		break;
+	case Keyword::Int4:
+		type = Int4Type;
+		break;
+	case Keyword::Uint:
+		type = UintType;
+		break;
+	case Keyword::Uint2:
+		type = Uint2Type;
+		break;
+	case Keyword::Uint3:
+		type = Uint3Type;
+		break;
+	case Keyword::Uint4:
+		type = Uint4Type;
+		break;
+	default:
+		ParserError("Unexpected type: %.*s", id.len, id.base);
+	}
+	return type;
+}
+
 Tuneable* ConsumeTuneable(BufferIter& b, ParseState& ps)
 {
 	Tuneable* tune = new Tuneable();
 	ps.rd->Tuneables.push_back(tune);
 
 	BufferString typeId = ConsumeIdentifier(b);
-	Keyword typeKey = LookupKeyword(typeId);
-	switch (typeKey)
-	{
-	case Keyword::Float:
-		tune->Type = FloatType;
-		break;
-	case Keyword::Float3:
-		tune->Type = Float3Type;
-		break;
-	case Keyword::Bool:
-		tune->Type = BoolType;
-		break;
-	case Keyword::Int:
-		tune->Type = IntType;
-		break;
-	case Keyword::Uint:
-		tune->Type = UintType;
-		break;
-	default:
-		ParserError("Unexpected tuneable type: %.*s", typeId.len, typeId.base);
-	}
+	tune->Type = LookupVariableType(typeId);
 
 	BufferString nameId = ConsumeIdentifier(b);
 	tune->Name = AddStringToDescriptionData(nameId, ps.rd);
@@ -1344,27 +1400,7 @@ Constant* ConsumeConstant(BufferIter& b, ParseState& ps)
 	ps.rd->Constants.push_back(cnst);
 
 	BufferString typeId = ConsumeIdentifier(b);
-	Keyword typeKey = LookupKeyword(typeId);
-	switch (typeKey)
-	{
-	case Keyword::Float:
-		cnst->Type = FloatType;
-		break;
-	case Keyword::Float4x4:
-		cnst->Type = Float4x4Type;
-		break;
-	case Keyword::Bool:
-		cnst->Type = BoolType;
-		break;
-	case Keyword::Int:
-		cnst->Type = IntType;
-		break;
-	case Keyword::Uint:
-		cnst->Type = UintType;
-		break;
-	default:
-		ParserError("Unexpected Constant type: %.*s", typeId.len, typeId.base);
-	}
+	cnst->Type = LookupVariableType(typeId);
 
 	BufferString nameId = ConsumeIdentifier(b);
 	cnst->Name = AddStringToDescriptionData(nameId, ps.rd);
@@ -1398,6 +1434,7 @@ enum class ConsumeType
 	Float4,
 	String,
 	AddressModeUVW,
+	Ast,
 	ComparisonFunc,
 	CullMode,
 	FilterMode,
@@ -1414,6 +1451,7 @@ struct StructEntry
 	size_t Offset;
 };
 #define StructEntryDef(struc, type, field) Keyword::field, ConsumeType::type, offsetof(struc, field)
+#define StructEntryDefEx(struc, type, name, field) Keyword::name, ConsumeType::type, offsetof(struc, field)
 
 StencilOpDesc ConsumeStencilOpDesc(BufferIter& b);
 
@@ -1471,6 +1509,9 @@ void ConsumeField(BufferIter& b, T* s, ConsumeType type, size_t offset)
 	}
 	case ConsumeType::AddressModeUVW:
 		*(AddressModeUVW*)p = ConsumeAddressModeUVW(b);
+		break;
+	case ConsumeType::Ast:
+		*(ast::Node**)p = ConsumeAst(b, *GPS);
 		break;
 	case ConsumeType::ComparisonFunc:
 		*(ComparisonFunc*)p = ConsumeComparisonFunc(b);
@@ -2151,7 +2192,7 @@ Texture* ConsumeTextureDef(
 
 	static StructEntry def[] = {
 		StructEntryDef(Texture, TextureFlag, Flags),
-		StructEntryDef(Texture, Uint2, Size),
+		StructEntryDefEx(Texture, Ast, Size, SizeExpr),
 		StructEntryDef(Texture, TextureFormat, Format),
 		StructEntryDef(Texture, String, DDSPath),
 	};

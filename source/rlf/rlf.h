@@ -197,6 +197,7 @@ namespace rlf
 	struct Texture
 	{
 		uint2 Size;
+		ast::Node* SizeExpr;
 		TextureFormat Format;
 		const char* DDSPath;
 		TextureFlag Flags;

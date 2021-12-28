@@ -57,20 +57,25 @@ void ExpectDim(const Node* n, u32 dim, Result& res, const char* name)
 		name, dim, res.Type.Dim);
 }
 
+VariableFormat DetermineResultFormat(VariableFormat f1, VariableFormat f2)
+{
+	if (f1 == VariableFormat::Float || f2 == VariableFormat::Float)
+		return VariableFormat::Float;
+	else if (f1 == VariableFormat::Int || f2 == VariableFormat::Int)
+		return VariableFormat::Int;
+	else if (f1 == VariableFormat::Uint || f2 == VariableFormat::Uint)
+		return VariableFormat::Uint;
+	else
+		return VariableFormat::Bool;
+}
+
 VariableType DetermineResultType(const Node* n, VariableType t1, VariableType t2)
 {
 	AstAssert(n, t1.Dim == t2.Dim || t1.Dim == 1 || t2.Dim == 1, 
 		"Vector size mismatch in operation, %u vs. %u", t1.Dim, t2.Dim);
 	VariableType t;
 	t.Dim = t1.Dim == 1 ? t2.Dim : t1.Dim;
-	if (t1.Fmt == VariableFormat::Float || t2.Fmt == VariableFormat::Float)
-		t.Fmt = VariableFormat::Float;
-	else if (t1.Fmt == VariableFormat::Int || t2.Fmt == VariableFormat::Int)
-		t.Fmt = VariableFormat::Int;
-	else if (t1.Fmt == VariableFormat::Uint || t2.Fmt == VariableFormat::Uint)
-		t.Fmt = VariableFormat::Uint;
-	else
-		t.Fmt = VariableFormat::Bool;
+	t.Fmt = DetermineResultFormat(t1.Fmt, t2.Fmt);
 	return t;
 }
 
@@ -405,6 +410,28 @@ void BinaryOp::Evaluate(const EvaluationContext& ec, Result& outRes) const
 	}
 	Assert(results.size() == 1, "Should have been reduced to just one result");
 	outRes = results.front();
+}
+
+void Join::Evaluate(const EvaluationContext& ec, Result& outRes) const
+{
+	Assert(Comps.size() > 0, "Invalid join");
+	Result res = {};
+	Comps[0]->Evaluate(ec, res);
+	for (size_t i = 1 ; i < Comps.size() ; ++i)
+	{
+		Result jr;
+		Comps[i]->Evaluate(ec, jr);
+		VariableFormat jf = DetermineResultFormat(res.Type.Fmt, jr.Type.Fmt);
+		u32 jd = res.Type.Dim + jr.Type.Dim;
+		AstAssert(this, jd <= 4, "Resulting vector of size %d is unsupported", jd);
+		for (u32 j = res.Type.Dim, k = 0 ; j < jd ; ++j, ++k)
+		{
+			res.Value.Float4Val.m[j] = jr.Value.Float4Val.m[k];
+		}
+		res.Type.Fmt = jf;
+		res.Type.Dim = jd;
+	}
+	outRes = res;
 }
 
 void VariableRef::Evaluate(const EvaluationContext&, Result& res) const

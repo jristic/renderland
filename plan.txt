@@ -21,8 +21,12 @@
 	* Some way to choose which shader to run based on some condition. 
 
 **** Expand draw pipeline support.
-	* Render to texture
-		* need some way to size rendertarget based on backbuffer
+	* Dynamic texture sizing
+		* When display size changes, recreate textures if their size changes. 
+		* When tuneables are changed, recreate textures if their size changes.
+		* Have ASTs track whether result varies by display size or time or tuneable.
+		* Textures should check that their size doesn't vary by time.
+		* Don't re-evaluate ASTs if their result is constant.
 	* Viewport.
 	* Blend state.
 	* Multiple RT support. 
@@ -34,7 +38,6 @@
 
 *** Cleanup:
 	* Handle various errors in specifying views/resources (mainly providing the wrong kind).
-	* Have InitD3D use InitAssert instead of all the returning. 
 	* Refactor system values.
 	* Texture flag cleanup -> SRV/UAV/RTV/DSV can be determined from usage. or keep it explicit?
 	* Make obj parsing handle not having normals or UVs. 

@@ -529,6 +529,7 @@ void PrepareConstants(
 void InitMain(
 	ID3D11Device* device,
 	RenderDescription* rd,
+	uint2 displaySize,
 	const char* workingDirectory,
 	InitErrorState* errorState)
 {
@@ -683,6 +684,25 @@ void InitMain(
 		}
 		else
 		{
+			ast::EvaluationContext evCtx;
+			evCtx.DisplaySize = displaySize;
+			evCtx.Time = 0;
+			ast::Result res;
+			ast::EvaluateErrorState es;
+			ast::Evaluate(evCtx, tex->SizeExpr, res, es);
+			if (!es.EvaluateSuccess)
+			{
+				InitException ie;
+				ie.Info.Location = es.Info.Location;
+				ie.Info.Message = "AST evaluation error: " + es.Info.Message;
+				throw ie;
+			}
+			InitAssert( res.Type.Dim == 2, 
+				"Size expression expected to evaluate to 2 components but got: %d",
+				res.Type.Dim);
+			Convert(res, VariableFormat::Uint);
+			tex->Size = res.Value.Uint2Val;
+
 			D3D11_TEXTURE2D_DESC desc;
 			desc.Width = tex->Size.x;
 			desc.Height = tex->Size.y;
@@ -847,6 +867,7 @@ void InitD3D(
 	ID3D11Device* device,
 	ID3D11InfoQueue* infoQueue,
 	RenderDescription* rd,
+	uint2 displaySize,
 	const char* workingDirectory,
 	InitErrorState* errorState)
 {
@@ -854,7 +875,7 @@ void InitD3D(
 	errorState->InitSuccess = true;
 	errorState->InitWarning = false;
 	try {
-		InitMain(device, rd, workingDirectory, errorState);
+		InitMain(device, rd, displaySize, workingDirectory, errorState);
 	}
 	catch (InitException ie)
 	{

@@ -68,6 +68,12 @@ struct BinaryOp : Node
 	std::vector<Type> Ops;
 };
 
+struct Join : Node
+{
+	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
+	std::vector<Node*> Comps;
+};
+
 struct VariableRef : Node
 {
 	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;

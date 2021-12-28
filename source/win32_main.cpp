@@ -53,6 +53,8 @@ std::string RlfValidationErrorMessage;
 config::Parameters Cfg = { "", false, 0, 0, 1280, 800 };
 bool StartupComplete = false;
 
+uint2 DisplaySize;
+
 rlf::RenderDescription* CurrentRenderDesc;
 
 // Forward declarations of helper functions
@@ -213,7 +215,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	ImGuiIO& io = ImGui::GetIO();
 	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
 	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
@@ -254,7 +256,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			ImGui::Begin("Shader");
 
 			ImGui::ColorEdit3("Clear color", (float*)&clear_color);
-			ImGui::Text("DisplaySize = %u / %u", (u32)io.DisplaySize.x, (u32)io.DisplaySize.y);
+			ImGui::Text("DisplaySize = %u / %u", DisplaySize.x, DisplaySize.y);
 			ImGui::Text("Time = %f", time);
 			ImGui::InputText("Rlf path", Cfg.FilePath, IM_ARRAYSIZE(Cfg.FilePath));
 			bool reload = ImGui::IsItemDeactivatedAfterEdit();
@@ -301,7 +303,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			}
 
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
-				1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+				1000.0f / io.Framerate, io.Framerate);
 
 			ImGui::Text("Exe directory: %s", ExeDirectoryPath.c_str());
 
@@ -360,8 +362,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			ctx.MainRtv = g_mainRenderTargetView;
 			ctx.MainRtUav = g_mainRenderTargetUav;
 			ctx.DefaultDepthView = g_mainDepthStencilView;
-			ctx.DisplaySize.x = (u32)io.DisplaySize.x;
-			ctx.DisplaySize.y = (u32)io.DisplaySize.y;
+			ctx.DisplaySize = DisplaySize;
 			ctx.Time = time;
 			rlf::ExecuteErrorState es = {};
 			rlf::Execute(&ctx, CurrentRenderDesc, &es);
@@ -427,6 +428,9 @@ void CreateRenderTarget()
 
 	D3D11_TEXTURE2D_DESC rtDesc = {};
 	pBackBuffer->GetDesc(&rtDesc);
+
+	DisplaySize.x = rtDesc.Width;
+	DisplaySize.y = rtDesc.Height;
 
 	D3D11_TEXTURE2D_DESC desc;
 	desc.Width = rtDesc.Width;
@@ -508,7 +512,8 @@ void CreateShader()
 	}
 
 	rlf::InitErrorState ies = {};
-	rlf::InitD3D(g_pd3dDevice, g_d3dInfoQueue, CurrentRenderDesc, dirPath.c_str(), &ies);
+	rlf::InitD3D(g_pd3dDevice, g_d3dInfoQueue, CurrentRenderDesc, DisplaySize, 
+		dirPath.c_str(), &ies);
 
 	if (ies.InitSuccess == false)
 	{

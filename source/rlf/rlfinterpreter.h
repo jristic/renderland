@@ -12,6 +12,7 @@ namespace rlf
 		ID3D11Device* device,
 		ID3D11InfoQueue* infoQueue,
 		RenderDescription* rd,
+		uint2 displaySize,
 		const char* workingDirectory,
 		InitErrorState* errorState);
 
