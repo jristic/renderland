@@ -1318,6 +1318,9 @@ VariableType LookupVariableType(BufferString id)
 	case Keyword::Uint4:
 		type = Uint4Type;
 		break;
+	case Keyword::Float4x4:
+		type = Float4x4Type;
+		break;
 	default:
 		ParserError("Unexpected type: %.*s", id.len, id.base);
 	}
