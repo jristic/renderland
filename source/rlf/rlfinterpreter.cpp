@@ -339,6 +339,143 @@ void CreateInputLayout(ID3D11Device* device, VertexShader* shader, ID3DBlob* blo
 	}
 }
 
+void CreateTexture(ID3D11Device* device, Texture* tex)
+{
+	Assert(tex->TextureObject == nullptr, "Leaking object");
+
+	D3D11_TEXTURE2D_DESC desc;
+	desc.Width = tex->Size.x;
+	desc.Height = tex->Size.y;
+	desc.MipLevels = 1;
+	desc.ArraySize = 1;
+	desc.Format = D3DTextureFormat[(u32)tex->Format];
+	desc.SampleDesc.Count = 1;
+	desc.SampleDesc.Quality = 0;
+	desc.Usage = D3D11_USAGE_DEFAULT;
+	desc.BindFlags = RlfToD3d(tex->Flags);
+	desc.CPUAccessFlags = 0;
+	desc.MiscFlags = 0;
+
+	HRESULT hr = device->CreateTexture2D(&desc, nullptr, &tex->TextureObject);
+	CheckHresult(hr, "Texture");
+}
+
+void CreateView(ID3D11Device* device, View* v)
+{
+	ID3D11Resource* res = nullptr;
+	if (v->ResourceType == ResourceType::Buffer)
+		res = v->Buffer->BufferObject;
+	else if (v->ResourceType == ResourceType::Texture)
+		res = v->Texture->TextureObject;
+	else
+		Unimplemented();
+	DXGI_FORMAT fmt = D3DTextureFormat[(u32)v->Format];
+	if (v->Type == ViewType::SRV)
+	{
+		D3D11_SHADER_RESOURCE_VIEW_DESC vd;
+		vd.Format = fmt;
+		if (v->ResourceType == ResourceType::Buffer)
+		{
+			if (v->Buffer->Flags & BufferFlag_Raw)
+			{
+				vd.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
+				vd.BufferEx.FirstElement = 0;
+				vd.BufferEx.NumElements = v->NumElements > 0 ? v->NumElements :
+					v->Buffer->ElementCount;
+				vd.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
+			}
+			else
+			{
+				vd.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+				vd.Buffer.FirstElement = 0;
+				vd.Buffer.NumElements = v->NumElements > 0 ? v->NumElements :
+					v->Buffer->ElementCount;
+			}
+		}
+		else if (v->ResourceType == ResourceType::Texture)
+		{
+			vd.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+			vd.Texture2D.MostDetailedMip = 0;
+			vd.Texture2D.MipLevels = (u32)-1;
+		}
+		else 
+			Unimplemented();
+		HRESULT hr = device->CreateShaderResourceView(res, &vd, &v->SRVObject);
+		CheckHresult(hr, "SRV");
+	}
+	else if (v->Type == ViewType::UAV)
+	{
+		D3D11_UNORDERED_ACCESS_VIEW_DESC vd;
+		vd.Format = fmt;
+		if (v->ResourceType == ResourceType::Buffer)
+		{
+			vd.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+			vd.Buffer.FirstElement = 0;
+			vd.Buffer.NumElements = v->NumElements > 0 ? v->NumElements : 
+				v->Buffer->ElementCount;
+			vd.Buffer.Flags = v->Buffer->Flags & BufferFlag_Raw ? 
+				D3D11_BUFFER_UAV_FLAG_RAW : 0;
+		}
+		else if (v->ResourceType == ResourceType::Texture)
+		{
+			vd.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+			vd.Texture2D.MipSlice = 0;
+		}
+		else 
+			Unimplemented();
+		HRESULT hr = device->CreateUnorderedAccessView(res, &vd, &v->UAVObject);
+		CheckHresult(hr, "UAV");
+	}
+	else if (v->Type == ViewType::RTV)
+	{
+		D3D11_RENDER_TARGET_VIEW_DESC vd;
+		vd.Format = fmt;
+		Assert(v->ResourceType == ResourceType::Texture, "Invalid");
+		vd.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+		vd.Texture2D.MipSlice = 0;
+		HRESULT hr = device->CreateRenderTargetView(res, &vd, &v->RTVObject);
+		CheckHresult(hr, "RTV");
+	}
+	else if (v->Type == ViewType::DSV)
+	{
+		D3D11_DEPTH_STENCIL_VIEW_DESC vd;
+		vd.Format = fmt;
+		Assert(v->ResourceType == ResourceType::Texture, "Invalid");
+		vd.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+		vd.Texture2D.MipSlice = 0;
+		vd.Flags = 0;
+		HRESULT hr = device->CreateDepthStencilView(res, &vd, &v->DSVObject);
+		CheckHresult(hr, "DSV");
+	}
+	else
+		Unimplemented();
+}
+
+void ReleaseView(View* v)
+{
+	switch (v->Type)
+	{
+	case ViewType::SRV:
+		SafeRelease(v->SRVObject);
+		break;
+	case ViewType::UAV:
+		SafeRelease(v->UAVObject);
+		break;
+	case ViewType::RTV:
+		SafeRelease(v->RTVObject);
+		break;
+	case ViewType::DSV:
+		SafeRelease(v->DSVObject);
+		break;
+	case ViewType::Auto:
+		// NOTE: intentional do-nothing, if Auto hasn't been replaced then an object
+		//	was never created.
+		break;
+	default:
+		Unimplemented();
+	}
+}
+
 void ResolveBind(Bind& bind, ID3D11ShaderReflection* reflector, const char* path)
 {
 	D3D11_SHADER_INPUT_BIND_DESC desc;
@@ -703,113 +840,13 @@ void InitMain(
 			Convert(res, VariableFormat::Uint);
 			tex->Size = res.Value.Uint2Val;
 
-			D3D11_TEXTURE2D_DESC desc;
-			desc.Width = tex->Size.x;
-			desc.Height = tex->Size.y;
-			desc.MipLevels = 1;
-			desc.ArraySize = 1;
-			desc.Format = D3DTextureFormat[(u32)tex->Format];
-			desc.SampleDesc.Count = 1;
-			desc.SampleDesc.Quality = 0;
-			desc.Usage = D3D11_USAGE_DEFAULT;
-			desc.BindFlags = RlfToD3d(tex->Flags);
-			desc.CPUAccessFlags = 0;
-			desc.MiscFlags = 0;
-
-			HRESULT hr = device->CreateTexture2D(&desc, nullptr, &tex->TextureObject);
-			CheckHresult(hr, "Texture");
+			CreateTexture(device, tex);
 		}
 	}
 
 	for (View* v : rd->Views)
 	{
-		ID3D11Resource* res = nullptr;
-		if (v->ResourceType == ResourceType::Buffer)
-			res = v->Buffer->BufferObject;
-		else if (v->ResourceType == ResourceType::Texture)
-			res = v->Texture->TextureObject;
-		else
-			Unimplemented();
-		DXGI_FORMAT fmt = D3DTextureFormat[(u32)v->Format];
-		if (v->Type == ViewType::SRV)
-		{
-			D3D11_SHADER_RESOURCE_VIEW_DESC vd;
-			vd.Format = fmt;
-			if (v->ResourceType == ResourceType::Buffer)
-			{
-				if (v->Buffer->Flags & BufferFlag_Raw)
-				{
-					vd.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
-					vd.BufferEx.FirstElement = 0;
-					vd.BufferEx.NumElements = v->NumElements > 0 ? v->NumElements :
-						v->Buffer->ElementCount;
-					vd.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
-				}
-				else
-				{
-					vd.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
-					vd.Buffer.FirstElement = 0;
-					vd.Buffer.NumElements = v->NumElements > 0 ? v->NumElements :
-						v->Buffer->ElementCount;
-				}
-			}
-			else if (v->ResourceType == ResourceType::Texture)
-			{
-				vd.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-				vd.Texture2D.MostDetailedMip = 0;
-				vd.Texture2D.MipLevels = (u32)-1;
-			}
-			else 
-				Unimplemented();
-			HRESULT hr = device->CreateShaderResourceView(res, &vd, &v->SRVObject);
-			CheckHresult(hr, "SRV");
-		}
-		else if (v->Type == ViewType::UAV)
-		{
-			D3D11_UNORDERED_ACCESS_VIEW_DESC vd;
-			vd.Format = fmt;
-			if (v->ResourceType == ResourceType::Buffer)
-			{
-				vd.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
-				vd.Buffer.FirstElement = 0;
-				vd.Buffer.NumElements = v->NumElements > 0 ? v->NumElements : 
-					v->Buffer->ElementCount;
-				vd.Buffer.Flags = v->Buffer->Flags & BufferFlag_Raw ? 
-					D3D11_BUFFER_UAV_FLAG_RAW : 0;
-			}
-			else if (v->ResourceType == ResourceType::Texture)
-			{
-				vd.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
-				vd.Texture2D.MipSlice = 0;
-			}
-			else 
-				Unimplemented();
-			HRESULT hr = device->CreateUnorderedAccessView(res, &vd, &v->UAVObject);
-			CheckHresult(hr, "UAV");
-		}
-		else if (v->Type == ViewType::RTV)
-		{
-			D3D11_RENDER_TARGET_VIEW_DESC vd;
-			vd.Format = fmt;
-			Assert(v->ResourceType == ResourceType::Texture, "Invalid");
-			vd.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-			vd.Texture2D.MipSlice = 0;
-			HRESULT hr = device->CreateRenderTargetView(res, &vd, &v->RTVObject);
-			CheckHresult(hr, "RTV");
-		}
-		else if (v->Type == ViewType::DSV)
-		{
-			D3D11_DEPTH_STENCIL_VIEW_DESC vd;
-			vd.Format = fmt;
-			Assert(v->ResourceType == ResourceType::Texture, "Invalid");
-			vd.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
-			vd.Texture2D.MipSlice = 0;
-			vd.Flags = 0;
-			HRESULT hr = device->CreateDepthStencilView(res, &vd, &v->DSVObject);
-			CheckHresult(hr, "DSV");
-		}
-		else
-			Unimplemented();
+		CreateView(device, v);
 	}
 
 	for (Sampler* s : rd->Samplers)
@@ -916,27 +953,7 @@ void ReleaseD3D(
 
 	for (View* v : rd->Views)
 	{
-		switch (v->Type)
-		{
-		case ViewType::SRV:
-			SafeRelease(v->SRVObject);
-			break;
-		case ViewType::UAV:
-			SafeRelease(v->UAVObject);
-			break;
-		case ViewType::RTV:
-			SafeRelease(v->RTVObject);
-			break;
-		case ViewType::DSV:
-			SafeRelease(v->DSVObject);
-			break;
-		case ViewType::Auto:
-			// NOTE: intentional do-nothing, if Auto hasn't been replaced then an object
-			//	was never created.
-			break;
-		default:
-			Unimplemented();
-		}
+		ReleaseView(v);
 	}
 
 	for (Sampler* s : rd->Samplers)
@@ -962,6 +979,62 @@ void ReleaseD3D(
 		}
 	}
 }
+
+void HandleDisplaySizeChanged(
+	ID3D11Device* device,
+	RenderDescription* rd,
+	uint2 displaySize)
+{
+	for (Texture* tex : rd->Textures)
+	{
+		if (tex->DDSPath)
+		{
+			// Do nothing, DDS textures are always sized based on the file. 
+		}
+		else
+		{
+			ast::EvaluationContext evCtx;
+			evCtx.DisplaySize = displaySize;
+			evCtx.Time = 0;
+			ast::Result res;
+			ast::EvaluateErrorState es;
+			ast::Evaluate(evCtx, tex->SizeExpr, res, es);
+			if (!es.EvaluateSuccess)
+			{
+				InitException ie;
+				ie.Info.Location = es.Info.Location;
+				ie.Info.Message = "AST evaluation error: " + es.Info.Message;
+				throw ie;
+			}
+			InitAssert( res.Type.Dim == 2, 
+				"Size expression expected to evaluate to 2 components but got: %d",
+				res.Type.Dim);
+			Convert(res, VariableFormat::Uint);
+			uint2 newSize = res.Value.Uint2Val;
+
+			if (tex->Size != newSize)
+			{
+				tex->Size = newSize;
+
+				SafeRelease(tex->TextureObject);
+				
+				CreateTexture(device, tex);
+
+				// Find any views that use this texture and recreate them. 
+				for (View* view : rd->Views)
+				{
+					if (view->ResourceType == ResourceType::Texture && 
+						view->Texture == tex)
+					{
+						ReleaseView(view);
+						CreateView(device, view);
+					}
+				}
+			}
+		}
+	}
+}
+
 
 
 // -----------------------------------------------------------------------------

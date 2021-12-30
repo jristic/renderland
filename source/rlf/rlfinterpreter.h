@@ -19,6 +19,11 @@ namespace rlf
 	void ReleaseD3D(
 		RenderDescription* rd);
 
+	void HandleDisplaySizeChanged(
+		ID3D11Device* device,
+		RenderDescription* rd,
+		uint2 displaySize);
+
 	struct ExecuteContext
 	{
 		ID3D11DeviceContext* D3dCtx;

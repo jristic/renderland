@@ -54,6 +54,7 @@ config::Parameters Cfg = { "", false, 0, 0, 1280, 800 };
 bool StartupComplete = false;
 
 uint2 DisplaySize;
+uint2 PrevDisplaySize;
 
 rlf::RenderDescription* CurrentRenderDesc;
 
@@ -156,6 +157,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		Cfg.WindowPosX, Cfg.WindowPosY, Cfg.WindowWidth, Cfg.WindowHeight, NULL, 
 		NULL, wc.hInstance, NULL);
 
+	// Show the window
+	::ShowWindow(hwnd, Cfg.Maximized ? SW_MAXIMIZE : SW_SHOWDEFAULT);
+	::UpdateWindow(hwnd);
+
 	// Initialize Direct3D
 	DXGI_SWAP_CHAIN_DESC sd;
 	ZeroMemory(&sd, sizeof(sd));
@@ -205,10 +210,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	CreateRenderTarget();
 
 	CreateShader();
-
-	// Show the window
-	::ShowWindow(hwnd, Cfg.Maximized ? SW_MAXIMIZE : SW_SHOWDEFAULT);
-	::UpdateWindow(hwnd);
 
 	StartupComplete = true;
 
@@ -338,6 +339,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			ImGui::End();
 		}
 
+		if (RlfCompileSuccess && DisplaySize != PrevDisplaySize)
+		{
+			rlf::HandleDisplaySizeChanged(g_pd3dDevice, CurrentRenderDesc, DisplaySize);
+		}
+
 		// ImGui::ShowDemoWindow(nullptr);
 
 		// Rendering
@@ -386,6 +392,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 		RlfValidationErrorMessage = "Validation error:\n";
 		RlfValidationError = CheckD3DValidation(RlfValidationErrorMessage);
+
+		PrevDisplaySize = DisplaySize;
 	}
 
 	// Cleanup

@@ -1,6 +1,3 @@
-* Expose D3D debug errors to the user. 
-	* Report D3D errors in object creation. 
-
 * Allow trailing commas in rlf arrays. 
 * Hex uint literals. binary too?
 * Comments support in RLF. 
@@ -22,11 +19,12 @@
 
 **** Expand draw pipeline support.
 	* Dynamic texture sizing
-		* When display size changes, recreate textures if their size changes. 
 		* When tuneables are changed, recreate textures if their size changes.
 		* Have ASTs track whether result varies by display size or time or tuneable.
 		* Textures should check that their size doesn't vary by time.
 		* Don't re-evaluate ASTs if their result is constant.
+		* Implement swizzle in AST subscript
+		* Store references to views for a given texture/buffer for lookup when they need to be recreated. 
 	* Viewport.
 	* Blend state.
 	* Multiple RT support. 

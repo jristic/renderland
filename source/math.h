@@ -128,6 +128,15 @@ uint4 operator/(const uint4& lhs, const uint4& rhs)
 	return res;
 }
 
+bool operator==(const uint2& l, const uint2& r)
+{
+	return l.x == r.x && l.y == r.y;
+}
+bool operator!=(const uint2& l, const uint2& r)
+{
+	return l.x != r.x || l.y != r.y;
+}
+
 float3 normalized(const float3& a)
 {
 	float mag = std::sqrt(a.x*a.x + a.y*a.y + a.z*a.z);
