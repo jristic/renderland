@@ -203,10 +203,6 @@ const char* TokenNames[] =
 	RLF_KEYWORD_ENTRY(StencilWriteMask) \
 	RLF_KEYWORD_ENTRY(FrontFace) \
 	RLF_KEYWORD_ENTRY(BackFace) \
-	RLF_KEYWORD_ENTRY(X) \
-	RLF_KEYWORD_ENTRY(Y) \
-	RLF_KEYWORD_ENTRY(Z) \
-	RLF_KEYWORD_ENTRY(W) \
 	RLF_KEYWORD_ENTRY(Constant) \
 	RLF_KEYWORD_ENTRY(Tuneable) \
 	RLF_KEYWORD_ENTRY(Resource) \
@@ -1137,17 +1133,20 @@ ast::Node* ConsumeAstRecurse(BufferIter& b, ParseState& ps)
 			sub->Subject = ast;
 			sub->Location = b.next;
 			BufferString ss = ConsumeIdentifier(b);
-			Keyword ssKey = LookupKeyword(ss);
-			if (ssKey == Keyword::X)
-				sub->Index = 0;
-			else if (ssKey == Keyword::Y)
-				sub->Index = 1;
-			else if (ssKey == Keyword::Z)
-				sub->Index = 2;
-			else if (ssKey == Keyword::W)
-				sub->Index = 3;
-			else
-				ParserError("Unexpected subscript: %.*s", ss.len, ss.base);
+			for (int i = 0 ; i < ss.len ; ++i)
+			{
+				char s = ss.base[i];
+				if (s == 'x' || s == 'r')
+					sub->Index[i] = 0;
+				else if (s == 'y' || s == 'g')
+					sub->Index[i] = 1;
+				else if (s == 'z' || s == 'b')
+					sub->Index[i] = 2;
+				else if (s == 'w' || s == 'a')
+					sub->Index[i] = 3;
+				else
+					ParserError("Unexpected subscript: %.*s", ss.len, ss.base);
+			}
 			ast = sub;
 		}
 		else if (tok == Token::Plus || tok == Token::Minus || tok == Token::Asterisk || 

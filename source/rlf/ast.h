@@ -74,7 +74,7 @@ struct Subscript : Node
 	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
 	virtual void GetDependency(DependencyInfo& dep) const override;
 	Node* Subject;
-	u32 Index;
+	i8 Index[4] = {-1,-1,-1,-1};
 };
 
 struct Group : Node

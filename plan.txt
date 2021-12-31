@@ -19,7 +19,6 @@
 
 **** Expand draw pipeline support.
 	* Dynamic texture sizing
-		* Implement swizzle in AST subscript
 		* Store references to views for a given texture/buffer for lookup when they need to be recreated. 
 		* Handle exception thrown by HandleDisplaySizeChanged
 		* Why aren't ast eval errors printing their location?

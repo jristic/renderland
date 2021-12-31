@@ -337,15 +337,23 @@ void Subscript::Evaluate(const EvaluationContext& ec, Result& res) const
 {
 	Result subjectRes;
 	Subject->Evaluate(ec, subjectRes);
-	AstAssert(this, Index <= subjectRes.Type.Dim, "Invalid subscript for this type");
 	AstAssert(this, subjectRes.Type.Fmt != VariableFormat::Float4x4,
 		"Subscripts aren't usable on Matrix types");
 	res.Type.Fmt = subjectRes.Type.Fmt;
-	res.Type.Dim = 1;
-	Assert(Index < 4, "Invalid subscript");
-	u8* src = ((u8*)&subjectRes.Value) + 4*Index;
-	u8* dest = (u8*)&res.Value;
-	memcpy(dest, src, 4);
+	u32 dim = 0;
+	for (int i = 0 ; i < 4 ; ++i)
+	{
+		if (Index[i] < 0)
+			break;
+		AstAssert(this, (u8)Index[i] < subjectRes.Type.Dim, "Invalid subscript for this type");
+		Assert(Index[i] < 4, "Invalid subscript");
+		u8* src = ((u8*)&subjectRes.Value) + 4*Index[i];
+		u8* dest = ((u8*)&res.Value) + 4*i;
+		memcpy(dest, src, 4);
+		++dim;
+	}
+	Assert(dim > 0, "There must've been at least one subscript element.");
+	res.Type.Dim = dim;
 }
 void Subscript::GetDependency(DependencyInfo& dep) const
 {
