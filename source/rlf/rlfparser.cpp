@@ -1082,7 +1082,7 @@ AstType* AllocateAst(RenderDescription* rd)
 	return ast;
 } 
 
-ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
+ast::Node* ConsumeAstRecurse(BufferIter& b, ParseState& ps)
 {
 	ast::Node* ast = nullptr;
 	while (true)
@@ -1108,7 +1108,7 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 				{
 					while (true)
 					{
-						ast::Node* arg = ConsumeAst(b, ps);
+						ast::Node* arg = ConsumeAstRecurse(b, ps);
 						func->Args.push_back(arg);
 						if (!TryConsumeToken(Token::Comma, b))
 							break;
@@ -1156,7 +1156,7 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 			const char* loc = b.next;
 			ParserAssert(ast, "expected value")
 			b = nb; //ConsumeToken(tok, b);
-			ast::Node* arg2 = ConsumeAst(b,ps);
+			ast::Node* arg2 = ConsumeAstRecurse(b,ps);
 			ast::BinaryOp::Type op;
 			switch (tok)
 			{
@@ -1208,7 +1208,7 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 			ParserAssert(!ast, "expected op")
 			b = nb; //ConsumeToken(Token::LParen, b);
 			ast::Group* grp = AllocateAst<ast::Group>(ps.rd);
-			grp->Sub = ConsumeAst(b, ps);
+			grp->Sub = ConsumeAstRecurse(b, ps);
 			ast = grp;
 			ConsumeToken(Token::RParen, b);
 		}
@@ -1220,7 +1220,7 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 			ast::Join* join = AllocateAst<ast::Join>(ps.rd);
 			while (true)
 			{
-				ast::Node* arg = ConsumeAst(b, ps);
+				ast::Node* arg = ConsumeAstRecurse(b, ps);
 				join->Comps.push_back(arg);
 				if (!TryConsumeToken(Token::Comma, b))
 					break;
@@ -1233,6 +1233,13 @@ ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
 			ParserError("Unexpected token given: %s", TokenNames[(u32)tok]);
 	}
 	ParserAssert(ast, "No expression given.");
+	return ast;
+}
+
+ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
+{
+	ast::Node* ast = ConsumeAstRecurse(b, ps);
+	ast->GetDependency(ast->Dep);
 	return ast;
 }
 
@@ -2203,6 +2210,12 @@ Texture* ConsumeTextureDef(
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
 		b, tex, def, "Texture");
+
+	ParserAssert(tex->DDSPath || tex->SizeExpr, 
+		"Texture size must be provided if not populated from DDS");
+	ParserAssert(!tex->SizeExpr || !tex->SizeExpr->VariesByTime(), 
+		"Texture size may not vary by time.");
+
 	return tex;
 }
 

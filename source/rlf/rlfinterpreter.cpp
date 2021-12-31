@@ -987,48 +987,44 @@ void HandleDisplaySizeChanged(
 {
 	for (Texture* tex : rd->Textures)
 	{
-		if (tex->DDSPath)
+		// DDS textures are always sized based on the file. 
+		if (tex->DDSPath || !tex->SizeExpr->VariesByDisplaySize())
+			continue;
+		ast::EvaluationContext evCtx;
+		evCtx.DisplaySize = displaySize;
+		evCtx.Time = 0;
+		ast::Result res;
+		ast::EvaluateErrorState es;
+		ast::Evaluate(evCtx, tex->SizeExpr, res, es);
+		if (!es.EvaluateSuccess)
 		{
-			// Do nothing, DDS textures are always sized based on the file. 
+			InitException ie;
+			ie.Info.Location = es.Info.Location;
+			ie.Info.Message = "AST evaluation error: " + es.Info.Message;
+			throw ie;
 		}
-		else
+		InitAssert( res.Type.Dim == 2, 
+			"Size expression expected to evaluate to 2 components but got: %d",
+			res.Type.Dim);
+		Convert(res, VariableFormat::Uint);
+		uint2 newSize = res.Value.Uint2Val;
+
+		if (tex->Size != newSize)
 		{
-			ast::EvaluationContext evCtx;
-			evCtx.DisplaySize = displaySize;
-			evCtx.Time = 0;
-			ast::Result res;
-			ast::EvaluateErrorState es;
-			ast::Evaluate(evCtx, tex->SizeExpr, res, es);
-			if (!es.EvaluateSuccess)
+			tex->Size = newSize;
+
+			SafeRelease(tex->TextureObject);
+			
+			CreateTexture(device, tex);
+
+			// Find any views that use this texture and recreate them. 
+			for (View* view : rd->Views)
 			{
-				InitException ie;
-				ie.Info.Location = es.Info.Location;
-				ie.Info.Message = "AST evaluation error: " + es.Info.Message;
-				throw ie;
-			}
-			InitAssert( res.Type.Dim == 2, 
-				"Size expression expected to evaluate to 2 components but got: %d",
-				res.Type.Dim);
-			Convert(res, VariableFormat::Uint);
-			uint2 newSize = res.Value.Uint2Val;
-
-			if (tex->Size != newSize)
-			{
-				tex->Size = newSize;
-
-				SafeRelease(tex->TextureObject);
-				
-				CreateTexture(device, tex);
-
-				// Find any views that use this texture and recreate them. 
-				for (View* view : rd->Views)
+				if (view->ResourceType == ResourceType::Texture && 
+					view->Texture == tex)
 				{
-					if (view->ResourceType == ResourceType::Texture && 
-						view->Texture == tex)
-					{
-						ReleaseView(view);
-						CreateView(device, view);
-					}
+					ReleaseView(view);
+					CreateView(device, view);
 				}
 			}
 		}

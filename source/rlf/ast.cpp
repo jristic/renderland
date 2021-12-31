@@ -8,10 +8,17 @@ struct AstException
 	ErrorInfo Info;
 };
 
-void Evaluate(const EvaluationContext& ec, const Node* ast, Result& res, 
+void Evaluate(const EvaluationContext& ec, Node* ast, Result& res, 
 	EvaluateErrorState& es)
 {
 	es.EvaluateSuccess = true;
+
+	if (ast->Constant() && ast->CacheValid)
+	{
+		res = ast->CachedResult;
+		return;
+	}
+
 	try {
 		ast->Evaluate(ec, res);
 	}
@@ -20,6 +27,9 @@ void Evaluate(const EvaluationContext& ec, const Node* ast, Result& res,
 		es.EvaluateSuccess = false;
 		es.Info = ae.Info;
 	}
+
+	ast->CachedResult = res;
+	ast->CacheValid = true;
 }
 
 void AstError(const Node* n, const char* str, ...)
@@ -317,6 +327,11 @@ void FloatLiteral::Evaluate(const EvaluationContext&, Result& res) const
 	res.Type = FloatType;
 	res.Value.FloatVal = Val;
 }
+void FloatLiteral::GetDependency(DependencyInfo& dep) const
+{
+	// Add no dependecies
+	(void)dep;
+}
 
 void Subscript::Evaluate(const EvaluationContext& ec, Result& res) const
 {
@@ -332,10 +347,18 @@ void Subscript::Evaluate(const EvaluationContext& ec, Result& res) const
 	u8* dest = (u8*)&res.Value;
 	memcpy(dest, src, 4);
 }
+void Subscript::GetDependency(DependencyInfo& dep) const
+{
+	Subject->GetDependency(dep);
+}
 
 void Group::Evaluate(const EvaluationContext& ec, Result& res) const
 {
 	Sub->Evaluate(ec, res);
+}
+void Group::GetDependency(DependencyInfo& dep) const
+{
+	Sub->GetDependency(dep);
 }
 
 void BinaryOp::Evaluate(const EvaluationContext& ec, Result& outRes) const
@@ -411,6 +434,11 @@ void BinaryOp::Evaluate(const EvaluationContext& ec, Result& outRes) const
 	Assert(results.size() == 1, "Should have been reduced to just one result");
 	outRes = results.front();
 }
+void BinaryOp::GetDependency(DependencyInfo& dep) const
+{
+	for (Node* arg : Args)
+		arg->GetDependency(dep);
+}
 
 void Join::Evaluate(const EvaluationContext& ec, Result& outRes) const
 {
@@ -433,6 +461,11 @@ void Join::Evaluate(const EvaluationContext& ec, Result& outRes) const
 	}
 	outRes = res;
 }
+void Join::GetDependency(DependencyInfo& dep) const
+{
+	for (Node* comp : Comps)
+		comp->GetDependency(dep);
+}
 
 void VariableRef::Evaluate(const EvaluationContext&, Result& res) const
 {
@@ -444,10 +477,15 @@ void VariableRef::Evaluate(const EvaluationContext&, Result& res) const
 	}
 	else
 	{
-		Constant* cnst = (Constant*)M;
+		rlf::Constant* cnst = (rlf::Constant*)M;
 		res.Type = cnst->Type;
 		res.Value = cnst->Value;
 	}
+}
+void VariableRef::GetDependency(DependencyInfo& dep) const
+{
+	if (isTuneable)
+		dep.VariesByFlags |= VariesBy_Tuneable;
 }
 
 
@@ -766,25 +804,30 @@ u32 LowerHash(const char* str)
 
 typedef void (*FunctionEvaluate)(const Node*, const EvaluationContext&, std::vector<Node*>,
 	Result&);
-std::unordered_map<u32, FunctionEvaluate> FuncMap = {
-	{ LowerHash("Int"), EvaluateInt },
-	{ LowerHash("Int2"), EvaluateInt2 },
-	{ LowerHash("Int3"), EvaluateInt3 },
-	{ LowerHash("Int4"), EvaluateInt4 },
-	{ LowerHash("Uint"), EvaluateUint },
-	{ LowerHash("Uint2"), EvaluateUint2 },
-	{ LowerHash("Uint3"), EvaluateUint3 },
-	{ LowerHash("Uint4"), EvaluateUint4 },
-	{ LowerHash("Float"), EvaluateFloat },
-	{ LowerHash("Float2"), EvaluateFloat2 },
-	{ LowerHash("Float3"), EvaluateFloat3 },
-	{ LowerHash("Float4"), EvaluateFloat4 },
-	{ LowerHash("Time"), EvaluateTime },
-	{ LowerHash("DisplaySize"), EvaluateDisplaySize },
-	{ LowerHash("Sin"), EvaluateSin },
-	{ LowerHash("Cos"), EvaluateCos },
-	{ LowerHash("LookAt"), EvaluateLookAt },
-	{ LowerHash("Projection"), EvaluateProjection },
+struct FunctionInfo
+{
+	FunctionEvaluate fn;
+	VariesBy vb;
+};
+std::unordered_map<u32, FunctionInfo> FuncMap = {
+	{ LowerHash("Int"), { EvaluateInt, VariesBy_None} },
+	{ LowerHash("Int2"), { EvaluateInt2, VariesBy_None} },
+	{ LowerHash("Int3"), { EvaluateInt3, VariesBy_None} },
+	{ LowerHash("Int4"), { EvaluateInt4, VariesBy_None} },
+	{ LowerHash("Uint"), { EvaluateUint, VariesBy_None} },
+	{ LowerHash("Uint2"), { EvaluateUint2, VariesBy_None} },
+	{ LowerHash("Uint3"), { EvaluateUint3, VariesBy_None} },
+	{ LowerHash("Uint4"), { EvaluateUint4, VariesBy_None} },
+	{ LowerHash("Float"), { EvaluateFloat, VariesBy_None} },
+	{ LowerHash("Float2"), { EvaluateFloat2, VariesBy_None} },
+	{ LowerHash("Float3"), { EvaluateFloat3, VariesBy_None} },
+	{ LowerHash("Float4"), { EvaluateFloat4, VariesBy_None} },
+	{ LowerHash("Time"), { EvaluateTime, VariesBy_Time} },
+	{ LowerHash("DisplaySize"), { EvaluateDisplaySize, VariesBy_DisplaySize} },
+	{ LowerHash("Sin"), { EvaluateSin, VariesBy_None} },
+	{ LowerHash("Cos"), { EvaluateCos, VariesBy_None} },
+	{ LowerHash("LookAt"), { EvaluateLookAt, VariesBy_None} },
+	{ LowerHash("Projection"), { EvaluateProjection, VariesBy_None} },
 };
 
 void Function::Evaluate(const EvaluationContext& ec, Result& res) const
@@ -792,8 +835,20 @@ void Function::Evaluate(const EvaluationContext& ec, Result& res) const
 	u32 funcHash = LowerHash(Name.c_str());
 	AstAssert(this, FuncMap.count(funcHash) == 1, "No function named %s exists.",
 		Name.c_str());
-	FunctionEvaluate fi = FuncMap[funcHash];
+	FunctionEvaluate fi = FuncMap[funcHash].fn;
 	fi(this, ec, Args, res);
+}
+void Function::GetDependency(DependencyInfo& dep) const
+{
+	u32 funcHash = LowerHash(Name.c_str());
+	AstAssert(this, FuncMap.count(funcHash) == 1, "No function named %s exists.",
+		Name.c_str());
+
+	VariesBy vb = FuncMap[funcHash].vb;
+	dep.VariesByFlags |= vb;
+
+	for (Node* arg : Args)
+		arg->GetDependency(dep);
 }
 
 
