@@ -250,6 +250,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		ImGui_ImplWin32_NewFrame();
 		ImGui::NewFrame();
 
+		bool TuneablesChanged = false;
+
 		{
 			static float f = 0.0f;
 			static int counter = 0;
@@ -313,35 +315,42 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 				ImGui::Text("Tuneables:");
 				for (rlf::Tuneable* tune : CurrentRenderDesc->Tuneables)
 				{
+					bool ch = false;
 					if (tune->Type == rlf::BoolType)
-						ImGui::Checkbox(tune->Name, &tune->Value.BoolVal);
+						ch = ImGui::Checkbox(tune->Name, &tune->Value.BoolVal);
 					else if (tune->Type == rlf::FloatType)
-						ImGui::DragFloat(tune->Name, &tune->Value.FloatVal, 0.01f,
+						ch = ImGui::DragFloat(tune->Name, &tune->Value.FloatVal, 0.01f,
 							tune->Min.FloatVal, tune->Max.FloatVal);
 					else if (tune->Type == rlf::Float3Type)
-						ImGui::DragFloat3(tune->Name, (float*)&tune->Value.Float4Val.m, 0.01f,
-							tune->Min.FloatVal, tune->Max.FloatVal);
+						ch = ImGui::DragFloat3(tune->Name, (float*)&tune->Value.Float4Val.m, 
+							0.01f, tune->Min.FloatVal, tune->Max.FloatVal);
 					else if (tune->Type == rlf::IntType)
-						ImGui::DragInt(tune->Name, &tune->Value.IntVal, 1.f, 
+						ch = ImGui::DragInt(tune->Name, &tune->Value.IntVal, 1.f, 
 							tune->Min.IntVal, tune->Max.IntVal);
 					else if (tune->Type == rlf::UintType)
 					{
 						i32 max = (tune->Min.UintVal == tune->Max.UintVal && 
 							tune->Min.UintVal == 0) ? INT_MAX : tune->Max.UintVal;
-						ImGui::DragInt(tune->Name, (i32*)&tune->Value.UintVal,
+						ch = ImGui::DragInt(tune->Name, (i32*)&tune->Value.UintVal,
 							1, tune->Min.IntVal, max, "%d", ImGuiSliderFlags_AlwaysClamp);
 					}
 					else
 						Unimplemented();
+					TuneablesChanged |= ch;
 				}
 			}
 
 			ImGui::End();
 		}
 
-		if (RlfCompileSuccess && DisplaySize != PrevDisplaySize)
+		u32 changed = 0;
+		changed |= (DisplaySize != PrevDisplaySize) ? rlf::ast::VariesBy_DisplaySize : 0;
+		changed |= TuneablesChanged ? rlf::ast::VariesBy_Tuneable : 0;
+
+		if (RlfCompileSuccess && changed)
 		{
-			rlf::HandleDisplaySizeChanged(g_pd3dDevice, CurrentRenderDesc, DisplaySize);
+			rlf::HandleTextureParametersChanged(g_pd3dDevice, CurrentRenderDesc, 
+				DisplaySize, changed);
 		}
 
 		// ImGui::ShowDemoWindow(nullptr);

@@ -19,7 +19,6 @@
 
 **** Expand draw pipeline support.
 	* Dynamic texture sizing
-		* When tuneables are changed, recreate textures if their size changes.
 		* Implement swizzle in AST subscript
 		* Store references to views for a given texture/buffer for lookup when they need to be recreated. 
 		* Handle exception thrown by HandleDisplaySizeChanged
@@ -32,6 +31,7 @@
 	* Append and consume buffers.
 	* Multiple vertex buffer support. 
 	* MSAA support.
+	* More fields should support dynamic expressions, like dispatch group counts. 
 
 *** Cleanup:
 	* Handle various errors in specifying views/resources (mainly providing the wrong kind).

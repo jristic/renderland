@@ -528,6 +528,7 @@ void PrepareConstants(
 	ID3D11ShaderReflection* reflector, std::vector<ConstantBuffer>& buffers, 
 	std::vector<SetConstant>& sets, const char* path)
 {
+	(void)path;
 	D3D11_SHADER_DESC sd;
 	reflector->GetDesc(&sd);
 	for (u32 i = 0 ; i < sd.ConstantBuffers ; ++i)
@@ -980,15 +981,18 @@ void ReleaseD3D(
 	}
 }
 
-void HandleDisplaySizeChanged(
+void HandleTextureParametersChanged(
 	ID3D11Device* device,
 	RenderDescription* rd,
-	uint2 displaySize)
+	uint2 displaySize,
+	u32 changedFlags)
 {
 	for (Texture* tex : rd->Textures)
 	{
 		// DDS textures are always sized based on the file. 
-		if (tex->DDSPath || !tex->SizeExpr->VariesByDisplaySize())
+		if (tex->DDSPath)
+			continue;
+		if ((tex->SizeExpr->Dep.VariesByFlags & changedFlags) == 0)
 			continue;
 		ast::EvaluationContext evCtx;
 		evCtx.DisplaySize = displaySize;
