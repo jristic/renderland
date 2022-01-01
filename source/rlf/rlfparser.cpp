@@ -936,6 +936,7 @@ View* ConsumeViewDef(BufferIter& b, ParseState& ps, ViewType vt)
 			{
 				v->ResourceType = ResourceType::Texture;
 				v->Texture = (Texture*)res.m;
+				v->Texture->Views.insert(v);
 			}
 			else
 			{
@@ -1012,6 +1013,7 @@ View* ConsumeViewRefOrDef(BufferIter& b, ParseState& ps, BufferString id)
 			v->Type = ViewType::Auto;
 			v->ResourceType = ResourceType::Texture;
 			v->Texture = (Texture*)res.m;
+			v->Texture->Views.insert(v);
 			v->Format = TextureFormat::Invalid;
 		}
 		else if (res.type == ParseState::ResType::Sampler)

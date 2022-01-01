@@ -1022,7 +1022,7 @@ void HandleTextureParametersChanged(
 			CreateTexture(device, tex);
 
 			// Find any views that use this texture and recreate them. 
-			for (View* view : rd->Views)
+			for (View* view : tex->Views)
 			{
 				if (view->ResourceType == ResourceType::Texture && 
 					view->Texture == tex)

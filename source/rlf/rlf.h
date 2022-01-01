@@ -3,6 +3,12 @@
 #include "rlf/textureformat.h"
 #include "rlf/ast.h"
 
+// forward declares
+namespace rlf 
+{
+	struct View;
+}
+
 namespace rlf
 {
 	enum class ResourceType
@@ -201,6 +207,7 @@ namespace rlf
 		TextureFormat Format;
 		const char* DDSPath;
 		TextureFlag Flags;
+		std::set<View*> Views;
 		ID3D11Texture2D* TextureObject;
 	};
 	struct Sampler
