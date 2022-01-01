@@ -86,6 +86,9 @@ bool CheckD3DValidation(std::string& outMessage)
 
 std::string RlfFileLocation(const char* filename, const char* location)
 {
+	Assert(filename, "File must be provided.");
+	if (!location)
+		return "";
 	u32 line = 1;
 	u32 chr = 0;
 	const char* lineStart = RlfFile;
@@ -349,8 +352,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 		if (RlfCompileSuccess && changed)
 		{
+			rlf::InitErrorState ies = {};
 			rlf::HandleTextureParametersChanged(g_pd3dDevice, CurrentRenderDesc, 
-				DisplaySize, changed);
+				DisplaySize, changed, &ies);
+			if (!ies.InitSuccess)
+			{
+				RlfCompileSuccess = false;
+				RlfCompileErrorMessage = std::string("Error resizing textures:\n") +
+					ies.Info.Message + "\n" + RlfFileLocation(Cfg.FilePath, ies.Info.Location);
+				CleanupShader();
+			}
 		}
 
 		// ImGui::ShowDemoWindow(nullptr);
@@ -534,15 +545,15 @@ void CreateShader()
 
 	if (ies.InitSuccess == false)
 	{
-		CleanupShader();
 		RlfCompileSuccess = false;
 		RlfCompileErrorMessage = std::string("Failed to create RLF scene:\n") +
-			ies.ErrorMessage;
+			ies.Info.Message + "\n" + RlfFileLocation(filename, ies.Info.Location);
+		CleanupShader();
 		return;
 	}
 
 	RlfCompileWarning = ies.InitWarning;
-	RlfCompileWarningMessage = ies.ErrorMessage;
+	RlfCompileWarningMessage = ies.Info.Message;
 }
 
 void CleanupShader()

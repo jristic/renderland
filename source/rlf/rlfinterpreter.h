@@ -5,7 +5,7 @@ namespace rlf
 	{
 		bool InitSuccess;
 		bool InitWarning;
-		std::string ErrorMessage;
+		ErrorInfo Info;
 	};
 
 	void InitD3D(
@@ -23,7 +23,8 @@ namespace rlf
 		ID3D11Device* device,
 		RenderDescription* rd,
 		uint2 displaySize,
-		u32 changedFlags);
+		u32 changedFlags,
+		InitErrorState* errorState);
 
 	struct ExecuteContext
 	{

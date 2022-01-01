@@ -253,7 +253,8 @@ ID3DBlob* CommonCompileShader(const char* path, const char* profile,
 	{
 		errorState->InitWarning = true;
 		char* errorText = (char*)errorBlob->GetBufferPointer();
-		errorState->ErrorMessage += errorText;
+		errorState->Info.Location = nullptr; // file&line already provided in text.
+		errorState->Info.Message += errorText;
 	}
 
 	SafeRelease(errorBlob);
@@ -918,7 +919,7 @@ void InitD3D(
 	catch (InitException ie)
 	{
 		errorState->InitSuccess = false;
-		errorState->ErrorMessage = ie.Info.Message;
+		errorState->Info = ie.Info;
 	}
 }
 
@@ -985,53 +986,63 @@ void HandleTextureParametersChanged(
 	ID3D11Device* device,
 	RenderDescription* rd,
 	uint2 displaySize,
-	u32 changedFlags)
+	u32 changedFlags,
+	InitErrorState* errorState)
 {
-	for (Texture* tex : rd->Textures)
-	{
-		// DDS textures are always sized based on the file. 
-		if (tex->DDSPath)
-			continue;
-		if ((tex->SizeExpr->Dep.VariesByFlags & changedFlags) == 0)
-			continue;
-		ast::EvaluationContext evCtx;
-		evCtx.DisplaySize = displaySize;
-		evCtx.Time = 0;
-		ast::Result res;
-		ast::EvaluateErrorState es;
-		ast::Evaluate(evCtx, tex->SizeExpr, res, es);
-		if (!es.EvaluateSuccess)
+	errorState->InitSuccess = true;
+	errorState->InitWarning = false;
+	try {
+		for (Texture* tex : rd->Textures)
 		{
-			InitException ie;
-			ie.Info.Location = es.Info.Location;
-			ie.Info.Message = "AST evaluation error: " + es.Info.Message;
-			throw ie;
-		}
-		InitAssert( res.Type.Dim == 2, 
-			"Size expression expected to evaluate to 2 components but got: %d",
-			res.Type.Dim);
-		Convert(res, VariableFormat::Uint);
-		uint2 newSize = res.Value.Uint2Val;
-
-		if (tex->Size != newSize)
-		{
-			tex->Size = newSize;
-
-			SafeRelease(tex->TextureObject);
-			
-			CreateTexture(device, tex);
-
-			// Find any views that use this texture and recreate them. 
-			for (View* view : tex->Views)
+			// DDS textures are always sized based on the file. 
+			if (tex->DDSPath)
+				continue;
+			if ((tex->SizeExpr->Dep.VariesByFlags & changedFlags) == 0)
+				continue;
+			ast::EvaluationContext evCtx;
+			evCtx.DisplaySize = displaySize;
+			evCtx.Time = 0;
+			ast::Result res;
+			ast::EvaluateErrorState es;
+			ast::Evaluate(evCtx, tex->SizeExpr, res, es);
+			if (!es.EvaluateSuccess)
 			{
-				if (view->ResourceType == ResourceType::Texture && 
-					view->Texture == tex)
+				InitException ie;
+				ie.Info.Location = es.Info.Location;
+				ie.Info.Message = "AST evaluation error: " + es.Info.Message;
+				throw ie;
+			}
+			InitAssert( res.Type.Dim == 2, 
+				"Size expression expected to evaluate to 2 components but got: %d",
+				res.Type.Dim);
+			Convert(res, VariableFormat::Uint);
+			uint2 newSize = res.Value.Uint2Val;
+
+			if (tex->Size != newSize)
+			{
+				tex->Size = newSize;
+
+				SafeRelease(tex->TextureObject);
+				
+				CreateTexture(device, tex);
+
+				// Find any views that use this texture and recreate them. 
+				for (View* view : tex->Views)
 				{
-					ReleaseView(view);
-					CreateView(device, view);
+					if (view->ResourceType == ResourceType::Texture && 
+						view->Texture == tex)
+					{
+						ReleaseView(view);
+						CreateView(device, view);
+					}
 				}
 			}
 		}
+	}
+	catch (InitException ie)
+	{
+		errorState->InitSuccess = false;
+		errorState->Info = ie.Info;
 	}
 }
 
