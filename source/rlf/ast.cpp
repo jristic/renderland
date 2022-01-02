@@ -3,15 +3,10 @@ namespace rlf {
 namespace ast {
 
 
-struct AstException
-{
-	ErrorInfo Info;
-};
-
 void Evaluate(const EvaluationContext& ec, Node* ast, Result& res, 
-	EvaluateErrorState& es)
+	ErrorState& es)
 {
-	es.EvaluateSuccess = true;
+	es.Success = true;
 
 	if (ast->Constant() && ast->CacheValid)
 	{
@@ -22,10 +17,10 @@ void Evaluate(const EvaluationContext& ec, Node* ast, Result& res,
 	try {
 		ast->Evaluate(ec, res);
 	}
-	catch (AstException ae)
+	catch (ErrorInfo ae)
 	{
-		es.EvaluateSuccess = false;
-		es.Info = ae.Info;
+		es.Success = false;
+		es.Info = ae;
 	}
 
 	ast->CachedResult = res;
@@ -40,9 +35,9 @@ void AstError(const Node* n, const char* str, ...)
 	vsprintf_s(buf,512,str,ptr);
 	va_end(ptr);
 
-	AstException ae;
-	ae.Info.Location = n->Location;
-	ae.Info.Message = buf;
+	ErrorInfo ae;
+	ae.Location = n->Location;
+	ae.Message = buf;
 	throw ae;
 }
 

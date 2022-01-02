@@ -312,10 +312,6 @@ struct ParseState
 	Token fcLUT[128];
 } *GPS;
 
-struct ParseException {
-	ErrorInfo Info;
-};
-
 void ParserError(const char* str, ...)
 {
 	char buf[512];
@@ -325,9 +321,9 @@ void ParserError(const char* str, ...)
 	va_end(ptr);
 
 	ParseState* ps = GPS;
-	ParseException pe = {};
-	pe.Info.Location = ps->b.next;
-	pe.Info.Message = buf;
+	ErrorInfo pe = {};
+	pe.Location = ps->b.next;
+	pe.Message = buf;
 
 	throw pe;
 }
@@ -2940,7 +2936,7 @@ RenderDescription* ParseBuffer(
 	const char* buffer,
 	u32 bufferSize,
 	const char* workingDir,
-	ParseErrorState* es)
+	ErrorState* es)
 {
 	ParseState ps;
 	ps.rd = new RenderDescription();
@@ -2949,20 +2945,20 @@ RenderDescription* ParseBuffer(
 	ParseStateInit(&ps);
 
 	GPS = &ps;
-	es->ParseSuccess = true;
+	es->Success = true;
 
 	try {
 		ParseMain();
 	}
-	catch (ParseException pe)
+	catch (ErrorInfo pe)
 	{
-		es->ParseSuccess = false;
-		es->Info = pe.Info;
+		es->Success = false;
+		es->Info = pe;
 	}
 
 	GPS = nullptr;
 
-	if (es->ParseSuccess == false)
+	if (es->Success == false)
 	{
 		ReleaseData(ps.rd);
 		return nullptr;

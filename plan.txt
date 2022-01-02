@@ -30,8 +30,6 @@
 
 *** Cleanup:
 	* Handle various errors in specifying views/resources (mainly providing the wrong kind).
-	* Clean up error handling and reporting
-		* Consolidate exception types, unify error rerporting path in win32_main
 	* Refactor system values.
 	* Texture flag cleanup -> SRV/UAV/RTV/DSV can be determined from usage. or keep it explicit?
 	* Make obj parsing handle not having normals or UVs. 

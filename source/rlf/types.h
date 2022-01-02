@@ -73,10 +73,4 @@ namespace rlf
 		};
 		return names[(u32)fmt];
 	}
-
-	struct ErrorInfo
-	{
-		const char* Location;
-		std::string Message;
-	};
 }

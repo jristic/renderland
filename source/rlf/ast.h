@@ -15,12 +15,6 @@ struct Result
 	Variable Value;
 };
 
-struct EvaluateErrorState
-{
-	bool EvaluateSuccess;
-	ErrorInfo Info;
-};
-
 enum VariesBy
 {
 	VariesBy_None =			0,
@@ -56,7 +50,7 @@ struct Node
 	bool VariesByTime() const { return Dep.VariesByFlags & VariesBy_Time; }
 };
 
-void Evaluate(const EvaluationContext& ec, Node* ast, Result& res, EvaluateErrorState& es);
+void Evaluate(const EvaluationContext& ec, Node* ast, Result& res, ErrorState& es);
 
 void Convert(Result& res, VariableFormat fmt);
 

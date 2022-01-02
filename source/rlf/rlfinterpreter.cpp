@@ -5,11 +5,6 @@ namespace rlf
 // -----------------------------------------------------------------------------
 // ------------------------------ INITIALIZATION -------------------------------
 // -----------------------------------------------------------------------------
-struct InitException
-{
-	ErrorInfo Info;
-};
-
 void InitError(const char* str, ...)
 {
 	char buf[512];
@@ -18,9 +13,9 @@ void InitError(const char* str, ...)
 	vsprintf_s(buf,512,str,ptr);
 	va_end(ptr);
 
-	InitException ie;
-	ie.Info.Location = nullptr;
-	ie.Info.Message = buf;
+	ErrorInfo ie;
+	ie.Location = nullptr;
+	ie.Message = buf;
 	throw ie;
 }
 
@@ -47,9 +42,9 @@ void CheckHresult(HRESULT hr, const char* desc)
 	}
 	gInfoQueue->ClearStoredMessages();
 
-	InitException ie;
-	ie.Info.Location = nullptr;
-	ie.Info.Message = mes.c_str();
+	ErrorInfo ie;
+	ie.Location = nullptr;
+	ie.Message = mes.c_str();
 	throw ie;
 }
 
@@ -213,7 +208,7 @@ D3D11_DEPTH_STENCILOP_DESC RlfToD3d(StencilOpDesc sod)
 }
 
 ID3DBlob* CommonCompileShader(const char* path, const char* profile, 
-	const char * entry, InitErrorState* errorState)
+	const char * entry, ErrorState* errorState)
 {
 	HANDLE shader = fileio::OpenFileOptional(path, GENERIC_READ);
 	InitAssert(shader != INVALID_HANDLE_VALUE, "Couldn't find shader file: %s", path);
@@ -251,7 +246,7 @@ ID3DBlob* CommonCompileShader(const char* path, const char* profile,
 	// check for warnings
 	if (errorBlob)
 	{
-		errorState->InitWarning = true;
+		errorState->Warning = true;
 		char* errorText = (char*)errorBlob->GetBufferPointer();
 		errorState->Info.Location = nullptr; // file&line already provided in text.
 		errorState->Info.Message += errorText;
@@ -670,7 +665,7 @@ void InitMain(
 	RenderDescription* rd,
 	uint2 displaySize,
 	const char* workingDirectory,
-	InitErrorState* errorState)
+	ErrorState* errorState)
 {
 	if (DefaultRasterizerState == nullptr)
 	{
@@ -827,13 +822,13 @@ void InitMain(
 			evCtx.DisplaySize = displaySize;
 			evCtx.Time = 0;
 			ast::Result res;
-			ast::EvaluateErrorState es;
+			ErrorState es;
 			ast::Evaluate(evCtx, tex->SizeExpr, res, es);
-			if (!es.EvaluateSuccess)
+			if (!es.Success)
 			{
-				InitException ie;
-				ie.Info.Location = es.Info.Location;
-				ie.Info.Message = "AST evaluation error: " + es.Info.Message;
+				ErrorInfo ie;
+				ie.Location = es.Info.Location;
+				ie.Message = "AST evaluation error: " + es.Info.Message;
 				throw ie;
 			}
 			InitAssert( res.Type.Dim == 2, 
@@ -908,18 +903,18 @@ void InitD3D(
 	RenderDescription* rd,
 	uint2 displaySize,
 	const char* workingDirectory,
-	InitErrorState* errorState)
+	ErrorState* errorState)
 {
 	gInfoQueue = infoQueue;
-	errorState->InitSuccess = true;
-	errorState->InitWarning = false;
+	errorState->Success = true;
+	errorState->Warning = false;
 	try {
 		InitMain(device, rd, displaySize, workingDirectory, errorState);
 	}
-	catch (InitException ie)
+	catch (ErrorInfo ie)
 	{
-		errorState->InitSuccess = false;
-		errorState->Info = ie.Info;
+		errorState->Success = false;
+		errorState->Info = ie;
 	}
 }
 
@@ -987,10 +982,10 @@ void HandleTextureParametersChanged(
 	RenderDescription* rd,
 	uint2 displaySize,
 	u32 changedFlags,
-	InitErrorState* errorState)
+	ErrorState* errorState)
 {
-	errorState->InitSuccess = true;
-	errorState->InitWarning = false;
+	errorState->Success = true;
+	errorState->Warning = false;
 	try {
 		for (Texture* tex : rd->Textures)
 		{
@@ -1003,13 +998,13 @@ void HandleTextureParametersChanged(
 			evCtx.DisplaySize = displaySize;
 			evCtx.Time = 0;
 			ast::Result res;
-			ast::EvaluateErrorState es;
+			ErrorState es;
 			ast::Evaluate(evCtx, tex->SizeExpr, res, es);
-			if (!es.EvaluateSuccess)
+			if (!es.Success)
 			{
-				InitException ie;
-				ie.Info.Location = es.Info.Location;
-				ie.Info.Message = "AST evaluation error: " + es.Info.Message;
+				ErrorInfo ie;
+				ie.Location = es.Info.Location;
+				ie.Message = "AST evaluation error: " + es.Info.Message;
 				throw ie;
 			}
 			InitAssert( res.Type.Dim == 2, 
@@ -1039,10 +1034,10 @@ void HandleTextureParametersChanged(
 			}
 		}
 	}
-	catch (InitException ie)
+	catch (ErrorInfo ie)
 	{
-		errorState->InitSuccess = false;
-		errorState->Info = ie.Info;
+		errorState->Success = false;
+		errorState->Info = ie;
 	}
 }
 
@@ -1051,11 +1046,6 @@ void HandleTextureParametersChanged(
 // -----------------------------------------------------------------------------
 // ------------------------------ EXECUTION ------------------------------------
 // -----------------------------------------------------------------------------
-struct ExecuteException
-{
-	ErrorInfo Info;
-};
-
 void ExecuteError(const char* str, ...)
 {
 	char buf[512];
@@ -1064,9 +1054,9 @@ void ExecuteError(const char* str, ...)
 	vsprintf_s(buf,512,str,ptr);
 	va_end(ptr);
 
-	ExecuteException ee;
-	ee.Info.Location = nullptr;
-	ee.Info.Message = buf;
+	ErrorInfo ee;
+	ee.Location = nullptr;
+	ee.Message = buf;
 	throw ee;
 }
 
@@ -1085,13 +1075,13 @@ void EvaluateConstants(ExecuteContext* ec, std::vector<Constant*>& cnsts)
 	for (Constant* cnst : cnsts)
 	{
 		ast::Result res;
-		ast::EvaluateErrorState es;
+		ErrorState es;
 		ast::Evaluate(evCtx, cnst->Expr, res, es);
-		if (!es.EvaluateSuccess)
+		if (!es.Success)
 		{
-			ExecuteException ee;
-			ee.Info.Location = es.Info.Location;
-			ee.Info.Message = "AST evaluation error: " + es.Info.Message;
+			ErrorInfo ee;
+			ee.Location = es.Info.Location;
+			ee.Message = "AST evaluation error: " + es.Info.Message;
 			throw ee;
 		}
 		ExecuteAssert( (cnst->Type.Fmt != VariableFormat::Float4x4 && 
@@ -1116,13 +1106,13 @@ void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets,
 	for (const SetConstant& set : sets)
 	{
 		ast::Result res;
-		ast::EvaluateErrorState es;
+		ErrorState es;
 		ast::Evaluate(evCtx, set.Value, res, es);
-		if (!es.EvaluateSuccess)
+		if (!es.Success)
 		{
-			ExecuteException ee;
-			ee.Info.Location = es.Info.Location;
-			ee.Info.Message = "AST evaluation error: " + es.Info.Message;
+			ErrorInfo ee;
+			ee.Location = es.Info.Location;
+			ee.Message = "AST evaluation error: " + es.Info.Message;
 			throw ee;
 		}
 		u32 typeSize = res.Type.Dim * 4;
@@ -1407,16 +1397,16 @@ void _Execute(
 void Execute(
 	ExecuteContext* ec,
 	RenderDescription* rd,
-	ExecuteErrorState* es)
+	ErrorState* es)
 {
-	es->ExecuteSuccess = true;
+	es->Success = true;
 	try {
 		_Execute(ec, rd);
 	}
-	catch (ExecuteException ee)
+	catch (ErrorInfo ee)
 	{
-		es->ExecuteSuccess = false;
-		es->Info = ee.Info;
+		es->Success = false;
+		es->Info = ee;
 	}
 }
 

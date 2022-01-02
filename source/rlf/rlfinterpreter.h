@@ -1,20 +1,13 @@
 
 namespace rlf
 {
-	struct InitErrorState 
-	{
-		bool InitSuccess;
-		bool InitWarning;
-		ErrorInfo Info;
-	};
-
 	void InitD3D(
 		ID3D11Device* device,
 		ID3D11InfoQueue* infoQueue,
 		RenderDescription* rd,
 		uint2 displaySize,
 		const char* workingDirectory,
-		InitErrorState* errorState);
+		ErrorState* errorState);
 
 	void ReleaseD3D(
 		RenderDescription* rd);
@@ -24,7 +17,7 @@ namespace rlf
 		RenderDescription* rd,
 		uint2 displaySize,
 		u32 changedFlags,
-		InitErrorState* errorState);
+		ErrorState* errorState);
 
 	struct ExecuteContext
 	{
@@ -36,14 +29,8 @@ namespace rlf
 		float Time;
 	};
 
-	struct ExecuteErrorState
-	{
-		bool ExecuteSuccess;
-		ErrorInfo Info;
-	};
-
 	void Execute(
 		ExecuteContext* context,
 		RenderDescription* rd,
-		ExecuteErrorState* es);
+		ErrorState* errorState);
 }

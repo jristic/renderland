@@ -63,6 +63,7 @@ void CreateRenderTarget();
 void CleanupRenderTarget();
 void CreateShader();
 void CleanupShader();
+void ReportError(const std::string& message);
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 bool CheckD3DValidation(std::string& outMessage)
@@ -352,15 +353,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 		if (RlfCompileSuccess && changed)
 		{
-			rlf::InitErrorState ies = {};
+			rlf::ErrorState ies = {};
 			rlf::HandleTextureParametersChanged(g_pd3dDevice, CurrentRenderDesc, 
 				DisplaySize, changed, &ies);
-			if (!ies.InitSuccess)
+			if (!ies.Success)
 			{
-				RlfCompileSuccess = false;
-				RlfCompileErrorMessage = std::string("Error resizing textures:\n") +
-					ies.Info.Message + "\n" + RlfFileLocation(Cfg.FilePath, ies.Info.Location);
-				CleanupShader();
+				ReportError( std::string("Error resizing textures:\n") + ies.Info.Message + 
+					"\n" + RlfFileLocation(Cfg.FilePath, ies.Info.Location));
 			}
 		}
 
@@ -390,15 +389,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			ctx.DefaultDepthView = g_mainDepthStencilView;
 			ctx.DisplaySize = DisplaySize;
 			ctx.Time = time;
-			rlf::ExecuteErrorState es = {};
+			rlf::ErrorState es = {};
 			rlf::Execute(&ctx, CurrentRenderDesc, &es);
-			if (!es.ExecuteSuccess)
+			if (!es.Success)
 			{
-				RlfCompileSuccess = false;
-				RlfCompileErrorMessage = "RLF execution error: \n" + es.Info.Message;
-				if (es.Info.Location)
-					RlfCompileErrorMessage += "\n" + 
-						RlfFileLocation(Cfg.FilePath, es.Info.Location);
+				ReportError( "RLF execution error: \n" + es.Info.Message +
+					"\n" + RlfFileLocation(Cfg.FilePath, es.Info.Location));
 			}
 		}
 
@@ -509,8 +505,7 @@ void CreateShader()
 
 	if (rlf == INVALID_HANDLE_VALUE) // file not found
 	{
-		RlfCompileSuccess = false;
-		RlfCompileErrorMessage = std::string("Couldn't find ") + filename;
+		ReportError( std::string("Couldn't find ") + filename);
 		return;
 	}
 
@@ -525,35 +520,29 @@ void CreateShader()
 	CloseHandle(rlf);
 
 	Assert(CurrentRenderDesc == nullptr, "leaking data");
-	rlf::ParseErrorState es = {};
+	rlf::ErrorState es = {};
 	CurrentRenderDesc = rlf::ParseBuffer(RlfFile, RlfFileSize, dirPath.c_str(), &es);
 
-	if (es.ParseSuccess == false)
+	if (es.Success == false)
 	{
-		Assert(CurrentRenderDesc == nullptr, "leaking data");
-		RlfCompileSuccess = false;
-		RlfCompileErrorMessage = std::string("Failed to parse RLF:\n") + es.Info.Message +
-			"\n" + RlfFileLocation(filename, es.Info.Location);
-		free(RlfFile);
-		RlfFile = nullptr;
+		ReportError( std::string("Failed to parse RLF:\n") + es.Info.Message +
+			"\n" + RlfFileLocation(filename, es.Info.Location));
 		return;
 	}
 
-	rlf::InitErrorState ies = {};
+	es = {};
 	rlf::InitD3D(g_pd3dDevice, g_d3dInfoQueue, CurrentRenderDesc, DisplaySize, 
-		dirPath.c_str(), &ies);
+		dirPath.c_str(), &es);
 
-	if (ies.InitSuccess == false)
+	if (es.Success == false)
 	{
-		RlfCompileSuccess = false;
-		RlfCompileErrorMessage = std::string("Failed to create RLF scene:\n") +
-			ies.Info.Message + "\n" + RlfFileLocation(filename, ies.Info.Location);
-		CleanupShader();
+		ReportError( std::string("Failed to create RLF scene:\n") +
+			es.Info.Message + "\n" + RlfFileLocation(filename, es.Info.Location));
 		return;
 	}
 
-	RlfCompileWarning = ies.InitWarning;
-	RlfCompileWarningMessage = ies.Info.Message;
+	RlfCompileWarning = es.Warning;
+	RlfCompileWarningMessage = es.Info.Message;
 }
 
 void CleanupShader()
@@ -563,9 +552,19 @@ void CleanupShader()
 		rlf::ReleaseD3D(CurrentRenderDesc);
 		rlf::ReleaseData(CurrentRenderDesc);
 		CurrentRenderDesc = nullptr;
+	}
+	if (RlfFile)
+	{
 		free(RlfFile);
 		RlfFile = nullptr;
 	}
+}
+
+void ReportError(const std::string& message)
+{
+	RlfCompileSuccess = false;
+	RlfCompileErrorMessage = message;
+	CleanupShader();
 }
 
 void UpdateWindowStats(HWND hWnd)

@@ -1,4 +1,5 @@
 
+#include "rlf/error.h"
 #include "rlf/types.h"
 #include "rlf/textureformat.h"
 #include "rlf/ast.h"
