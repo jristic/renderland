@@ -66,6 +66,8 @@ struct float4 {
 			float x,y,z,w;
 		};
 	};
+	float& operator[](u32 i) { return m[i]; }
+	float operator[](u32 i) const { return m[i]; }
 };
 
 #pragma warning(default: 4201)

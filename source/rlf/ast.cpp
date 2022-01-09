@@ -756,6 +756,17 @@ void EvaluateCos(const Node* n, const EvaluationContext& ec, std::vector<Node*> 
 	}
 }
 
+void EvaluateInverse(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
+{
+	AstAssert(n, args.size() == 1, "Inverse takes 1 param");
+	Result argRes;
+	args[0]->Evaluate(ec, argRes);
+	ExpectFmt(n, VariableFormat::Float4x4, argRes, "arg1");
+	res.Type = Float4x4Type;
+	inverse(argRes.Value.Float4x4Val, res.Value.Float4x4Val);
+}
+
 void EvaluateLookAt(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
 	Result& res)
 {
@@ -829,6 +840,7 @@ std::unordered_map<u32, FunctionInfo> FuncMap = {
 	{ LowerHash("DisplaySize"), { EvaluateDisplaySize, VariesBy_DisplaySize} },
 	{ LowerHash("Sin"), { EvaluateSin, VariesBy_None} },
 	{ LowerHash("Cos"), { EvaluateCos, VariesBy_None} },
+	{ LowerHash("Inverse"), { EvaluateInverse, VariesBy_None} },
 	{ LowerHash("LookAt"), { EvaluateLookAt, VariesBy_None} },
 	{ LowerHash("Projection"), { EvaluateProjection, VariesBy_None} },
 };

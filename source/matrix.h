@@ -38,6 +38,9 @@ struct float4x4
 		m20 = a20; m21 = a21; m22 = a22; m23 = a23;
 		m30 = a30; m31 = a31; m32 = a32; m33 = a33;
 	}
+
+	float& operator()(u32 i, u32 j) { return m[i][j]; }
+	float operator()(u32 i, u32 j) const { return m[i][j]; }
 };
 
 inline float3 operator*(const float4x4& f, const float3& vec)
@@ -104,6 +107,51 @@ inline float4x4 transposed(const float4x4& f)
 		f.m02, f.m12, f.m22, f.m32,
 		f.m03, f.m13, f.m23, f.m33
 	);
+}
+
+void inverse( const float4x4& in, float4x4& out )
+{
+	/* The following is taken from (public domained) code provided by
+		Robert Bridson for a graphics assignment */
+	// This somewhat scary-looking code implements a robust matrix
+	// inversion algorithm based on the Modified Gram-Schmidt process for QR
+	// factorization. We actually instead factor matrix as R*Q, where R is upper
+	// triangular and Q is orthogonal; if the transformation is a combination of
+	// rotations and translations, this boils down to writing it as a single
+	// rotation followed by a single translation. If the matrix is singular, we
+	// can fairly robustly detect this and provide a plausible near-inverse.
+	float4x4 Rinv(1.f), Q(0.f);
+	float4 qrow;
+	// get Frobenius norm of matrix to later check if matrix is singular
+	float Mnorm=0;
+	for(int i=0; i<4; ++i) for(int j=0; j<4; ++j) Mnorm+=sqr( in(i,j) );
+	Mnorm=std::sqrt(Mnorm);
+	// do the RQ factorization with Modified Gram-Schmidt, storing inverse
+	// of R instead of R
+	for(int i=3; i>=0; --i){
+		for(int k=0; k<4; ++k) qrow[k]= in(i,k);
+		for(int j=i+1; j<4; ++j){
+			float rij=qrow[0]*Q(j,0)+qrow[1]*Q(j,1)
+				+qrow[2]*Q(j,2)+qrow[3]*Q(j,3);
+			for(int k=0; k<4; ++k){
+				qrow[k]-=rij*Q(j,k);
+				Rinv(i,k)-=rij*Rinv(j,k);
+			}
+		}
+		float qnorm=std::sqrt(sqr(qrow[0])+sqr(qrow[1])
+			+sqr(qrow[2])+sqr(qrow[3]));
+		if(qnorm>1e-5*Mnorm){ // test for nonsingularity
+			for(int k=0; k<4; ++k){
+				Q(i,k)=qrow[k]/qnorm;
+				Rinv(i,k)/=qnorm;
+			}
+		}
+	}
+	// multiply the transpose of Q by inverse of R to get the inverse of M
+	for(int i=0; i<4; ++i) for(int j=0; j<4; ++j){
+		out(i,j)=0;
+		for(int k=0; k<4; ++k) out(i,j)+=Q(k,i)*Rinv(k,j);
+	}
 }
 
 // http://msdn.microsoft.com/en-us/library/windows/desktop/bb205342(v=vs.85).aspx

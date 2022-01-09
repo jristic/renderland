@@ -157,3 +157,8 @@ float3 cross(const float3& a, const float3& b)
 	c.z = a.x*b.y - a.y*b.x;
 	return c;
 }
+
+float sqr(float x)
+{
+	return x*x;
+}
