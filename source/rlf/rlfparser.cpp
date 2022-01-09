@@ -348,9 +348,40 @@ Keyword LookupKeyword(
 void SkipWhitespace(
 	BufferIter& b)
 {
-	while (b.next < b.end && isspace(*b.next)) {
-		++b.next;
+	bool progress;
+	do {
+		progress = false;
+		while (b.next < b.end && isspace(*b.next))
+		{
+			++b.next;
+			progress = true;
+		}
+		if (b.next + 1 < b.end && b.next[0] == '/')
+		{
+			if (b.next[1] == '/')
+			{
+				b.next += 2;
+				while (b.next < b.end && *b.next != '\n')
+					++b.next;
+				progress = true;
+			}
+			else if (b.next[1] == '*')
+			{
+				b.next += 2;
+				while (b.next + 1 < b.end)
+				{
+					if (b.next[0] == '*' && b.next[1] == '/')
+						break;
+					++b.next;
+				}
+				ParserAssert(b.next[0] == '*' && b.next[1] == '/',
+					"Closing of comment block was not found before end of file");
+				b.next += 2;
+				progress = true;
+			}
+		}
 	}
+	while (progress);
 }
 
 void ParseStateInit(ParseState* ps)
