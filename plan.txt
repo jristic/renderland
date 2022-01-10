@@ -1,6 +1,7 @@
 * Allow trailing commas in rlf arrays. 
 * Hex uint literals. binary too?
-* Comments support in RLF. 
+* Warning instead of error for missing constant.
+	* Warnings as error setting.
 
 * Use linear memory allocator for RenderDescription allocations. 
 * Defines that are usable within the RLF and shader. 

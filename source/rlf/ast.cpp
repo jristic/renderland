@@ -488,7 +488,14 @@ void VariableRef::Evaluate(const EvaluationContext&, Result& res) const
 void VariableRef::GetDependency(DependencyInfo& dep) const
 {
 	if (isTuneable)
+	{
 		dep.VariesByFlags |= VariesBy_Tuneable;
+	}
+	else
+	{
+		rlf::Constant* cnst = (rlf::Constant*)M;
+		cnst->Expr->GetDependency(dep);
+	}
 }
 
 
