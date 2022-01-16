@@ -7,15 +7,22 @@ namespace rlf
 // -----------------------------------------------------------------------------
 void InitError(const char* str, ...)
 {
-	char buf[512];
+	char buf[2048];
 	va_list ptr;
 	va_start(ptr,str);
-	vsprintf_s(buf,512,str,ptr);
+	vsprintf_s(buf,2048,str,ptr);
 	va_end(ptr);
 
 	ErrorInfo ie;
 	ie.Location = nullptr;
 	ie.Message = buf;
+	throw ie;
+}
+void InitErrorEx(const char* message)
+{
+	ErrorInfo ie;
+	ie.Location = nullptr;
+	ie.Message = message;
 	throw ie;
 }
 
@@ -236,11 +243,12 @@ ID3DBlob* CommonCompileShader(const char* path, const char* profile,
 	{
 		Assert(errorBlob != nullptr, "No error info given for shader compile fail.");
 		char* errorText = (char*)errorBlob->GetBufferPointer();
+		std::string textCopy = errorText;
 
 		Assert(shaderBlob == nullptr, "leak");
 		SafeRelease(errorBlob);
 
-		InitError("Failed to compile shader:\n %s", errorText);
+		InitErrorEx(("Failed to compile shader:\n " + textCopy).c_str());
 	}
 
 	// check for warnings
