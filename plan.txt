@@ -1,3 +1,5 @@
+* Unary minus in AST expressions. 
+
 * Allow trailing commas in rlf arrays. 
 * Hex uint literals. binary too?
 * Warning instead of error for missing constant.

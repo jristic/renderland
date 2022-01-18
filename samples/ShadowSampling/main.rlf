@@ -1,0 +1,161 @@
+
+tuneable uint ShadowMapSize [32,2048] = 512;
+
+//constant float3 CameraPos = {2*sin(time()),0,2*cos(time())};
+constant float3 CameraPos = {2,1,1};
+constant float3 LookPos = {0,0,0};
+//constant float3 LightPos = {0.75,2,0.75};
+constant float3 LightPos = {1*sin(time()),2,1*cos(time())};
+
+constant float FOV = 3.14/2;
+constant float ZNear = 0.1;
+constant float ZFar = 10;
+constant float Aspect = DisplaySize().x / float(DisplaySize().y);
+constant float4x4 ProjectionView = 
+	projection(FOV, Aspect, ZNear, ZFar) * lookAt(CameraPos, LookPos);
+constant float4x4 InvProjView = inverse(ProjectionView);
+
+constant float4x4 LightProjection = projection(FOV, 1, 0.01, 3);
+constant float4x4 LightView = lookAt(LightPos, LookPos);
+constant float4x4 LightProjectionView = LightProjection * LightView;
+constant float4x4 LightInvProj = inverse(LightProjection);
+
+ObjImport {
+	ObjPath = "monkey.obj";
+} monkeyObj
+
+Buffer {
+	Flags = { Vertex };
+	InitData = monkeyObj.vertices;
+} verts
+
+Buffer {
+	Flags = { Index };
+	InitData = monkeyObj.indices;
+} indices
+
+Buffer {
+	ElementSize = 24;
+	ElementCount = 4;
+	Flags = { Vertex };
+	InitData = float {
+		5.0, -1.0, 5.0, 0, 1, 0,
+		5.0, -1.0, -5.0, 0, 1, 0,
+		-5.0, -1.0, 5.0, 0, 1, 0,
+		-5.0, -1.0, -5.0, 0, 1, 0
+	};
+} planeVerts
+
+Buffer {
+	ElementSize = 2;
+	ElementCount = 6;
+	Flags = { Index };
+	InitData = u16 {
+		0, 1, 2,
+		2, 1, 3
+	};
+} planeIndices
+
+
+Sampler {
+	Filter = { All = Point };
+	AddressMode = { UVW=Clamp };
+} PointSampler
+
+Texture {
+	Format = R8G8B8A8_UNORM;
+	Size = DisplaySize();
+	Flags = { RTV, SRV };
+} RT
+
+Texture {
+	Format = D24_UNORM_S8_UINT;
+	Size = { DisplaySize() };
+	Flags = { DSV };
+} MainDS
+
+Texture {
+	Format = D24_UNORM_S8_UINT;
+	Size = { ShadowMapSize.xx };
+	Flags = { SRV, DSV };
+} ShadowDS
+
+DrawIndexed {
+	Topology = TriList;
+	VShader = VertexShader {
+		ShaderPath = "shaders.hlsl";
+		EntryPoint = "VSMain";
+	};
+	VertexBuffer = verts;
+	IndexBuffer = indices;
+	DepthStencil = ShadowDS;
+	SetConstantVs Matrix = LightProjectionView;
+} renderShadowMap
+
+
+DrawIndexed {
+	Topology = TriList;
+	VShader = VertexShader {
+		ShaderPath = "shaders.hlsl";
+		EntryPoint = "VSMain";
+	};
+	PShader = PixelShader {
+		ShaderPath = "shaders.hlsl";
+		EntryPoint = "PSMain";
+	};
+	VertexBuffer = verts;
+	IndexBuffer = indices;
+	RenderTarget = RT;
+	DepthStencil = MainDS;
+	SetConstantVs Matrix = ProjectionView;
+	SetConstantPs Matrix = InvProjView;
+	SetConstantPs LightView = LightView;
+	SetConstantPs LightProjection = LightProjection;
+	SetConstantPs TextureSize = DisplaySize();
+	SetConstantPs LightPos = LightPos;
+	bindps ShadowMap = ShadowDS;
+} objDraw
+
+DrawIndexed {
+	Topology = TriList;
+	VShader = VertexShader {
+		ShaderPath = "shaders.hlsl";
+		EntryPoint = "VSMain";
+	};
+	PShader = PixelShader {
+		ShaderPath = "shaders.hlsl";
+		EntryPoint = "PSMain";
+	};
+	VertexBuffer = planeVerts;
+	IndexBuffer = planeIndices;
+	RenderTarget = RT;
+	DepthStencil = MainDS;
+	SetConstantVs Matrix = ProjectionView;
+	SetConstantPs Matrix = InvProjView;
+	SetConstantPs LightView = LightView;
+	SetConstantPs TextureSize = DisplaySize();
+	SetConstantPs LightPos = LightPos;
+} drawFloorPlane
+
+
+Dispatch {
+	Shader = ComputeShader {
+		ShaderPath = "shaders.hlsl";
+		EntryPoint = "CSMain";
+	};
+	ThreadPerPixel = true; 
+	Bind OutTexture = @BackBuffer;
+	Bind InTexture = RT;
+	Bind Sampler= PointSampler;
+	setconstant TextureSize = DisplaySize();
+} copy
+
+Passes {
+	ClearColor{ Target=RT; Color={0,0,0,1}; },
+	ClearDepth{ Target=MainDS; Depth=1; },
+	ClearDepth{ Target=ShadowDS; Depth=1; },
+	renderShadowMap,
+	objDraw,
+	drawFloorPlane,
+	copy
+}
