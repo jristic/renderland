@@ -15,7 +15,7 @@ constant float4x4 ProjectionView =
 	projection(FOV, Aspect, ZNear, ZFar) * lookAt(CameraPos, LookPos);
 constant float4x4 InvProjView = inverse(ProjectionView);
 
-constant float4x4 LightProjection = projection(FOV, 1, 0.01, 3);
+constant float4x4 LightProjection = projection(FOV, 1, 0.01, 10);
 constant float4x4 LightView = lookAt(LightPos, LookPos);
 constant float4x4 LightProjectionView = LightProjection * LightView;
 constant float4x4 LightInvProj = inverse(LightProjection);
@@ -75,10 +75,20 @@ Texture {
 } MainDS
 
 Texture {
-	Format = D24_UNORM_S8_UINT;
+	Format = R24G8_TYPELESS;
 	Size = { ShadowMapSize.xx };
 	Flags = { SRV, DSV };
 } ShadowDS
+
+DSV {
+	Resource = ShadowDS;
+	Format = D24_UNORM_S8_UINT;
+} ShadowDSView
+
+SRV {
+	Resource = ShadowDS;
+	Format = R24_UNORM_X8_TYPELESS;
+} ShadowDSSrv
 
 DrawIndexed {
 	Topology = TriList;
@@ -88,7 +98,7 @@ DrawIndexed {
 	};
 	VertexBuffer = verts;
 	IndexBuffer = indices;
-	DepthStencil = ShadowDS;
+	DepthStencil = ShadowDSView;
 	SetConstantVs Matrix = LightProjectionView;
 } renderShadowMap
 
@@ -113,7 +123,8 @@ DrawIndexed {
 	SetConstantPs LightProjection = LightProjection;
 	SetConstantPs TextureSize = DisplaySize();
 	SetConstantPs LightPos = LightPos;
-	bindps ShadowMap = ShadowDS;
+	bindps ShadowDepth = ShadowDSSrv;
+	bindps ShadowSampler = PointSampler;
 } objDraw
 
 DrawIndexed {
@@ -133,8 +144,11 @@ DrawIndexed {
 	SetConstantVs Matrix = ProjectionView;
 	SetConstantPs Matrix = InvProjView;
 	SetConstantPs LightView = LightView;
+	SetConstantPs LightProjection = LightProjection;
 	SetConstantPs TextureSize = DisplaySize();
 	SetConstantPs LightPos = LightPos;
+	bindps ShadowDepth = ShadowDSSrv;
+	bindps ShadowSampler = PointSampler;
 } drawFloorPlane
 
 
@@ -153,7 +167,7 @@ Dispatch {
 Passes {
 	ClearColor{ Target=RT; Color={0,0,0,1}; },
 	ClearDepth{ Target=MainDS; Depth=1; },
-	ClearDepth{ Target=ShadowDS; Depth=1; },
+	ClearDepth{ Target=ShadowDSView; Depth=1; },
 	renderShadowMap,
 	objDraw,
 	drawFloorPlane,
