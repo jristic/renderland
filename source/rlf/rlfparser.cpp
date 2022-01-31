@@ -348,13 +348,12 @@ Keyword LookupKeyword(
 void SkipWhitespace(
 	BufferIter& b)
 {
-	bool progress;
+	bool checkAgain;
 	do {
-		progress = false;
+		checkAgain = false;
 		while (b.next < b.end && isspace(*b.next))
 		{
 			++b.next;
-			progress = true;
 		}
 		if (b.next + 1 < b.end && b.next[0] == '/')
 		{
@@ -363,7 +362,7 @@ void SkipWhitespace(
 				b.next += 2;
 				while (b.next < b.end && *b.next != '\n')
 					++b.next;
-				progress = true;
+				checkAgain = true;
 			}
 			else if (b.next[1] == '*')
 			{
@@ -377,11 +376,11 @@ void SkipWhitespace(
 				ParserAssert(b.next[0] == '*' && b.next[1] == '/',
 					"Closing of comment block was not found before end of file");
 				b.next += 2;
-				progress = true;
+				checkAgain = true;
 			}
 		}
 	}
-	while (progress);
+	while (checkAgain);
 }
 
 void ParseStateInit(ParseState* ps)
@@ -1178,11 +1177,10 @@ ast::Node* ConsumeAstRecurse(BufferIter& b, ParseState& ps)
 			}
 			ast = sub;
 		}
-		else if (tok == Token::Plus || tok == Token::Minus || tok == Token::Asterisk || 
-			tok == Token::ForwardSlash)
+		else if (ast && (tok == Token::Plus || tok == Token::Minus || tok == Token::Asterisk || 
+			tok == Token::ForwardSlash))
 		{
 			const char* loc = b.next;
-			ParserAssert(ast, "expected value")
 			b = nb; //ConsumeToken(tok, b);
 			ast::Node* arg2 = ConsumeAstRecurse(b,ps);
 			ast::BinaryOp::Type op;
@@ -1220,10 +1218,70 @@ ast::Node* ConsumeAstRecurse(BufferIter& b, ParseState& ps)
 			else
 				Unimplemented();
 		}
-		else if (tok == Token::Minus || tok == Token::FloatLiteral || 
-			tok == Token::IntegerLiteral)
+		else if (!ast && tok == Token::Minus)
 		{
-			ParserAssert(!ast, "expected op")
+			const char* loc = b.next;
+			BufferIter nb2 = nb;
+			SkipWhitespace(nb2);
+			Token tok2 = PeekNextToken(nb2);
+			if (tok2 == Token::IntegerLiteral)
+			{
+				i32 i = ConsumeIntLiteral(b);
+				ast::IntLiteral* il = AllocateAst<ast::IntLiteral>(ps.rd);
+				il->Val = i;
+				il->Location = loc;
+				ast = il;
+			}
+			else if (tok2 == Token::FloatLiteral)
+			{
+				float f = ConsumeFloatLiteral(b);
+				ast::FloatLiteral* fl = AllocateAst<ast::FloatLiteral>(ps.rd);
+				fl->Val = f;
+				fl->Location = loc;
+				ast = fl;
+			}
+			else
+			{
+				b = nb; //ConsumeToken(Token::Minus, b);
+				ast::IntLiteral* nl = AllocateAst<ast::IntLiteral>(ps.rd);
+				nl->Val = -1;
+				nl->Location = loc;
+				ast::Node* arg = ConsumeAstRecurse(b,ps);
+				if (arg->Spec == ast::Node::Special::Operator)
+				{
+					ast::BinaryOp* bop = static_cast<ast::BinaryOp*>(arg);
+					bop->Args.push_back(nl);
+					bop->Ops.push_back(ast::BinaryOp::Type::Multiply);
+					bop->Location = loc; // TODO: location per operator
+					ast = bop;	
+				}
+				else if (arg->Spec == ast::Node::Special::None)
+				{
+					ast::BinaryOp* bop = AllocateAst<ast::BinaryOp>(ps.rd);
+					bop->Args.push_back(arg);
+					bop->Args.push_back(nl);
+					bop->Ops.push_back(ast::BinaryOp::Type::Multiply);
+					bop->Location = loc; // TODO: location per operator
+					bop->Spec = ast::Node::Special::Operator;
+					ast = bop;
+				}
+				else
+					Unimplemented();
+			}
+		}
+		else if (tok == Token::IntegerLiteral)
+		{
+			ParserAssert(!ast, "expected op");
+			const char* loc = b.next;
+			u32 u = ConsumeUintLiteral(b);
+			ast::UintLiteral* ul = AllocateAst<ast::UintLiteral>(ps.rd);
+			ul->Val = u;
+			ul->Location = loc;
+			ast = ul;
+		}
+		else if (tok == Token::FloatLiteral)
+		{
+			ParserAssert(!ast, "expected op");
 			const char* loc = b.next;
 			float f = ConsumeFloatLiteral(b);
 			ast::FloatLiteral* fl = AllocateAst<ast::FloatLiteral>(ps.rd);

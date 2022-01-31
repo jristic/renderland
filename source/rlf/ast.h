@@ -56,6 +56,20 @@ void Convert(Result& res, VariableFormat fmt);
 
 
 
+struct UintLiteral : Node
+{
+	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
+	virtual void GetDependency(DependencyInfo& dep) const override;
+	u32 Val;
+};
+
+struct IntLiteral : Node
+{
+	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
+	virtual void GetDependency(DependencyInfo& dep) const override;
+	i32 Val;
+};
+
 struct FloatLiteral : Node
 {
 	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;

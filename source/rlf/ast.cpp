@@ -317,15 +317,34 @@ void OperatorDivide(const Node* n, const Result& arg1, const Result& arg2, Resul
 // -----------------------------------------------------------------------------
 // ------------------------------ NODE EVALS -----------------------------------
 // -----------------------------------------------------------------------------
+void UintLiteral::Evaluate(const EvaluationContext&, Result& res) const
+{
+	res.Type = UintType;
+	res.Value.UintVal = Val;
+}
+void UintLiteral::GetDependency(DependencyInfo&) const
+{
+	// Add no dependecies
+}
+
+void IntLiteral::Evaluate(const EvaluationContext&, Result& res) const
+{
+	res.Type = IntType;
+	res.Value.IntVal = Val;
+}
+void IntLiteral::GetDependency(DependencyInfo&) const
+{
+	// Add no dependecies
+}
+
 void FloatLiteral::Evaluate(const EvaluationContext&, Result& res) const
 {
 	res.Type = FloatType;
 	res.Value.FloatVal = Val;
 }
-void FloatLiteral::GetDependency(DependencyInfo& dep) const
+void FloatLiteral::GetDependency(DependencyInfo&) const
 {
 	// Add no dependecies
-	(void)dep;
 }
 
 void Subscript::Evaluate(const EvaluationContext& ec, Result& res) const
@@ -455,6 +474,8 @@ void Join::Evaluate(const EvaluationContext& ec, Result& outRes) const
 		VariableFormat jf = DetermineResultFormat(res.Type.Fmt, jr.Type.Fmt);
 		u32 jd = res.Type.Dim + jr.Type.Dim;
 		AstAssert(this, jd <= 4, "Resulting vector of size %d is unsupported", jd);
+		Convert(res, jf);
+		Convert(jr, jf);
 		for (u32 j = res.Type.Dim, k = 0 ; j < jd ; ++j, ++k)
 		{
 			res.Value.Float4Val.m[j] = jr.Value.Float4Val.m[k];

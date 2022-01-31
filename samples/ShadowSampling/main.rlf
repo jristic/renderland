@@ -3,9 +3,9 @@ tuneable uint ShadowMapSize [32,2048] = 512;
 
 //constant float3 CameraPos = {2*sin(time()),0,2*cos(time())};
 constant float3 CameraPos = {2,1,1};
-constant float3 LookPos = {0,0,0};
+constant float3 LookPos = {0,-1,0};
 //constant float3 LightPos = {0.75,2,0.75};
-constant float3 LightPos = {1*sin(time()),2,1*cos(time())};
+constant float3 LightPos = {sin(time()),2,-cos(time())};
 
 constant float FOV = 3.14/2;
 constant float ZNear = 0.1;
