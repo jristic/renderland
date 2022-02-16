@@ -14,6 +14,7 @@
 // External headers
 #include "imgui/imgui.h"
 #include "DirectXTex/DirectXTex.h"
+#include "ImGuiFileDialog/ImGuiFileDialog.h"
 
 // Imgui example backend
 #include "imgui_impl_win32.h"
@@ -221,7 +222,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
-	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
 	// Setup Dear ImGui style
@@ -235,6 +237,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	// Our state
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 	float time = 0;
+	// bool showDemoWindow = true;
 
 	// Main loop
 	MSG msg;
@@ -256,11 +259,45 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 		bool TuneablesChanged = false;
 
+		if (ImGui::BeginMainMenuBar())
+		{
+			if (ImGui::BeginMenu("File"))
+			{
+				if (ImGui::MenuItem("Open", "Ctrl+O"))
+				{
+					ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey",
+						"Choose File", ".rlf", ".");
+				}
+				ImGui::EndMenu();
+			}
+			ImGui::Text("Loaded: %s", Cfg.FilePath);
+			ImGui::EndMainMenuBar();
+		}
+		ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(),
+			ImGuiDockNodeFlags_PassthruCentralNode);
+
+		if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey")) 
+		{
+			// action if OK
+			if (ImGuiFileDialog::Instance()->IsOk())
+			{
+				std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
+				std::string filePath = ImGuiFileDialog::Instance()->GetCurrentPath();
+				memcpy_s(Cfg.FilePath, sizeof(Cfg.FilePath), filePathName.c_str(), 
+					filePathName.length());
+				Cfg.FilePath[filePathName.length()] = '\0';
+				time = 0;
+				CleanupShader();
+				CreateShader();
+			}
+			ImGuiFileDialog::Instance()->Close();
+		}
+
+		// if (showDemoWindow) ImGui::ShowDemoWindow(&showDemoWindow);
+
+		if (ImGui::Begin("Shader"))
 		{
 			static float f = 0.0f;
-			static int counter = 0;
-
-			ImGui::Begin("Shader");
 
 			ImGui::ColorEdit3("Clear color", (float*)&clear_color);
 			ImGui::Text("DisplaySize = %u / %u", DisplaySize.x, DisplaySize.y);
@@ -343,9 +380,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 					TuneablesChanged |= ch;
 				}
 			}
-
-			ImGui::End();
 		}
+		ImGui::End();
 
 		u32 changed = 0;
 		changed |= (DisplaySize != PrevDisplaySize) ? rlf::ast::VariesBy_DisplaySize : 0;
@@ -362,8 +398,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 					"\n" + RlfFileLocation(Cfg.FilePath, ies.Info.Location));
 			}
 		}
-
-		// ImGui::ShowDemoWindow(nullptr);
 
 		// Rendering
 		ImGui::Render();
@@ -624,6 +658,10 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 // #include "imgui/imgui_demo.cpp"
 #include "imgui/imgui_tables.cpp"
 #include "imgui/imgui_widgets.cpp"
+#pragma warning( push )
+#pragma warning( disable : 4100 )
+#include "ImGuiFileDialog/ImGuiFileDialog.cpp"
+#pragma warning( pop )
 
 // Imgui example backend
 #include "imgui_impl_win32.cpp"
