@@ -237,7 +237,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	// Our state
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 	float time = 0;
+	float speed = 1;
 	// bool showDemoWindow = true;
+	bool showPlaybackWindow = true;
+	bool showParametersWindow = true;
 
 	// Main loop
 	MSG msg;
@@ -257,19 +260,35 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		ImGui_ImplWin32_NewFrame();
 		ImGui::NewFrame();
 
+		bool Reload = ImGui::IsKeyReleased(ImGuiKey_F5);
+		bool Quit = ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyReleased(ImGuiKey_Q);
+		if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyReleased(ImGuiKey_O))
+			ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey",
+				"Choose File", ".rlf", ".");
+
 		bool TuneablesChanged = false;
 
 		if (ImGui::BeginMainMenuBar())
 		{
 			if (ImGui::BeginMenu("File"))
 			{
+				if (ImGui::MenuItem("Reload", "F5"))
+					Reload = true;
 				if (ImGui::MenuItem("Open", "Ctrl+O"))
-				{
 					ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey",
 						"Choose File", ".rlf", ".");
-				}
+	            ImGui::Separator();
+				if (ImGui::MenuItem("Quit", "Ctrl+Q"))
+					Quit = true;
 				ImGui::EndMenu();
 			}
+			if (ImGui::BeginMenu("Windows"))
+			{
+				ImGui::MenuItem("Playback", "", &showPlaybackWindow);
+				ImGui::MenuItem("Parameters", "", &showParametersWindow);
+				ImGui::EndMenu();
+			}
+			ImGui::Spacing(); ImGui::Spacing(); ImGui::Spacing();
 			ImGui::Text("Loaded: %s", Cfg.FilePath);
 			ImGui::EndMainMenuBar();
 		}
@@ -286,32 +305,28 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 				memcpy_s(Cfg.FilePath, sizeof(Cfg.FilePath), filePathName.c_str(), 
 					filePathName.length());
 				Cfg.FilePath[filePathName.length()] = '\0';
-				time = 0;
-				CleanupShader();
-				CreateShader();
+				Reload = true;
 			}
 			ImGuiFileDialog::Instance()->Close();
 		}
 
 		// if (showDemoWindow) ImGui::ShowDemoWindow(&showDemoWindow);
+		if (Quit)
+		{
+			PostQuitMessage(0);
+			continue;
+		}
+		if (Reload)
+		{
+			time = 0;
+			CleanupShader();
+			CreateShader();
+		}
 
 		if (ImGui::Begin("Shader"))
 		{
 			static float f = 0.0f;
 
-			ImGui::ColorEdit3("Clear color", (float*)&clear_color);
-			ImGui::Text("DisplaySize = %u / %u", DisplaySize.x, DisplaySize.y);
-			ImGui::Text("Time = %f", time);
-			ImGui::InputText("Rlf path", Cfg.FilePath, IM_ARRAYSIZE(Cfg.FilePath));
-			bool reload = ImGui::IsItemDeactivatedAfterEdit();
-			reload = ImGui::Button("Reload shader") || reload;
-			reload = ImGui::IsKeyDown(VK_F5) || reload;
-			if (reload)
-			{
-				time = 0;
-				CleanupShader();
-				CreateShader();
-			}
 			if (!RlfCompileSuccess)
 			{
 				ImVec4 color = ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
@@ -346,42 +361,74 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 				ImGui::PopStyleColor();
 			}
 
-			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
-				1000.0f / io.Framerate, io.Framerate);
+			// ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
+			// 	1000.0f / io.Framerate, io.Framerate);
 
-			ImGui::Text("Exe directory: %s", ExeDirectoryPath.c_str());
-
-			if (RlfCompileSuccess)
-			{
-				ImGui::Text("Tuneables:");
-				for (rlf::Tuneable* tune : CurrentRenderDesc->Tuneables)
-				{
-					bool ch = false;
-					if (tune->Type == rlf::BoolType)
-						ch = ImGui::Checkbox(tune->Name, &tune->Value.BoolVal);
-					else if (tune->Type == rlf::FloatType)
-						ch = ImGui::DragFloat(tune->Name, &tune->Value.FloatVal, 0.01f,
-							tune->Min.FloatVal, tune->Max.FloatVal);
-					else if (tune->Type == rlf::Float3Type)
-						ch = ImGui::DragFloat3(tune->Name, (float*)&tune->Value.Float4Val.m, 
-							0.01f, tune->Min.FloatVal, tune->Max.FloatVal);
-					else if (tune->Type == rlf::IntType)
-						ch = ImGui::DragInt(tune->Name, &tune->Value.IntVal, 1.f, 
-							tune->Min.IntVal, tune->Max.IntVal);
-					else if (tune->Type == rlf::UintType)
-					{
-						i32 max = (tune->Min.UintVal == tune->Max.UintVal && 
-							tune->Min.UintVal == 0) ? INT_MAX : tune->Max.UintVal;
-						ch = ImGui::DragInt(tune->Name, (i32*)&tune->Value.UintVal,
-							1, tune->Min.IntVal, max, "%d", ImGuiSliderFlags_AlwaysClamp);
-					}
-					else
-						Unimplemented();
-					TuneablesChanged |= ch;
-				}
-			}
+			// ImGui::Text("Exe directory: %s", ExeDirectoryPath.c_str());
 		}
 		ImGui::End();
+
+		if (showPlaybackWindow)
+		{
+			if (ImGui::Begin("Playback", &showPlaybackWindow))
+			{
+				if (ImGui::Button("<<"))
+					speed = -2;
+				ImGui::SameLine();
+				if (ImGui::Button("<"))
+					speed = -1;
+				ImGui::SameLine();
+				if (ImGui::Button("||"))
+					speed = 0;
+				ImGui::SameLine();
+				if (ImGui::Button(">"))
+					speed = 1;
+				ImGui::SameLine();
+				if (ImGui::Button(">>"))
+					speed = 2;
+				ImGui::Text("Time = %f", time);
+			}
+			ImGui::End();
+		}
+
+		if (showParametersWindow)
+		{
+			if (ImGui::Begin("Parameters", &showParametersWindow))
+			{
+				ImGui::ColorEdit3("Clear color", (float*)&clear_color);
+				ImGui::Text("DisplaySize = %u / %u", DisplaySize.x, DisplaySize.y);
+				if (RlfCompileSuccess)
+				{
+					ImGui::Text("Tuneables:");
+					for (rlf::Tuneable* tune : CurrentRenderDesc->Tuneables)
+					{
+						bool ch = false;
+						if (tune->Type == rlf::BoolType)
+							ch = ImGui::Checkbox(tune->Name, &tune->Value.BoolVal);
+						else if (tune->Type == rlf::FloatType)
+							ch = ImGui::DragFloat(tune->Name, &tune->Value.FloatVal, 0.01f,
+								tune->Min.FloatVal, tune->Max.FloatVal);
+						else if (tune->Type == rlf::Float3Type)
+							ch = ImGui::DragFloat3(tune->Name, (float*)&tune->Value.Float4Val.m, 
+								0.01f, tune->Min.FloatVal, tune->Max.FloatVal);
+						else if (tune->Type == rlf::IntType)
+							ch = ImGui::DragInt(tune->Name, &tune->Value.IntVal, 1.f, 
+								tune->Min.IntVal, tune->Max.IntVal);
+						else if (tune->Type == rlf::UintType)
+						{
+							i32 max = (tune->Min.UintVal == tune->Max.UintVal && 
+								tune->Min.UintVal == 0) ? INT_MAX : tune->Max.UintVal;
+							ch = ImGui::DragInt(tune->Name, (i32*)&tune->Value.UintVal,
+								1, tune->Min.IntVal, max, "%d", ImGuiSliderFlags_AlwaysClamp);
+						}
+						else
+							Unimplemented();
+						TuneablesChanged |= ch;
+					}
+				}
+			}
+			ImGui::End();
+		}
 
 		u32 changed = 0;
 		changed |= (DisplaySize != PrevDisplaySize) ? rlf::ast::VariesBy_DisplaySize : 0;
@@ -438,7 +485,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		g_pSwapChain->Present(1, 0); // Present with vsync
 		//g_pSwapChain->Present(0, 0); // Present without vsync
 
-		time += io.DeltaTime;
+		time = max(0, time + speed * io.DeltaTime);
 
 		RlfValidationErrorMessage = "Validation error:\n";
 		RlfValidationError = CheckD3DValidation(RlfValidationErrorMessage);

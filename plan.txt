@@ -1,5 +1,3 @@
-* Unary minus in AST expressions. 
-
 * Allow trailing commas in rlf arrays. 
 * Hex uint literals. binary too?
 * Warning instead of error for missing constant.
@@ -38,9 +36,7 @@
 	* Make obj parsing handle not having normals or UVs. 
 
 *** UI:
-	* Switch to the dearimgui docking branch.
 	* Event-viewer style list of the passes in a frame. 
-	* Tuneables panel.
 	* Debug viz tools for seeing the contents of textures/buffers/rendertargets/depthstencils at any given point in the frame. 
 
 Samples:
