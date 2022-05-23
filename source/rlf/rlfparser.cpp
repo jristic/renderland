@@ -2742,6 +2742,7 @@ Pass ConsumePassRefOrDef(
 	BufferString id = ConsumeIdentifier(b);
 	Keyword key = LookupKeyword(id);
 	Pass pass;
+	pass.Name = nullptr; // Default to no name for the anonymous passes
 	if (key == Keyword::Dispatch || key == Keyword::DispatchIndirect)
 	{
 		pass.Type = PassType::Dispatch;
@@ -2930,6 +2931,7 @@ void ParseMain()
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %.*s already defined", 
 				nameId.len, nameId.base);
 			Pass pass;
+			pass.Name = AddStringToDescriptionData(nameId, rd);
 			pass.Type = PassType::Dispatch;
 			pass.Dispatch = dc;
 			ps.passMap[nameId] = pass;
@@ -2944,6 +2946,7 @@ void ParseMain()
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %.*s already defined", 
 				nameId.len, nameId.base);
 			Pass pass;
+			pass.Name = AddStringToDescriptionData(nameId, rd);
 			pass.Type = PassType::Draw;
 			pass.Draw = draw;
 			ps.passMap[nameId] = pass;
@@ -2956,6 +2959,7 @@ void ParseMain()
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %.*s already defined", 
 				nameId.len, nameId.base);
 			Pass pass;
+			pass.Name = AddStringToDescriptionData(nameId, rd);
 			pass.Type = PassType::ClearColor;
 			pass.ClearColor = clear;
 			ps.passMap[nameId] = pass;
@@ -2968,6 +2972,7 @@ void ParseMain()
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %.*s already defined", 
 				nameId.len, nameId.base);
 			Pass pass;
+			pass.Name = AddStringToDescriptionData(nameId, rd);
 			pass.Type = PassType::ClearDepth;
 			pass.ClearDepth = clear;
 			ps.passMap[nameId] = pass;
@@ -2980,6 +2985,7 @@ void ParseMain()
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %.*s already defined", 
 				nameId.len, nameId.base);
 			Pass pass;
+			pass.Name = AddStringToDescriptionData(nameId, rd);
 			pass.Type = PassType::ClearStencil;
 			pass.ClearStencil = clear;
 			ps.passMap[nameId] = pass;

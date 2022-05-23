@@ -241,6 +241,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	// bool showDemoWindow = true;
 	bool showPlaybackWindow = true;
 	bool showParametersWindow = true;
+	bool showEventsWindow = true;
 
 	// Main loop
 	MSG msg;
@@ -284,6 +285,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			}
 			if (ImGui::BeginMenu("Windows"))
 			{
+				ImGui::MenuItem("Event Viewer", "", &showEventsWindow);
 				ImGui::MenuItem("Playback", "", &showPlaybackWindow);
 				ImGui::MenuItem("Parameters", "", &showParametersWindow);
 				ImGui::EndMenu();
@@ -313,7 +315,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		// if (showDemoWindow) ImGui::ShowDemoWindow(&showDemoWindow);
 		if (Quit)
 		{
-			PostQuitMessage(0);
+			::PostQuitMessage(0);
 			continue;
 		}
 		if (Reload)
@@ -323,7 +325,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			CreateShader();
 		}
 
-		if (ImGui::Begin("Shader"))
+		if (ImGui::Begin("Compile Output"))
 		{
 			static float f = 0.0f;
 
@@ -367,6 +369,25 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			// ImGui::Text("Exe directory: %s", ExeDirectoryPath.c_str());
 		}
 		ImGui::End();
+
+		if (showEventsWindow)
+		{
+			if (ImGui::Begin("Event Viewer", &showEventsWindow))
+			{
+				if (RlfCompileSuccess)
+				{
+					std::vector<rlf::Pass> passes = CurrentRenderDesc->Passes;
+					for (int i = 0 ; i < passes.size() ; ++i)
+					{
+						rlf::Pass& p = passes[i];
+						static int selected_index = -1;
+						if (ImGui::Selectable(p.Name ? p.Name : "anon", selected_index == i))
+							selected_index = i;
+					}
+				}
+			}
+			ImGui::End();
+		}
 
 		if (showPlaybackWindow)
 		{

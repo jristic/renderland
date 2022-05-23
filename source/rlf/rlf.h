@@ -334,6 +334,7 @@ namespace rlf
 	};
 	struct Pass
 	{
+		const char* Name;
 		PassType Type;
 		union {
 			Dispatch* Dispatch;
