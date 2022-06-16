@@ -868,6 +868,9 @@ FilterMode ConsumeFilterMode(BufferIter& b)
 	ConsumeToken(Token::LBrace, b);
 	while (true)
 	{
+		if (TryConsumeToken(Token::RBrace, b))
+			break;
+
 		BufferString fieldId = ConsumeIdentifier(b);
 		ConsumeToken(Token::Equals, b);
 		switch (LookupKeyword(fieldId))
@@ -903,6 +906,9 @@ AddressModeUVW ConsumeAddressModeUVW(BufferIter& b)
 	ConsumeToken(Token::LBrace,b);
 	while (true)
 	{
+		if (TryConsumeToken(Token::RBrace, b))
+			break;
+
 		BufferString fieldId = ConsumeIdentifier(b);
 		ConsumeToken(Token::Equals, b);
 		AddressMode mode = ConsumeAddressMode(b);
@@ -2144,6 +2150,9 @@ Buffer* ConsumeBufferDef(
 
 				while (true)
 				{
+					if (TryConsumeToken(Token::RBrace, b))
+						break;
+
 					float f = ConsumeFloatLiteral(b);
 					initDataFloat.push_back(f);
 
@@ -2159,6 +2168,9 @@ Buffer* ConsumeBufferDef(
 
 				while (true)
 				{
+					if (TryConsumeToken(Token::RBrace, b))
+						break;
+
 					u32 val = ConsumeUintLiteral(b);
 					ParserAssert(val < 65536, "Given literal is outside of u16 range.");
 					u16 l = (u16)val;
@@ -2176,6 +2188,9 @@ Buffer* ConsumeBufferDef(
 
 				while (true)
 				{
+					if (TryConsumeToken(Token::RBrace, b))
+						break;
+					
 					u32 val = ConsumeUintLiteral(b);
 					initDataU32.push_back(val);
 
