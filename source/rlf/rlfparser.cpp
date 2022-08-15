@@ -40,11 +40,22 @@ namespace rlf
 	RLF_TOKEN_ENTRY(String) \
 
 #define RLF_TOKEN_ENTRY(name) name,
-enum class Token
+enum class TokenType
 {
 	RLF_TOKEN_TUPLE
 };
 #undef RLF_TOKEN_ENTRY
+
+struct Token
+{
+	TokenType Type;
+	const char* Location;
+	union {
+		const char* String;
+		double FloatLiteral;
+		u32 IntegerLiteral;
+	};
+};
 
 #define RLF_TOKEN_ENTRY(name) #name,
 const char* TokenNames[] =
@@ -54,6 +65,204 @@ const char* TokenNames[] =
 #undef RLF_TOKEN_ENTRY
 
 #undef RLF_TOKEN_TUPLE
+
+
+void TokenizerError(const char* loc, const char* str, ...)
+{
+	char buf[512];
+	va_list ptr;
+	va_start(ptr,str);
+	vsprintf_s(buf,512,str,ptr);
+	va_end(ptr);
+
+	ErrorInfo pe = {};
+	pe.Location = loc;
+	pe.Message = buf;
+
+	throw pe;
+}
+
+#define TokenizerAssert(expression, loc, message, ...) 	\
+do {													\
+	if (!(expression)) {								\
+		TokenizerError(message, loc, ##__VA_ARGS__);	\
+	}													\
+} while (0);											\
+
+struct TokenizerState {
+	std::vector<Token> tokens;
+	std::unordered_set<std::string> tokenStrings;
+	TokenType fcLUT[128];
+};
+
+void TokenizerStateInit(TokenizerState& ts)
+{
+	TokenType* fcLUT = ts.fcLUT;
+	for (u32 fc = 0 ; fc < 128 ; ++fc)
+		fcLUT[fc] = TokenType::Invalid;
+	fcLUT['('] = TokenType::LParen;
+	fcLUT[')'] = TokenType::RParen;
+	fcLUT['{'] = TokenType::LBrace;
+	fcLUT['}'] = TokenType::RBrace;
+	fcLUT['['] = TokenType::LBracket;
+	fcLUT[']'] = TokenType::RBracket;
+	fcLUT[','] = TokenType::Comma;
+	fcLUT['='] = TokenType::Equals;
+	fcLUT['+'] = TokenType::Plus;
+	fcLUT['-'] = TokenType::Minus;
+	fcLUT[';'] = TokenType::Semicolon;
+	fcLUT['@'] = TokenType::At;
+	fcLUT['.'] = TokenType::Period;
+	fcLUT['/'] = TokenType::ForwardSlash;
+	fcLUT['*'] = TokenType::Asterisk;
+	fcLUT['"'] = TokenType::String;
+	for (u32 fc = 0 ; fc < 128 ; ++fc)
+	{
+		if (isalpha(fc))
+			fcLUT[fc] = TokenType::Identifier;
+		else if (isdigit(fc))
+			fcLUT[fc] = TokenType::IntegerLiteral;
+	} 
+	fcLUT['_'] = TokenType::Identifier;
+}
+
+const char* SkipWhitespace(const char* next, const char* end)
+{
+	bool checkAgain;
+	do {
+		checkAgain = false;
+		while (next < end && isspace(*next))
+		{
+			++next;
+		}
+		if (next + 1 < end && next[0] == '/')
+		{
+			if (next[1] == '/')
+			{
+				next += 2;
+				while (next < end && *next != '\n')
+					++next;
+				checkAgain = true;
+			}
+			else if (next[1] == '*')
+			{
+				next += 2;
+				while (next + 1 < end)
+				{
+					if (next[0] == '*' && next[1] == '/')
+						break;
+					++next;
+				}
+				TokenizerAssert(next[0] == '*' && next[1] == '/', next,
+					"Closing of comment block was not found before end of file");
+				next += 2;
+				checkAgain = true;
+			}
+		}
+	}
+	while (checkAgain);
+	return next;
+}
+
+void Tokenize(const char* start, const char* end, TokenizerState& ts)
+{
+	const char* next = SkipWhitespace(start, end);
+
+	while (next < end)
+	{
+		char firstChar = *next;
+
+		TokenType tok = ts.fcLUT[firstChar];
+
+		Token token;
+		token.Location = next;
+
+		switch (tok)
+		{
+		case TokenType::LParen:
+		case TokenType::RParen:
+		case TokenType::LBrace:
+		case TokenType::RBrace:
+		case TokenType::LBracket:
+		case TokenType::RBracket:
+		case TokenType::Comma:
+		case TokenType::Equals:
+		case TokenType::Plus:
+		case TokenType::Minus:
+		case TokenType::Semicolon:
+		case TokenType::At:
+		case TokenType::Period:
+		case TokenType::ForwardSlash:
+		case TokenType::Asterisk:
+			++next;
+			break;
+		case TokenType::IntegerLiteral:
+		{
+			u32 val = 0;
+			while(next < end && isdigit(*next)) {
+				val *= 10;
+				val += (*next - '0');
+				++next;
+			}
+			token.IntegerLiteral = val;
+			if (next < end && *next == '.') {
+				++next;
+				tok = TokenType::FloatLiteral;
+				double floatVal = val;
+				double sub = 0.1;
+				while(next < end && isdigit(*next)) {
+					floatVal += (*next - '0') * sub;
+					sub *= 0.1;
+					++next;
+				}
+				token.FloatLiteral = floatVal;
+			}
+			break;
+		}
+		case TokenType::Identifier:
+		{
+			// identifiers have to start with a letter, but can contain numbers
+			const char* id_begin = next;
+			while (next < end && (isalpha(*next) || isdigit(*next) || 
+				*next == '_')) 
+			{
+				++next;
+			}
+			const char* id_end = next;
+			std::string id = std::string(id_begin, id_end);
+			auto insrt = ts.tokenStrings.insert(id);
+			token.String = insrt.first->c_str();
+			break;
+		}
+		case TokenType::String:
+		{
+			++next; // skip over opening quotes
+			const char* str_begin = next;
+			while (next < end && *next != '"') {
+				++next;
+			}
+			TokenizerAssert(next < end, next, "End-of-buffer before closing parenthesis.");
+			const char* str_end = next;
+			++next; // pass the closing quotes
+			std::string str = std::string(str_begin, str_end);
+			auto insrt = ts.tokenStrings.insert(str);
+			token.String = insrt.first->c_str();
+			break;
+		}
+		case TokenType::Invalid:
+		default:
+			TokenizerError(next, "unexpected character when parsing token: %c", firstChar);
+			break;
+		}
+
+		token.Type = tok;
+		ts.tokens.push_back(token);
+
+		next = SkipWhitespace(next, end);
+	}
+	Assert(next == end, "Internal inconsistency, passed the end of the buffer");
+}
+
 
 #define RLF_KEYWORD_TUPLE \
 	RLF_KEYWORD_ENTRY(ComputeShader) \
@@ -227,65 +436,31 @@ const char* KeywordString[] =
 
 #undef RLF_KEYWORD_TUPLE
 
-struct BufferString
-{
-	const char* base;
-	size_t len;
-};
-
-bool operator==(const BufferString& l, const BufferString& r)
-{
-	if (l.len != r.len)
-		return false;
-	for (size_t i = 0 ; i < l.len ; ++i)
-	{
-		if (l.base[i] != r.base[i])
-			return false;
-	}
-	return true;
-}
-
-struct BufferStringHash
-{
-	size_t operator()(const BufferString& s) const
-	{
-		unsigned long h = 5381;
-		unsigned const char* us = (unsigned const char *) s.base;
-		unsigned const char* end = (unsigned const char *) s.base + s.len;
-		while(us < end) {
-			h = ((h << 5) + h) + *us;
-			us++;
-		}
-		return h; 
-	}
-};
-
-u32 LowerHash(const char* str, size_t len)
+u32 LowerHash(const char* str)
 {
 	unsigned long h = 5381;
 	unsigned const char* us = (unsigned const char *) str;
-	unsigned const char* end = (unsigned const char *) str + len;
-	while(us < end) {
+	while(*us != '\0') {
 		h = ((h << 5) + h) + tolower(*us);
 		us++;
 	}
 	return h; 
 }
 
-struct BufferIter
+struct TokenIter
 {
-	const char* next;
-	const char* end;
+	const Token* next;
+	const Token* end;
 };
 
 struct ParseState 
 {
-	BufferIter b;
+	TokenIter t;
 	RenderDescription* rd;
-	std::unordered_map<BufferString, Pass, BufferStringHash> passMap;
-	std::unordered_map<BufferString, ComputeShader*, BufferStringHash> csMap;
-	std::unordered_map<BufferString, VertexShader*, BufferStringHash> vsMap;
-	std::unordered_map<BufferString, PixelShader*, BufferStringHash> psMap;
+	std::unordered_map<const char*, Pass> passMap;
+	std::unordered_map<const char*, ComputeShader*> csMap;
+	std::unordered_map<const char*, VertexShader*> vsMap;
+	std::unordered_map<const char*, PixelShader*> psMap;
 	enum class ResType {
 		Sampler,
 		Buffer,
@@ -296,20 +471,19 @@ struct ParseState
 		ResType type;
 		void* m;
 	};
-	std::unordered_map<BufferString, Resource, BufferStringHash> resMap;
-	std::unordered_map<BufferString, TextureFormat, BufferStringHash> fmtMap;
-	std::unordered_map<BufferString, RasterizerState*, BufferStringHash> rsMap;
-	std::unordered_map<BufferString, DepthStencilState*, BufferStringHash> dssMap;
-	std::unordered_map<BufferString, ObjImport*, BufferStringHash> objMap;
+	std::unordered_map<const char*, Resource> resMap;
+	std::unordered_map<u32, TextureFormat> fmtMap;
+	std::unordered_map<const char*, RasterizerState*> rsMap;
+	std::unordered_map<const char*, DepthStencilState*> dssMap;
+	std::unordered_map<const char*, ObjImport*> objMap;
 	struct Var {
 		bool tuneable;
 		void* m;
 	};
-	std::unordered_map<BufferString, Var, BufferStringHash> varMap;
+	std::unordered_map<const char*, Var> varMap;
 	std::unordered_map<u32, Keyword> keyMap;
 
 	const char* workingDirectory;
-	Token fcLUT[128];
 } *GPS;
 
 void ParserError(const char* str, ...)
@@ -322,7 +496,7 @@ void ParserError(const char* str, ...)
 
 	ParseState* ps = GPS;
 	ErrorInfo pe = {};
-	pe.Location = ps->b.next;
+	pe.Location = ps->t.next < ps->t.end ? ps->t.next->Location : nullptr;
 	pe.Message = buf;
 
 	throw pe;
@@ -336,227 +510,92 @@ do {											\
 } while (0);									\
 
 Keyword LookupKeyword(
-	BufferString id)
+	const char* str)
 {
-	u32 hash = LowerHash(id.base, id.len);
+	u32 hash = LowerHash(str);
 	if (GPS->keyMap.count(hash) > 0)
 		return GPS->keyMap[hash];
 	else
 		return Keyword::Invalid;
 }
 
-void SkipWhitespace(
-	BufferIter& b)
-{
-	bool checkAgain;
-	do {
-		checkAgain = false;
-		while (b.next < b.end && isspace(*b.next))
-		{
-			++b.next;
-		}
-		if (b.next + 1 < b.end && b.next[0] == '/')
-		{
-			if (b.next[1] == '/')
-			{
-				b.next += 2;
-				while (b.next < b.end && *b.next != '\n')
-					++b.next;
-				checkAgain = true;
-			}
-			else if (b.next[1] == '*')
-			{
-				b.next += 2;
-				while (b.next + 1 < b.end)
-				{
-					if (b.next[0] == '*' && b.next[1] == '/')
-						break;
-					++b.next;
-				}
-				ParserAssert(b.next[0] == '*' && b.next[1] == '/',
-					"Closing of comment block was not found before end of file");
-				b.next += 2;
-				checkAgain = true;
-			}
-		}
-	}
-	while (checkAgain);
-}
-
 void ParseStateInit(ParseState* ps)
 {
-	Token* fcLUT = ps->fcLUT;
-	for (u32 fc = 0 ; fc < 128 ; ++fc)
-		fcLUT[fc] = Token::Invalid;
-	fcLUT['('] = Token::LParen;
-	fcLUT[')'] = Token::RParen;
-	fcLUT['{'] = Token::LBrace;
-	fcLUT['}'] = Token::RBrace;
-	fcLUT['['] = Token::LBracket;
-	fcLUT[']'] = Token::RBracket;
-	fcLUT[','] = Token::Comma;
-	fcLUT['='] = Token::Equals;
-	fcLUT['+'] = Token::Plus;
-	fcLUT['-'] = Token::Minus;
-	fcLUT[';'] = Token::Semicolon;
-	fcLUT['@'] = Token::At;
-	fcLUT['.'] = Token::Period;
-	fcLUT['/'] = Token::ForwardSlash;
-	fcLUT['*'] = Token::Asterisk;
-	fcLUT['"'] = Token::String;
-	for (u32 fc = 0 ; fc < 128 ; ++fc)
-	{
-		if (isalpha(fc))
-			fcLUT[fc] = Token::Identifier;
-		else if (isdigit(fc))
-			fcLUT[fc] = Token::IntegerLiteral;
-	} 
-	fcLUT['_'] = Token::Identifier;
-
 	for (u32 i = (u32)TextureFormat::Invalid+1 ; i < (u32)TextureFormat::_Count ; ++i)
 	{
 		TextureFormat fmt = (TextureFormat)i;
 		const char* str = TextureFormatName[i];
-		BufferString bstr = { str, strlen(str) };
-		Assert(ps->fmtMap.count(bstr) == 0, "hash collision");
-		ps->fmtMap[bstr] = fmt;
+		u32 hash = LowerHash(str);
+		Assert(ps->fmtMap.count(hash) == 0, "hash collision");
+		ps->fmtMap[hash] = fmt;
 	}
 	for (u32 i = 0 ; i < (u32)Keyword::_Count ; ++i)
 	{
 		Keyword key = (Keyword)i;
 		const char* str = KeywordString[i];
-		u32 hash = LowerHash(str, strlen(str));
+		u32 hash = LowerHash(str);
 		Assert(ps->keyMap.count(hash) == 0, "hash collision");
 		ps->keyMap[hash] = key;
 	}
 }
 
-Token PeekNextToken(
-	BufferIter& b)
+TokenType PeekNextToken(
+	const TokenIter& t)
 {
-	ParserAssert(b.next != b.end, "unexpected end-of-buffer.");
-
-	char firstChar = *b.next;
-	++b.next;
-
-	Token tok = GPS->fcLUT[firstChar];
-
-	switch (tok)
-	{
-	case Token::LParen:
-	case Token::RParen:
-	case Token::LBrace:
-	case Token::RBrace:
-	case Token::LBracket:
-	case Token::RBracket:
-	case Token::Comma:
-	case Token::Equals:
-	case Token::Plus:
-	case Token::Minus:
-	case Token::Semicolon:
-	case Token::At:
-	case Token::Period:
-	case Token::ForwardSlash:
-	case Token::Asterisk:
-		break;
-	case Token::IntegerLiteral:
-		while(b.next < b.end && isdigit(*b.next)) {
-			++b.next;
-		}
-		if (b.next < b.end && *b.next == '.')
-		{
-			tok = Token::FloatLiteral;
-			++b.next;
-			while(b.next < b.end && isdigit(*b.next)) {
-				++b.next;
-			}
-		}
-		break;
-	case Token::Identifier:
-		// identifiers have to start with a letter, but can contain numbers
-		while (b.next < b.end && (isalpha(*b.next) || isdigit(*b.next) || 
-			*b.next == '_')) 
-		{
-			++b.next;
-		}
-		break;
-	case Token::String:
-		while (b.next < b.end && *b.next != '"') {
-			++b.next;
-		}
-		ParserAssert(b.next < b.end, "End-of-buffer before closing parenthesis.");
-		++b.next; // pass the closing quotes
-		break;
-	case Token::Invalid:
-	default:
-		ParserError("unexpected character when parsing token: %c", firstChar);
-		break;
-	}
-
-	return tok;
+	ParserAssert(t.next != t.end, "unexpected end-of-buffer")
+	TokenType type = t.next->Type;
+	return type;
 }
 
 void ConsumeToken(
-	Token tok,
-	BufferIter& b)
+	TokenType tok,
+	TokenIter& t)
 {
-	SkipWhitespace(b);
-	Token foundTok;
-	foundTok = PeekNextToken(b);
+	TokenType foundTok = PeekNextToken(t);
 	ParserAssert(foundTok == tok, "unexpected token, expected %s but found %s",
 		TokenNames[(u32)tok], TokenNames[(u32)foundTok]);
+	++t.next;
 }
 
 bool TryConsumeToken(
-	Token tok,
-	BufferIter& b)
+	TokenType tok,
+	TokenIter& t)
 {
-	BufferIter nb = b;
-	SkipWhitespace(nb);
-	Token foundTok;
-	foundTok = PeekNextToken(nb);
+	TokenType foundTok = PeekNextToken(t);
 	bool found = (foundTok == tok);
 	if (found)
-		b = nb;
+		++t.next;
 	return found;
 }
 
-BufferString ConsumeIdentifier(
-	BufferIter& b)
+const char* ConsumeIdentifier(
+	TokenIter& t)
 {
-	SkipWhitespace(b);
-	BufferIter start = b; 
-	Token tok = PeekNextToken(b);
-	ParserAssert(tok == Token::Identifier, "unexpected %s (wanted identifier)", 
+	TokenType tok = PeekNextToken(t);
+	ParserAssert(tok == TokenType::Identifier, "unexpected %s (wanted identifier)", 
 		TokenNames[(u32)tok]);
 
-	BufferString id;
-	id.base = start.next;
-	id.len = b.next - start.next;
-
-	return id;
+	const char* str = t.next->String;
+	++t.next;
+	return str;
 }
 
-BufferString ConsumeString(
-	BufferIter& b)
+const char* ConsumeString(
+	TokenIter& t)
 {
-	SkipWhitespace(b);
-	BufferIter start = b;
-	Token tok = PeekNextToken(b);
-	ParserAssert(tok == Token::String, "unexpected %s (wanted string)", 
+	TokenType tok = PeekNextToken(t);
+	ParserAssert(tok == TokenType::String, "unexpected %s (wanted string)", 
 		TokenNames[(u32)tok]);
 
-	BufferString str;
-	str.base = start.next + 1;
-	str.len = b.next - start.next - 2;
-
+	const char* str = t.next->String;
+	++t.next;
 	return str;	
 }
 
 bool ConsumeBool(
-	BufferIter& b)
+	TokenIter& t)
 {
-	BufferString value = ConsumeIdentifier(b);
+	const char* value = ConsumeIdentifier(t);
 	Keyword key = LookupKeyword(value);
 	bool ret = false;
 	if (key == Keyword::True)
@@ -564,108 +603,56 @@ bool ConsumeBool(
 	else if (key == Keyword::False)
 		ret = false;
 	else
-		ParserError("Expected bool (true/false), got: %.*s", value.len, value.base);
+		ParserError("Expected bool (true/false), got: %s", value);
 
 	return ret;
 }
 
 i32 ConsumeIntLiteral(
-	BufferIter& b)
+	TokenIter& t)
 {
-	SkipWhitespace(b);
-	bool negative = false;
-	if (TryConsumeToken(Token::Minus, b))
-	{
-		negative = true;
-		SkipWhitespace(b);
-	}
-	BufferIter nb = b;
-	Token tok = PeekNextToken(b);
-	ParserAssert(tok == Token::IntegerLiteral, "unexpected %s (wanted integer literal)",
+	bool negative = TryConsumeToken(TokenType::Minus, t);
+	TokenType tok = PeekNextToken(t);
+	ParserAssert(tok == TokenType::IntegerLiteral, "unexpected %s (wanted integer literal)",
 		TokenNames[(u32)tok]);
-
-	i32 val = 0;
-	do 
-	{
-		val *= 10;
-		val += (*nb.next - '0');
-		++nb.next;
-	} while (nb.next < b.next);
-
+	i32 val = t.next->IntegerLiteral;
+	++t.next;
 	return negative ? -val : val;
 }
 
 u32 ConsumeUintLiteral(
-	BufferIter& b)
+	TokenIter& t)
 {
-	SkipWhitespace(b);
-	if (TryConsumeToken(Token::Minus, b))
-	{
+	if (TryConsumeToken(TokenType::Minus, t))
 		ParserError("Unsigned int expected, '-' invalid here");
-	}
-	BufferIter nb = b;
-	Token tok = PeekNextToken(b);
-	ParserAssert(tok == Token::IntegerLiteral, "unexpected %s (wanted integer literal)",
+	TokenType tok = PeekNextToken(t);
+	ParserAssert(tok == TokenType::IntegerLiteral, "unexpected %s (wanted integer literal)",
 		TokenNames[(u32)tok]);
 
-	u32 val = 0;
-	do 
-	{
-		val *= 10;
-		val += (*nb.next - '0');
-		++nb.next;
-	} while (nb.next < b.next);
-
+	u32 val = t.next->IntegerLiteral;
+	++t.next;
 	return val;
 }
 
 u8 ConsumeUcharLiteral(
-	BufferIter& b)
+	TokenIter& t)
 {
-	u32 u = ConsumeUintLiteral(b);
+	u32 u = ConsumeUintLiteral(t);
 	ParserAssert(u < 256, "Uchar value too large to fit: %u", u);
 	return (u8)u;
 }
 
 float ConsumeFloatLiteral(
-	BufferIter& b)
+	TokenIter& t)
 {
-	SkipWhitespace(b);
-	bool negative = false;
-	if (TryConsumeToken(Token::Minus, b))
-	{
-		negative = true;
-		SkipWhitespace(b);
-	}
-	BufferIter nb = b;
-	Token tok = PeekNextToken(b);
-	ParserAssert(tok == Token::IntegerLiteral || tok == Token::FloatLiteral, 
+	bool negative = TryConsumeToken(TokenType::Minus, t);
+	TokenType tok = PeekNextToken(t);
+	ParserAssert(tok == TokenType::IntegerLiteral || tok == TokenType::FloatLiteral, 
 		"unexpected %s (wanted float literal)", TokenNames[(u32)tok]);
 
-	bool fracPart = (tok == Token::FloatLiteral);
-
-	double val = 0;
-	do 
-	{
-		val *= 10;
-		val += (*nb.next - '0');
-		++nb.next;
-	} while (nb.next < b.next && *nb.next != '.');
-
-	if (fracPart)
-	{
-		Assert(nb.next < b.next && *nb.next == '.', "something went wrong, char=%c", 
-			*nb.next);
-		++nb.next;
-
-		double sub = 0.1;
-		while (nb.next < b.next) 
-		{
-			val += (*nb.next - '0') * sub;
-			sub *= 0.1;
-			++nb.next;
-		}
-	}
+	bool fracPart = (tok == TokenType::FloatLiteral);
+	double val = fracPart ? t.next->FloatLiteral : t.next->IntegerLiteral;
+	++t.next;
 
 	double result = negative ? -val : val;
 	ParserAssert(result >= -FLT_MAX && result < FLT_MAX, 
@@ -673,9 +660,9 @@ float ConsumeFloatLiteral(
 	return (float)(result);
 }
 
-const char* AddStringToDescriptionData(BufferString str, RenderDescription* rd)
+const char* AddStringToDescriptionData(const char* str, RenderDescription* rd)
 {
-	auto pair = rd->Strings.insert(std::string(str.base, str.len));
+	auto pair = rd->Strings.insert(std::string(str));
 	return pair.first->c_str();
 }
 
@@ -694,9 +681,9 @@ struct EnumEntry
 	T Value;
 };
 template <typename T, size_t DefSize>
-T ConsumeEnum(BufferIter& b, EnumEntry<T> (&def)[DefSize], const char* name)
+T ConsumeEnum(TokenIter& ti, EnumEntry<T> (&def)[DefSize], const char* name)
 {
-	BufferString id = ConsumeIdentifier(b);
+	const char* id = ConsumeIdentifier(ti);
 	Keyword key = LookupKeyword(id);
 	T t = T::Invalid;
 	for (size_t i = 0 ; i < DefSize ; ++i)
@@ -707,30 +694,30 @@ T ConsumeEnum(BufferIter& b, EnumEntry<T> (&def)[DefSize], const char* name)
 			break;
 		}
 	}
-	ParserAssert(t != T::Invalid, "Invalid %s enum value: %.*s", name, id.len, id.base);
+	ParserAssert(t != T::Invalid, "Invalid %s enum value: %s", name, id);
 	return t;
 }
 
-SystemValue ConsumeSystemValue(BufferIter& b)
+SystemValue ConsumeSystemValue(TokenIter& t)
 {
 	static EnumEntry<SystemValue> def[] = {
 		Keyword::BackBuffer,	SystemValue::BackBuffer,
 		Keyword::DefaultDepth,	SystemValue::DefaultDepth,
 	};
-	return ConsumeEnum(b, def, "SystemValue");
+	return ConsumeEnum(t, def, "SystemValue");
 }
 
-Filter ConsumeFilter(BufferIter& b)
+Filter ConsumeFilter(TokenIter& t)
 {
 	static EnumEntry<Filter> def[] = {
 		Keyword::Point,		Filter::Point,
 		Keyword::Linear,	Filter::Linear,
 		Keyword::Aniso,		Filter::Aniso,
 	};
-	return ConsumeEnum(b, def, "Filter");
+	return ConsumeEnum(t, def, "Filter");
 }
 
-AddressMode ConsumeAddressMode(BufferIter& b)
+AddressMode ConsumeAddressMode(TokenIter& t)
 {
 	static EnumEntry<AddressMode> def[] = {
 		Keyword::Wrap,			AddressMode::Wrap,
@@ -739,10 +726,10 @@ AddressMode ConsumeAddressMode(BufferIter& b)
 		Keyword::Clamp,			AddressMode::Clamp,
 		Keyword::Border,		AddressMode::Border,
 	};
-	return ConsumeEnum(b, def, "AddressMode");
+	return ConsumeEnum(t, def, "AddressMode");
 }
 
-Topology ConsumeTopology(BufferIter& b)
+Topology ConsumeTopology(TokenIter& t)
 {
 	static EnumEntry<Topology> def[] = {
 		Keyword::PointList,		Topology::PointList,
@@ -751,20 +738,20 @@ Topology ConsumeTopology(BufferIter& b)
 		Keyword::TriList,		Topology::TriList,
 		Keyword::TriStrip,		Topology::TriStrip,
 	};
-	return ConsumeEnum(b, def, "Topology");
+	return ConsumeEnum(t, def, "Topology");
 }
 
-CullMode ConsumeCullMode(BufferIter& b)
+CullMode ConsumeCullMode(TokenIter& t)
 {
 	static EnumEntry<CullMode> def[] = {
 		Keyword::None,	CullMode::None,
 		Keyword::Front,	CullMode::Front,
 		Keyword::Back,	CullMode::Back,
 	};
-	return ConsumeEnum(b, def, "CullMode");
+	return ConsumeEnum(t, def, "CullMode");
 }
 
-ComparisonFunc ConsumeComparisonFunc(BufferIter& b)
+ComparisonFunc ConsumeComparisonFunc(TokenIter& t)
 {
 	static EnumEntry<ComparisonFunc> def[] = {
 		Keyword::Never,			ComparisonFunc::Never,
@@ -776,10 +763,10 @@ ComparisonFunc ConsumeComparisonFunc(BufferIter& b)
 		Keyword::GreaterEqual,	ComparisonFunc::GreaterEqual,
 		Keyword::Always,		ComparisonFunc::Always,
 	};
-	return ConsumeEnum(b, def, "ComparisonFunc");
+	return ConsumeEnum(t, def, "ComparisonFunc");
 }
 
-StencilOp ConsumeStencilOp(BufferIter& b)
+StencilOp ConsumeStencilOp(TokenIter& t)
 {
 	static EnumEntry<StencilOp> def[] = {
 		Keyword::Keep,		StencilOp::Keep,
@@ -791,7 +778,7 @@ StencilOp ConsumeStencilOp(BufferIter& b)
 		Keyword::Incr,		StencilOp::Incr,
 		Keyword::Decr,		StencilOp::Decr,
 	};
-	return ConsumeEnum(b, def, "StencilOp");
+	return ConsumeEnum(t, def, "StencilOp");
 }
 
 // -----------------------------------------------------------------------------
@@ -804,17 +791,17 @@ struct FlagsEntry
 	T Value;
 };
 template <typename T, size_t DefSize>
-T ConsumeFlags(BufferIter& b, FlagsEntry<T> (&def)[DefSize], const char* name)
+T ConsumeFlags(TokenIter& t, FlagsEntry<T> (&def)[DefSize], const char* name)
 {
-	ConsumeToken(Token::LBrace, b);
+	ConsumeToken(TokenType::LBrace, t);
 
 	T flags = (T)0;
 	while (true)
 	{
-		if (TryConsumeToken(Token::RBrace, b))
+		if (TryConsumeToken(TokenType::RBrace, t))
 			break;
 
-		BufferString id = ConsumeIdentifier(b);
+		const char* id = ConsumeIdentifier(t);
 		Keyword key = LookupKeyword(id);
 		bool found = false;
 		for (size_t i = 0 ; i < DefSize ; ++i)
@@ -826,18 +813,18 @@ T ConsumeFlags(BufferIter& b, FlagsEntry<T> (&def)[DefSize], const char* name)
 				break;
 			}
 		}
-		ParserAssert(found, "Unexpected %s flag: %.*s", name, id.len, id.base)
+		ParserAssert(found, "Unexpected %s flag: %s", name, id)
 
-		if (TryConsumeToken(Token::RBrace, b))
+		if (TryConsumeToken(TokenType::RBrace, t))
 			break;
 		else
-			ConsumeToken(Token::Comma, b);
+			ConsumeToken(TokenType::Comma, t);
 	}
 
 	return flags;
 }
 
-BufferFlag ConsumeBufferFlag(BufferIter& b)
+BufferFlag ConsumeBufferFlag(TokenIter& t)
 {
 	static FlagsEntry<BufferFlag> def[] = {
 		Keyword::Vertex,		BufferFlag_Vertex,
@@ -846,9 +833,9 @@ BufferFlag ConsumeBufferFlag(BufferIter& b)
 		Keyword::IndirectArgs,	BufferFlag_IndirectArgs,
 		Keyword::Raw,			BufferFlag_Raw,
 	};
-	return ConsumeFlags(b, def, "BufferFlag");
+	return ConsumeFlags(t, def, "BufferFlag");
 }
-TextureFlag ConsumeTextureFlag(BufferIter& b)
+TextureFlag ConsumeTextureFlag(TokenIter& t)
 {
 	static FlagsEntry<TextureFlag> def[] = {
 		Keyword::SRV,	TextureFlag_SRV,
@@ -856,69 +843,67 @@ TextureFlag ConsumeTextureFlag(BufferIter& b)
 		Keyword::RTV,	TextureFlag_RTV,
 		Keyword::DSV,	TextureFlag_DSV,
 	};
-	return ConsumeFlags(b, def, "TextureFlag");
+	return ConsumeFlags(t, def, "TextureFlag");
 }
 
 // -----------------------------------------------------------------------------
 // ------------------------------ SPECIAL --------------------------------------
 // -----------------------------------------------------------------------------
-FilterMode ConsumeFilterMode(BufferIter& b)
+FilterMode ConsumeFilterMode(TokenIter& t)
 {
 	FilterMode fm = {};
-	ConsumeToken(Token::LBrace, b);
+	ConsumeToken(TokenType::LBrace, t);
 	while (true)
 	{
-		if (TryConsumeToken(Token::RBrace, b))
+		if (TryConsumeToken(TokenType::RBrace, t))
 			break;
 
-		BufferString fieldId = ConsumeIdentifier(b);
-		ConsumeToken(Token::Equals, b);
+		const char* fieldId = ConsumeIdentifier(t);
+		ConsumeToken(TokenType::Equals, t);
 		switch (LookupKeyword(fieldId))
 		{
 		case Keyword::All:
-			fm.Min = fm.Mag = fm.Mip = ConsumeFilter(b);
+			fm.Min = fm.Mag = fm.Mip = ConsumeFilter(t);
 			break;
 		case Keyword::Min:
-			fm.Min = ConsumeFilter(b);
+			fm.Min = ConsumeFilter(t);
 			break;
 		case Keyword::Mag:
-			fm.Mag = ConsumeFilter(b);
+			fm.Mag = ConsumeFilter(t);
 			break;
 		case Keyword::Mip:
-			fm.Mip = ConsumeFilter(b);
+			fm.Mip = ConsumeFilter(t);
 			break;
 		default:
-			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+			ParserError("unexpected field %s", fieldId);
 		}
 
-		if (TryConsumeToken(Token::RBrace, b))
+		if (TryConsumeToken(TokenType::RBrace, t))
 			break;
 		else 
-			ConsumeToken(Token::Comma, b);
+			ConsumeToken(TokenType::Comma, t);
 	}
 	return fm;
 }
 
-AddressModeUVW ConsumeAddressModeUVW(BufferIter& b)
+AddressModeUVW ConsumeAddressModeUVW(TokenIter& t)
 {
 	AddressModeUVW addr; 
 	addr.U = addr.V = addr.W = AddressMode::Wrap;
-	ConsumeToken(Token::LBrace,b);
+	ConsumeToken(TokenType::LBrace,t);
 	while (true)
 	{
-		if (TryConsumeToken(Token::RBrace, b))
+		if (TryConsumeToken(TokenType::RBrace, t))
 			break;
 
-		BufferString fieldId = ConsumeIdentifier(b);
-		ConsumeToken(Token::Equals, b);
-		AddressMode mode = ConsumeAddressMode(b);
+		const char* fieldId = ConsumeIdentifier(t);
+		ConsumeToken(TokenType::Equals, t);
+		AddressMode mode = ConsumeAddressMode(t);
 
-		ParserAssert(fieldId.len <= 3, "Invalid [U?V?W?], %.*s", fieldId.len, 
-			fieldId.base);
+		ParserAssert(strlen(fieldId) <= 3, "Invalid [U?V?W?], %s", fieldId);
 
-		const char* curr = fieldId.base;
-		const char* end = fieldId.base + fieldId.len;
-		while (curr < end)
+		const char* curr = fieldId;
+		while (*curr != '\0')
 		{
 			if (*curr == 'U')
 				addr.U = mode;
@@ -931,33 +916,33 @@ AddressModeUVW ConsumeAddressModeUVW(BufferIter& b)
 			++curr;
 		}
 
-		if (TryConsumeToken(Token::RBrace, b))
+		if (TryConsumeToken(TokenType::RBrace, t))
 			break;
 		else 
-			ConsumeToken(Token::Comma, b);
+			ConsumeToken(TokenType::Comma, t);
 	}
 	return addr;
 }
 
-View* ConsumeViewDef(BufferIter& b, ParseState& ps, ViewType vt)
+View* ConsumeViewDef(TokenIter& t, ParseState& ps, ViewType vt)
 {
 	View* v = new View();
 	ps.rd->Views.push_back(v);
 	v->Type = vt;
-	ConsumeToken(Token::LBrace, b);
+	ConsumeToken(TokenType::LBrace, t);
 	while (true)
 	{
-		if (TryConsumeToken(Token::RBrace, b))
+		if (TryConsumeToken(TokenType::RBrace, t))
 			break;
 
-		BufferString id = ConsumeIdentifier(b);
+		const char* id = ConsumeIdentifier(t);
 		Keyword key = LookupKeyword(id);
-		ConsumeToken(Token::Equals, b);
+		ConsumeToken(TokenType::Equals, t);
 		if (key == Keyword::Resource)
 		{
-			BufferString rid = ConsumeIdentifier(b);
-			ParserAssert(ps.resMap.count(rid) != 0, "Couldn't find resource %.*s", 
-				rid.len, rid.base);
+			const char* rid = ConsumeIdentifier(t);
+			ParserAssert(ps.resMap.count(rid) != 0, "Couldn't find resource %s", 
+				rid);
 			ParseState::Resource& res = ps.resMap[rid];
 			if (res.type == ParseState::ResType::Buffer)
 			{
@@ -972,58 +957,58 @@ View* ConsumeViewDef(BufferIter& b, ParseState& ps, ViewType vt)
 			}
 			else
 			{
-				ParserError("Referenced resource (%.*s) must be Texture or Buffer.", 
-					rid.len, rid.base);
+				ParserError("Referenced resource (%s) must be Texture or Buffer.", 
+					rid);
 			}
 		}
 		else if (key == Keyword::Format)
 		{
-			BufferString formatId = ConsumeIdentifier(b);
-			ParserAssert(GPS->fmtMap.count(formatId) != 0, "Couldn't find format %.*s", 
-				formatId.len, formatId.base);
-			v->Format = GPS->fmtMap[formatId];
+			const char* formatId = ConsumeIdentifier(t);
+			u32 hash = LowerHash(formatId);
+			ParserAssert(GPS->fmtMap.count(hash) != 0, "Couldn't find format %s", 
+				formatId);
+			v->Format = GPS->fmtMap[hash];
 		}
 		else if (key == Keyword::NumElements)
 		{
-			v->NumElements = ConsumeUintLiteral(b);
+			v->NumElements = ConsumeUintLiteral(t);
 		}
 		else 
 		{
-			ParserError("Unexpected field (%.*s)", id.len, id.base);
+			ParserError("Unexpected field (%s)", id);
 		}
 
-		ConsumeToken(Token::Semicolon, b);
+		ConsumeToken(TokenType::Semicolon, t);
 	}
 	ParserAssert(v->ResourceType != ResourceType::Invalid, 
 		"Resource on View must be set.");
 	return v;
 }
 
-View* ConsumeViewRefOrDef(BufferIter& b, ParseState& ps, BufferString id)
+View* ConsumeViewRefOrDef(TokenIter& t, ParseState& ps, const char* id)
 {
 	View* v = nullptr;
 
 	Keyword key = LookupKeyword(id);
 	if (key == Keyword::SRV)
 	{
-		v = ConsumeViewDef(b,ps, ViewType::SRV);
+		v = ConsumeViewDef(t,ps, ViewType::SRV);
 	}
 	else if (key == Keyword::UAV)
 	{
-		v = ConsumeViewDef(b,ps, ViewType::UAV);
+		v = ConsumeViewDef(t,ps, ViewType::UAV);
 	}
 	else if (key == Keyword::RTV)
 	{
-		v = ConsumeViewDef(b,ps, ViewType::RTV);
+		v = ConsumeViewDef(t,ps, ViewType::RTV);
 	}
 	else if (key == Keyword::DSV)
 	{
-		v = ConsumeViewDef(b,ps, ViewType::DSV);
+		v = ConsumeViewDef(t,ps, ViewType::DSV);
 	}
 	else
 	{
-		ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
-			id.len, id.base);
+		ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %s", id);
 		ParseState::Resource& res = ps.resMap[id];
 		if (res.type == ParseState::ResType::View)
 		{
@@ -1061,33 +1046,32 @@ View* ConsumeViewRefOrDef(BufferIter& b, ParseState& ps, BufferString id)
 	return v;
 }
 
-Bind ConsumeBind(BufferIter& b, ParseState& ps)
+Bind ConsumeBind(TokenIter& t, ParseState& ps)
 {
-	BufferString bindName = ConsumeIdentifier(b);
-	ConsumeToken(Token::Equals, b);
+	const char* bindName = ConsumeIdentifier(t);
+	ConsumeToken(TokenType::Equals, t);
 	Bind bind;
 	bind.BindTarget = AddStringToDescriptionData(bindName, ps.rd);
-	if (TryConsumeToken(Token::At, b))
+	if (TryConsumeToken(TokenType::At, t))
 	{
 		bind.Type = BindType::SystemValue;
-		bind.SystemBind = ConsumeSystemValue(b);
+		bind.SystemBind = ConsumeSystemValue(t);
 	}
 	else
 	{
-		BufferString id = ConsumeIdentifier(b);
-		View* v = ConsumeViewRefOrDef(b, ps, id);
+		const char* id = ConsumeIdentifier(t);
+		View* v = ConsumeViewRefOrDef(t, ps, id);
 		if (v)
 		{
 			ParserAssert(v->Type == ViewType::SRV || v->Type == ViewType::UAV ||
-				v->Type == ViewType::Auto, "Referenced view (%.*s) must be SRV/UAV/Auto.",
-				id.len, id.base);
+				v->Type == ViewType::Auto, "Referenced view (%s) must be SRV/UAV/Auto.",
+				id);
 			bind.Type = BindType::View;
 			bind.ViewBind = v;
 		}
 		else
 		{
-			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
-				id.len, id.base);
+			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %s", id);
 			ParseState::Resource& res = ps.resMap[id];
 			if (res.type == ParseState::ResType::Sampler)
 			{
@@ -1096,8 +1080,8 @@ Bind ConsumeBind(BufferIter& b, ParseState& ps)
 			}
 			else
 			{
-				ParserError("Referenced resource (%.*s) must be SRV/UAV/Auto, or sampler.", 
-					id.len, id.base);
+				ParserError("Referenced resource (%s) must be SRV/UAV/Auto, or sampler.", 
+					id);
 			}
 		}
 	}
@@ -1112,45 +1096,42 @@ AstType* AllocateAst(RenderDescription* rd)
 	return ast;
 } 
 
-ast::Node* ConsumeAstRecurse(BufferIter& b, ParseState& ps)
+ast::Node* ConsumeAstRecurse(TokenIter& t, ParseState& ps)
 {
 	ast::Node* ast = nullptr;
 	while (true)
 	{
-		BufferIter nb = b;
-		SkipWhitespace(nb);
-		Token tok = PeekNextToken(nb);
-		if (tok == Token::Comma || tok == Token::RParen || tok == Token::Semicolon ||
-			tok == Token::RBrace)
+		TokenType tok = PeekNextToken(t);
+		if (tok == TokenType::Comma || tok == TokenType::RParen || 
+			tok == TokenType::Semicolon || tok == TokenType::RBrace)
 		{
 			break;
 		}
-		else if (tok == Token::Identifier)
+		else if (tok == TokenType::Identifier)
 		{
 			ParserAssert(!ast, "expected op");
-			const char* loc = b.next;
-			BufferString id = ConsumeIdentifier(b);
-			if (TryConsumeToken(Token::LParen, b))
+			const char* loc = t.next->Location;
+			const char* id = ConsumeIdentifier(t);
+			if (TryConsumeToken(TokenType::LParen, t))
 			{
 				ast::Function* func = AllocateAst<ast::Function>(ps.rd);
-				func->Name = std::string(id.base, id.len);
-				if (!TryConsumeToken(Token::RParen, b))
+				func->Name = std::string(id);
+				if (!TryConsumeToken(TokenType::RParen, t))
 				{
 					while (true)
 					{
-						ast::Node* arg = ConsumeAstRecurse(b, ps);
+						ast::Node* arg = ConsumeAstRecurse(t, ps);
 						func->Args.push_back(arg);
-						if (!TryConsumeToken(Token::Comma, b))
+						if (!TryConsumeToken(TokenType::Comma, t))
 							break;
 					}
-					ConsumeToken(Token::RParen, b);
+					ConsumeToken(TokenType::RParen, t);
 				}
 				ast = func;
 			}
 			else
 			{
-				ParserAssert(ps.varMap.count(id) == 1, "Variable %.*s not defined.",
-					id.len, id.base);
+				ParserAssert(ps.varMap.count(id) == 1, "Variable %s not defined.", id);
 				ParseState::Var& v = ps.varMap[id];
 				ast::VariableRef* vr = AllocateAst<ast::VariableRef>(ps.rd);
 				vr->isTuneable = v.tuneable;
@@ -1159,17 +1140,18 @@ ast::Node* ConsumeAstRecurse(BufferIter& b, ParseState& ps)
 			}
 			ast->Location = loc;
 		}
-		else if (tok == Token::Period)
+		else if (tok == TokenType::Period)
 		{
 			ParserAssert(ast, "expected value")
-			b = nb; //ConsumeToken(Token::Period, b);
+			ConsumeToken(TokenType::Period, t);
 			ast::Subscript* sub = AllocateAst<ast::Subscript>(ps.rd);
 			sub->Subject = ast;
-			sub->Location = b.next;
-			BufferString ss = ConsumeIdentifier(b);
-			for (int i = 0 ; i < ss.len ; ++i)
+			sub->Location = t.next->Location;
+			const char* ss = ConsumeIdentifier(t);
+			size_t slen = strlen(ss);
+			for (u32 i = 0 ; i < slen ; ++i)
 			{
-				char s = ss.base[i];
+				char s = ss[i];
 				if (s == 'x' || s == 'r')
 					sub->Index[i] = 0;
 				else if (s == 'y' || s == 'g')
@@ -1179,26 +1161,26 @@ ast::Node* ConsumeAstRecurse(BufferIter& b, ParseState& ps)
 				else if (s == 'w' || s == 'a')
 					sub->Index[i] = 3;
 				else
-					ParserError("Unexpected subscript: %.*s", ss.len, ss.base);
+					ParserError("Unexpected subscript: %s", ss);
 			}
 			ast = sub;
 		}
-		else if (ast && (tok == Token::Plus || tok == Token::Minus || tok == Token::Asterisk || 
-			tok == Token::ForwardSlash))
+		else if (ast && (tok == TokenType::Plus || tok == TokenType::Minus || 
+			tok == TokenType::Asterisk || tok == TokenType::ForwardSlash))
 		{
-			const char* loc = b.next;
-			b = nb; //ConsumeToken(tok, b);
-			ast::Node* arg2 = ConsumeAstRecurse(b,ps);
+			const char* loc = t.next->Location;
+			ConsumeToken(tok, t);
+			ast::Node* arg2 = ConsumeAstRecurse(t,ps);
 			ast::BinaryOp::Type op;
 			switch (tok)
 			{
-			case Token::Plus:
+			case TokenType::Plus:
 				op = ast::BinaryOp::Type::Add; break;
-			case Token::Minus:
+			case TokenType::Minus:
 				op = ast::BinaryOp::Type::Subtract; break;
-			case Token::Asterisk:
+			case TokenType::Asterisk:
 				op = ast::BinaryOp::Type::Multiply; break;
-			case Token::ForwardSlash:
+			case TokenType::ForwardSlash:
 				op = ast::BinaryOp::Type::Divide; break;
 			default:
 				Unimplemented();
@@ -1224,23 +1206,21 @@ ast::Node* ConsumeAstRecurse(BufferIter& b, ParseState& ps)
 			else
 				Unimplemented();
 		}
-		else if (!ast && tok == Token::Minus)
+		else if (!ast && tok == TokenType::Minus)
 		{
-			const char* loc = b.next;
-			BufferIter nb2 = nb;
-			SkipWhitespace(nb2);
-			Token tok2 = PeekNextToken(nb2);
-			if (tok2 == Token::IntegerLiteral)
+			const char* loc = t.next->Location;
+			TokenType tok2 = PeekNextToken(t);
+			if (tok2 == TokenType::IntegerLiteral)
 			{
-				i32 i = ConsumeIntLiteral(b);
+				i32 i = ConsumeIntLiteral(t);
 				ast::IntLiteral* il = AllocateAst<ast::IntLiteral>(ps.rd);
 				il->Val = i;
 				il->Location = loc;
 				ast = il;
 			}
-			else if (tok2 == Token::FloatLiteral)
+			else if (tok2 == TokenType::FloatLiteral)
 			{
-				float f = ConsumeFloatLiteral(b);
+				float f = ConsumeFloatLiteral(t);
 				ast::FloatLiteral* fl = AllocateAst<ast::FloatLiteral>(ps.rd);
 				fl->Val = f;
 				fl->Location = loc;
@@ -1248,11 +1228,11 @@ ast::Node* ConsumeAstRecurse(BufferIter& b, ParseState& ps)
 			}
 			else
 			{
-				b = nb; //ConsumeToken(Token::Minus, b);
+				ConsumeToken(TokenType::Minus, t);
 				ast::IntLiteral* nl = AllocateAst<ast::IntLiteral>(ps.rd);
 				nl->Val = -1;
 				nl->Location = loc;
-				ast::Node* arg = ConsumeAstRecurse(b,ps);
+				ast::Node* arg = ConsumeAstRecurse(t,ps);
 				if (arg->Spec == ast::Node::Special::Operator)
 				{
 					ast::BinaryOp* bop = static_cast<ast::BinaryOp*>(arg);
@@ -1275,51 +1255,51 @@ ast::Node* ConsumeAstRecurse(BufferIter& b, ParseState& ps)
 					Unimplemented();
 			}
 		}
-		else if (tok == Token::IntegerLiteral)
+		else if (tok == TokenType::IntegerLiteral)
 		{
 			ParserAssert(!ast, "expected op");
-			const char* loc = b.next;
-			u32 u = ConsumeUintLiteral(b);
+			const char* loc = t.next->Location;
+			u32 u = ConsumeUintLiteral(t);
 			ast::UintLiteral* ul = AllocateAst<ast::UintLiteral>(ps.rd);
 			ul->Val = u;
 			ul->Location = loc;
 			ast = ul;
 		}
-		else if (tok == Token::FloatLiteral)
+		else if (tok == TokenType::FloatLiteral)
 		{
 			ParserAssert(!ast, "expected op");
-			const char* loc = b.next;
-			float f = ConsumeFloatLiteral(b);
+			const char* loc = t.next->Location;
+			float f = ConsumeFloatLiteral(t);
 			ast::FloatLiteral* fl = AllocateAst<ast::FloatLiteral>(ps.rd);
 			fl->Val = f;
 			fl->Location = loc;
 			ast = fl;
 		}
-		else if (tok == Token::LParen)
+		else if (tok == TokenType::LParen)
 		{
 			ParserAssert(!ast, "expected op")
-			b = nb; //ConsumeToken(Token::LParen, b);
+			ConsumeToken(TokenType::LParen, t);
 			ast::Group* grp = AllocateAst<ast::Group>(ps.rd);
-			grp->Sub = ConsumeAstRecurse(b, ps);
+			grp->Sub = ConsumeAstRecurse(t, ps);
 			ast = grp;
-			ConsumeToken(Token::RParen, b);
+			ConsumeToken(TokenType::RParen, t);
 		}
-		else if (tok == Token::LBrace)
+		else if (tok == TokenType::LBrace)
 		{
 			ParserAssert(!ast, "expected op");
-			const char* loc = b.next;
-			b = nb; //ConsumeToken(Token::LBrace, b);
+			const char* loc = t.next->Location;
+			ConsumeToken(TokenType::LBrace, t);
 			ast::Join* join = AllocateAst<ast::Join>(ps.rd);
 			while (true)
 			{
-				ast::Node* arg = ConsumeAstRecurse(b, ps);
+				ast::Node* arg = ConsumeAstRecurse(t, ps);
 				join->Comps.push_back(arg);
-				if (!TryConsumeToken(Token::Comma, b))
+				if (!TryConsumeToken(TokenType::Comma, t))
 					break;
 			}
 			join->Location = loc;
 			ast = join;
-			ConsumeToken(Token::RBrace, b);
+			ConsumeToken(TokenType::RBrace, t);
 		}
 		else
 			ParserError("Unexpected token given: %s", TokenNames[(u32)tok]);
@@ -1328,43 +1308,43 @@ ast::Node* ConsumeAstRecurse(BufferIter& b, ParseState& ps)
 	return ast;
 }
 
-ast::Node* ConsumeAst(BufferIter& b, ParseState& ps)
+ast::Node* ConsumeAst(TokenIter& t, ParseState& ps)
 {
-	ast::Node* ast = ConsumeAstRecurse(b, ps);
+	ast::Node* ast = ConsumeAstRecurse(t, ps);
 	ast->GetDependency(ast->Dep);
 	return ast;
 }
 
-SetConstant ConsumeSetConstant(BufferIter& b, ParseState& ps)
+SetConstant ConsumeSetConstant(TokenIter& t, ParseState& ps)
 {
-	BufferString varName = ConsumeIdentifier(b);
-	ConsumeToken(Token::Equals, b);
+	const char* varName = ConsumeIdentifier(t);
+	ConsumeToken(TokenType::Equals, t);
 	SetConstant sc = {};
 	sc.VariableName = AddStringToDescriptionData(varName, ps.rd);
-	sc.Value = ConsumeAst(b, ps);
-	ConsumeToken(Token::Semicolon, b);
+	sc.Value = ConsumeAst(t, ps);
+	ConsumeToken(TokenType::Semicolon, t);
 	return sc;
 }
 
-void ConsumeVariable(VariableType type, Variable& var, BufferIter& b)
+void ConsumeVariable(VariableType type, Variable& var, TokenIter& t)
 {
 	for (u32 i = 0 ; i < type.Dim ; ++i)
 	{
 		if (i != 0)
-			ConsumeToken(Token::Comma, b);
+			ConsumeToken(TokenType::Comma, t);
 		switch (type.Fmt)
 		{
 		case VariableFormat::Float:
-			var.Float4Val.m[i] = ConsumeFloatLiteral(b);
+			var.Float4Val.m[i] = ConsumeFloatLiteral(t);
 			break;
 		case VariableFormat::Bool:
-			var.Bool4Val.m[i] = ConsumeBool(b);
+			var.Bool4Val.m[i] = ConsumeBool(t);
 			break;
 		case VariableFormat::Int:
-			var.Int4Val.m[i] = ConsumeIntLiteral(b);
+			var.Int4Val.m[i] = ConsumeIntLiteral(t);
 			break;
 		case VariableFormat::Uint:
-			var.Uint4Val.m[i] = ConsumeUintLiteral(b);
+			var.Uint4Val.m[i] = ConsumeUintLiteral(t);
 			break;
 		default:
 			Unimplemented();
@@ -1372,7 +1352,7 @@ void ConsumeVariable(VariableType type, Variable& var, BufferIter& b)
 	}
 }
 
-VariableType LookupVariableType(BufferString id)
+VariableType LookupVariableType(const char* id)
 {
 	VariableType type = BoolType;
 	Keyword key = LookupKeyword(id);
@@ -1421,23 +1401,23 @@ VariableType LookupVariableType(BufferString id)
 		type = Float4x4Type;
 		break;
 	default:
-		ParserError("Unexpected type: %.*s", id.len, id.base);
+		ParserError("Unexpected type: %s", id);
 	}
 	return type;
 }
 
-Tuneable* ConsumeTuneable(BufferIter& b, ParseState& ps)
+Tuneable* ConsumeTuneable(TokenIter& t, ParseState& ps)
 {
 	Tuneable* tune = new Tuneable();
 	ps.rd->Tuneables.push_back(tune);
 
-	BufferString typeId = ConsumeIdentifier(b);
+	const char* typeId = ConsumeIdentifier(t);
 	tune->Type = LookupVariableType(typeId);
 
-	BufferString nameId = ConsumeIdentifier(b);
+	const char* nameId = ConsumeIdentifier(t);
 	tune->Name = AddStringToDescriptionData(nameId, ps.rd);
-	ParserAssert(ps.varMap.count(nameId) == 0, "Variable %.*s already defined", 
-		nameId.len, nameId.base);
+	ParserAssert(ps.varMap.count(nameId) == 0, "Variable %s already defined", 
+		nameId);
 	ParseState::Var v;
 	v.tuneable = true;
 	v.m = tune;
@@ -1445,19 +1425,19 @@ Tuneable* ConsumeTuneable(BufferIter& b, ParseState& ps)
 
 	bool hasRange = false;
 
-	if (tune->Type != BoolType && TryConsumeToken(Token::LBracket,b))
+	if (tune->Type != BoolType && TryConsumeToken(TokenType::LBracket,t))
 	{
 		hasRange = true;
 		VariableType mmType = tune->Type;
 		mmType.Dim = 1;
-		ConsumeVariable(mmType, tune->Min, b);
-		ConsumeToken(Token::Comma,b);
-		ConsumeVariable(mmType, tune->Max, b);
-		ConsumeToken(Token::RBracket,b);
+		ConsumeVariable(mmType, tune->Min, t);
+		ConsumeToken(TokenType::Comma,t);
+		ConsumeVariable(mmType, tune->Max, t);
+		ConsumeToken(TokenType::RBracket,t);
 	}
 
-	ConsumeToken(Token::Equals, b);
-	ConsumeVariable(tune->Type, tune->Value, b);
+	ConsumeToken(TokenType::Equals, t);
+	ConsumeVariable(tune->Type, tune->Value, t);
 
 	if (hasRange)
 	{
@@ -1491,33 +1471,32 @@ Tuneable* ConsumeTuneable(BufferIter& b, ParseState& ps)
 		}
 	}
 
-	ConsumeToken(Token::Semicolon, b);
+	ConsumeToken(TokenType::Semicolon, t);
 
 	return tune;
 }
 
-Constant* ConsumeConstant(BufferIter& b, ParseState& ps)
+Constant* ConsumeConstant(TokenIter& t, ParseState& ps)
 {
 	Constant* cnst = new Constant();
 	ps.rd->Constants.push_back(cnst);
 
-	BufferString typeId = ConsumeIdentifier(b);
+	const char* typeId = ConsumeIdentifier(t);
 	cnst->Type = LookupVariableType(typeId);
 
-	BufferString nameId = ConsumeIdentifier(b);
+	const char* nameId = ConsumeIdentifier(t);
 	cnst->Name = AddStringToDescriptionData(nameId, ps.rd);
-	ParserAssert(ps.varMap.count(nameId) == 0, "Variable %.*s already defined", 
-		nameId.len, nameId.base);
+	ParserAssert(ps.varMap.count(nameId) == 0, "Variable %s already defined", nameId);
 
-	ConsumeToken(Token::Equals, b);
-	cnst->Expr = ConsumeAst(b,ps);
+	ConsumeToken(TokenType::Equals, t);
+	cnst->Expr = ConsumeAst(t,ps);
 	
 	ParseState::Var v;
 	v.tuneable = false;
 	v.m = cnst;
 	ps.varMap[nameId] = v;
 
-	ConsumeToken(Token::Semicolon, b);
+	ConsumeToken(TokenType::Semicolon, t);
 
 	return cnst;
 }
@@ -1555,139 +1534,138 @@ struct StructEntry
 #define StructEntryDef(struc, type, field) Keyword::field, ConsumeType::type, offsetof(struc, field)
 #define StructEntryDefEx(struc, type, name, field) Keyword::name, ConsumeType::type, offsetof(struc, field)
 
-StencilOpDesc ConsumeStencilOpDesc(BufferIter& b);
+StencilOpDesc ConsumeStencilOpDesc(TokenIter& t);
 
 template <typename T>
-void ConsumeField(BufferIter& b, T* s, ConsumeType type, size_t offset)
+void ConsumeField(TokenIter& t, T* s, ConsumeType type, size_t offset)
 {
 	u8* p = (u8*)s;
 	p += offset;
 	switch (type)
 	{
 	case ConsumeType::Bool:
-		*(bool*)p = ConsumeBool(b);
+		*(bool*)p = ConsumeBool(t);
 		break;
 	case ConsumeType::Int:
-		*(i32*)p = ConsumeIntLiteral(b);
+		*(i32*)p = ConsumeIntLiteral(t);
 		break;
 	case ConsumeType::Uchar:
-		*(u8*)p = ConsumeUcharLiteral(b);
+		*(u8*)p = ConsumeUcharLiteral(t);
 		break;
 	case ConsumeType::Uint:
-		*(u32*)p = ConsumeUintLiteral(b);
+		*(u32*)p = ConsumeUintLiteral(t);
 		break;
 	case ConsumeType::Uint2:
 	{
-		ConsumeToken(Token::LBrace, b);
+		ConsumeToken(TokenType::LBrace, t);
 		uint2& u2 = *(uint2*)p;
-		u2.x = ConsumeUintLiteral(b);
-		ConsumeToken(Token::Comma, b);
-		u2.y = ConsumeUintLiteral(b);
-		ConsumeToken(Token::RBrace, b);
+		u2.x = ConsumeUintLiteral(t);
+		ConsumeToken(TokenType::Comma, t);
+		u2.y = ConsumeUintLiteral(t);
+		ConsumeToken(TokenType::RBrace, t);
 		break;
 	}
 	case ConsumeType::Float:
-		*(float*)p = ConsumeFloatLiteral(b);
+		*(float*)p = ConsumeFloatLiteral(t);
 		break;
 	case ConsumeType::Float4:
 	{
 		float4& f4 = *(float4*)p;
-		ConsumeToken(Token::LBrace, b);
-		f4.x = ConsumeFloatLiteral(b);
-		ConsumeToken(Token::Comma, b);
-		f4.y = ConsumeFloatLiteral(b);
-		ConsumeToken(Token::Comma, b);
-		f4.z = ConsumeFloatLiteral(b);
-		ConsumeToken(Token::Comma, b);
-		f4.w = ConsumeFloatLiteral(b);
-		ConsumeToken(Token::RBrace, b);
+		ConsumeToken(TokenType::LBrace, t);
+		f4.x = ConsumeFloatLiteral(t);
+		ConsumeToken(TokenType::Comma, t);
+		f4.y = ConsumeFloatLiteral(t);
+		ConsumeToken(TokenType::Comma, t);
+		f4.z = ConsumeFloatLiteral(t);
+		ConsumeToken(TokenType::Comma, t);
+		f4.w = ConsumeFloatLiteral(t);
+		ConsumeToken(TokenType::RBrace, t);
 		break;
 	}
 	case ConsumeType::String:
 	{
-		BufferString str = ConsumeString(b);
+		const char* str = ConsumeString(t);
 		*(const char**)p = AddStringToDescriptionData(str, GPS->rd);
 		break;
 	}
 	case ConsumeType::AddressModeUVW:
-		*(AddressModeUVW*)p = ConsumeAddressModeUVW(b);
+		*(AddressModeUVW*)p = ConsumeAddressModeUVW(t);
 		break;
 	case ConsumeType::Ast:
-		*(ast::Node**)p = ConsumeAst(b, *GPS);
+		*(ast::Node**)p = ConsumeAst(t, *GPS);
 		break;
 	case ConsumeType::ComparisonFunc:
-		*(ComparisonFunc*)p = ConsumeComparisonFunc(b);
+		*(ComparisonFunc*)p = ConsumeComparisonFunc(t);
 		break;
 	case ConsumeType::CullMode:
-		*(CullMode*)p = ConsumeCullMode(b);
+		*(CullMode*)p = ConsumeCullMode(t);
 		break;
 	case ConsumeType::FilterMode:
-		*(FilterMode*)p = ConsumeFilterMode(b);
+		*(FilterMode*)p = ConsumeFilterMode(t);
 		break;
 	case ConsumeType::StencilOp:
-		*(StencilOp*)p = ConsumeStencilOp(b);
+		*(StencilOp*)p = ConsumeStencilOp(t);
 		break;
 	case ConsumeType::StencilOpDesc:
-		*(StencilOpDesc*)p = ConsumeStencilOpDesc(b);
+		*(StencilOpDesc*)p = ConsumeStencilOpDesc(t);
 		break;
 	case ConsumeType::Texture:
 	{
-		BufferString id = ConsumeIdentifier(b);
-		ParserAssert(GPS->resMap.count(id) != 0, "Couldn't find resource %.*s", 
-			id.len, id.base);
+		const char* id = ConsumeIdentifier(t);
+		ParserAssert(GPS->resMap.count(id) != 0, "Couldn't find resource %s", id);
 		ParseState::Resource& res = GPS->resMap[id];
 		ParserAssert(res.type == ParseState::ResType::Texture, "Resource must be texture");
 		*(Texture**)p = reinterpret_cast<Texture*>(res.m);
 		break;
 	}
 	case ConsumeType::TextureFlag:
-		*(TextureFlag*)p = ConsumeTextureFlag(b);
+		*(TextureFlag*)p = ConsumeTextureFlag(t);
 		break;
 	case ConsumeType::TextureFormat:
 	{
-		BufferString formatId = ConsumeIdentifier(b);
-		ParserAssert(GPS->fmtMap.count(formatId) != 0, "Couldn't find format %.*s", 
-			formatId.len, formatId.base);
-		*(TextureFormat*)p = GPS->fmtMap[formatId];
+		const char* formatId = ConsumeIdentifier(t);
+		u32 hash = LowerHash(formatId);
+		ParserAssert(GPS->fmtMap.count(hash) != 0, "Couldn't find format %s", 
+			formatId);
+		*(TextureFormat*)p = GPS->fmtMap[hash];
 		break;
 	}
 	default:
 		Unimplemented();
 	}
 }
-template <Token Delim, bool TrailingRequired, typename T, size_t DefSize>
-void ConsumeStruct(BufferIter& b, T* s, StructEntry (&def)[DefSize], const char* name)
+template <TokenType Delim, bool TrailingRequired, typename T, size_t DefSize>
+void ConsumeStruct(TokenIter& t, T* s, StructEntry (&def)[DefSize], const char* name)
 {
-	ConsumeToken(Token::LBrace, b);
+	ConsumeToken(TokenType::LBrace, t);
 
 	while (true)
 	{
-		if (TryConsumeToken(Token::RBrace, b))
+		if (TryConsumeToken(TokenType::RBrace, t))
 			break;
 
-		BufferString id = ConsumeIdentifier(b);
+		const char* id = ConsumeIdentifier(t);
 		Keyword key = LookupKeyword(id);
-		ConsumeToken(Token::Equals, b);
+		ConsumeToken(TokenType::Equals, t);
 		bool found = false;
 		for (size_t i = 0 ; i < DefSize ; ++i)
 		{
 			if (key == def[i].Key)
 			{
-				ConsumeField(b, s, def[i].Type, def[i].Offset);
+				ConsumeField(t, s, def[i].Type, def[i].Offset);
 				found = true;
 				break;
 			}
 		}
-		ParserAssert(found, "Unexpected field (%.*s) in struct %s", 
-			id.len, id.base, name)
+		ParserAssert(found, "Unexpected field (%s) in struct %s", id, name)
 
 		if (TrailingRequired)
 		{
-			ConsumeToken(Delim, b);
+			ConsumeToken(Delim, t);
 		}
-		else if (!TryConsumeToken(Delim, b))
+		else if (!TryConsumeToken(Delim, t))
 		{
-			ConsumeToken(Token::RBrace, b);
+			ConsumeToken(TokenType::RBrace, t);
 			break;
 		}
 	}
@@ -1695,7 +1673,7 @@ void ConsumeStruct(BufferIter& b, T* s, StructEntry (&def)[DefSize], const char*
 
 
 RasterizerState* ConsumeRasterizerStateDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
 	RenderDescription* rd = ps.rd;
@@ -1718,32 +1696,31 @@ RasterizerState* ConsumeRasterizerStateDef(
 		StructEntryDef(RasterizerState, Float, DepthClipEnable),
 		StructEntryDef(RasterizerState, Bool, ScissorEnable),
 	};
-	constexpr Token Delim = Token::Semicolon;
+	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		b, rs, def, "RasterizerState");
+		t, rs, def, "RasterizerState");
 	return rs;
 }
 
 RasterizerState* ConsumeRasterizerStateRefOrDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
-	BufferString id = ConsumeIdentifier(b);
+	const char* id = ConsumeIdentifier(t);
 	Keyword key = LookupKeyword(id);
 	if (key == Keyword::RasterizerState)
 	{
-		return ConsumeRasterizerStateDef(b,ps);
+		return ConsumeRasterizerStateDef(t,ps);
 	}
 	else
 	{
-		ParserAssert(ps.rsMap.count(id) != 0, "couldn't find rasterizer state %.*s",
-			id.len, id.base);
+		ParserAssert(ps.rsMap.count(id) != 0, "couldn't find rasterizer state %s", id);
 		return ps.rsMap[id];
 	}
 }
 
-StencilOpDesc ConsumeStencilOpDesc(BufferIter& b)
+StencilOpDesc ConsumeStencilOpDesc(TokenIter& t)
 {
 	StencilOpDesc desc = {};
 	// non-zero defaults
@@ -1757,15 +1734,15 @@ StencilOpDesc ConsumeStencilOpDesc(BufferIter& b)
 		StructEntryDef(StencilOpDesc, StencilOp, StencilPassOp),
 		StructEntryDef(StencilOpDesc, ComparisonFunc, StencilFunc),
 	};
-	constexpr Token Delim = Token::Semicolon;
+	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		b, &desc, def, "StencilOpDesc");
+		t, &desc, def, "StencilOpDesc");
 	return desc;
 }
 
 DepthStencilState* ConsumeDepthStencilStateDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
 	RenderDescription* rd = ps.rd;
@@ -1795,33 +1772,32 @@ DepthStencilState* ConsumeDepthStencilStateDef(
 		StructEntryDef(DepthStencilState, StencilOpDesc, FrontFace),
 		StructEntryDef(DepthStencilState, StencilOpDesc, BackFace),
 	};
-	constexpr Token Delim = Token::Semicolon;
+	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		b, dss, def, "DepthStencilState");
+		t, dss, def, "DepthStencilState");
 	return dss;
 }
 
 DepthStencilState* ConsumeDepthStencilStateRefOrDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
-	BufferString id = ConsumeIdentifier(b);
+	const char* id = ConsumeIdentifier(t);
 	Keyword key = LookupKeyword(id);
 	if (key == Keyword::DepthStencilState)
 	{
-		return ConsumeDepthStencilStateDef(b,ps);
+		return ConsumeDepthStencilStateDef(t,ps);
 	}
 	else
 	{
-		ParserAssert(ps.dssMap.count(id) != 0, "couldn't find depthstencil state %.*s",
-			id.len, id.base);
+		ParserAssert(ps.dssMap.count(id) != 0, "couldn't find depthstencil state %s", id);
 		return ps.dssMap[id];
 	}
 }
 
 ComputeShader* ConsumeComputeShaderDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
 	RenderDescription* rd = ps.rd;
@@ -1833,33 +1809,32 @@ ComputeShader* ConsumeComputeShaderDef(
 		StructEntryDef(ComputeShader, String, ShaderPath),
 		StructEntryDef(ComputeShader, String, EntryPoint),
 	};
-	constexpr Token Delim = Token::Semicolon;
+	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		b, cs, def, "ComputeShader");
+		t, cs, def, "ComputeShader");
 	return cs;
 }
 
 ComputeShader* ConsumeComputeShaderRefOrDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
-	BufferString id = ConsumeIdentifier(b);
+	const char* id = ConsumeIdentifier(t);
 	Keyword key = LookupKeyword(id);
 	if (key == Keyword::ComputeShader)
 	{
-		return ConsumeComputeShaderDef(b, ps);
+		return ConsumeComputeShaderDef(t, ps);
 	}
 	else
 	{
-		ParserAssert(ps.csMap.count(id) != 0, "couldn't find shader %.*s", 
-			id.len, id.base);
+		ParserAssert(ps.csMap.count(id) != 0, "couldn't find shader %s", id);
 		return ps.csMap[id];
 	}
 }
 
 VertexShader* ConsumeVertexShaderDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
 	RenderDescription* rd = ps.rd;
@@ -1871,33 +1846,32 @@ VertexShader* ConsumeVertexShaderDef(
 		StructEntryDef(VertexShader, String, ShaderPath),
 		StructEntryDef(VertexShader, String, EntryPoint),
 	};
-	constexpr Token Delim = Token::Semicolon;
+	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		b, vs, def, "VertexShader");
+		t, vs, def, "VertexShader");
 	return vs;
 }
 
 VertexShader* ConsumeVertexShaderRefOrDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
-	BufferString id = ConsumeIdentifier(b);
+	const char* id = ConsumeIdentifier(t);
 	Keyword key = LookupKeyword(id);
 	if (key == Keyword::VertexShader)
 	{
-		return ConsumeVertexShaderDef(b, ps);
+		return ConsumeVertexShaderDef(t, ps);
 	}
 	else
 	{
-		ParserAssert(ps.vsMap.count(id) != 0, "couldn't find shader %.*s", 
-			id.len, id.base);
+		ParserAssert(ps.vsMap.count(id) != 0, "couldn't find shader %*s", id);
 		return ps.vsMap[id];
 	}
 }
 
 PixelShader* ConsumePixelShaderDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& state)
 {
 	RenderDescription* rd = state.rd;
@@ -1909,27 +1883,26 @@ PixelShader* ConsumePixelShaderDef(
 		StructEntryDef(PixelShader, String, ShaderPath),
 		StructEntryDef(PixelShader, String, EntryPoint),
 	};
-	constexpr Token Delim = Token::Semicolon;
+	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		b, ps, def, "PixelShader");
+		t, ps, def, "PixelShader");
 	return ps;
 }
 
 PixelShader* ConsumePixelShaderRefOrDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
-	BufferString id = ConsumeIdentifier(b);
+	const char* id = ConsumeIdentifier(t);
 	Keyword key = LookupKeyword(id);
 	if (key == Keyword::PixelShader)
 	{
-		return ConsumePixelShaderDef(b, ps);
+		return ConsumePixelShaderDef(t, ps);
 	}
 	else
 	{
-		ParserAssert(ps.psMap.count(id) != 0, "couldn't find shader %.*s", 
-			id.len, id.base);
+		ParserAssert(ps.psMap.count(id) != 0, "couldn't find shader %s", id);
 		return ps.psMap[id];
 	}
 }
@@ -2064,26 +2037,26 @@ void ParseOBJ(ObjImport* import, RenderDescription* rd, ParseState& ps)
 }
 
 ObjImport* ConsumeObjImportDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
 	RenderDescription* rd = ps.rd;
 
-	ConsumeToken(Token::LBrace, b);
+	ConsumeToken(TokenType::LBrace, t);
 
 	ObjImport* obj = new ObjImport();
 	rd->Objs.push_back(obj);
 
-	BufferString fieldId = ConsumeIdentifier(b);
+	const char* fieldId = ConsumeIdentifier(t);
 	if (LookupKeyword(fieldId) == Keyword::ObjPath)
 	{
-		ConsumeToken(Token::Equals, b);
-		BufferString path = ConsumeString(b);
+		ConsumeToken(TokenType::Equals, t);
+		const char* path = ConsumeString(t);
 		obj->ObjPath = AddStringToDescriptionData(path, rd);
 	}
 
-	ConsumeToken(Token::Semicolon, b);
-	ConsumeToken(Token::RBrace, b);
+	ConsumeToken(TokenType::Semicolon, t);
+	ConsumeToken(TokenType::RBrace, t);
 
 	ParseOBJ(obj, rd, ps);
 
@@ -2092,12 +2065,12 @@ ObjImport* ConsumeObjImportDef(
 
 
 Buffer* ConsumeBufferDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
 	RenderDescription* rd = ps.rd;
 
-	ConsumeToken(Token::LBrace, b);
+	ConsumeToken(TokenType::LBrace, t);
 
 	Buffer* buf = new Buffer();
 	rd->Buffers.push_back(buf);
@@ -2112,99 +2085,99 @@ Buffer* ConsumeBufferDef(
 
 	while (true)
 	{
-		BufferString fieldId = ConsumeIdentifier(b);
+		const char* fieldId = ConsumeIdentifier(t);
 		switch (LookupKeyword(fieldId))
 		{
 		case Keyword::ElementSize:
 		{
-			ConsumeToken(Token::Equals, b);
-			buf->ElementSize = ConsumeUintLiteral(b);
+			ConsumeToken(TokenType::Equals, t);
+			buf->ElementSize = ConsumeUintLiteral(t);
 			break;
 		}
 		case Keyword::ElementCount:
 		{
-			ConsumeToken(Token::Equals, b);
-			buf->ElementCount = ConsumeUintLiteral(b);
+			ConsumeToken(TokenType::Equals, t);
+			buf->ElementCount = ConsumeUintLiteral(t);
 			break;
 		}
 		case Keyword::Flags:
 		{
-			ConsumeToken(Token::Equals, b);
-			buf->Flags = ConsumeBufferFlag(b);
+			ConsumeToken(TokenType::Equals, t);
+			buf->Flags = ConsumeBufferFlag(t);
 			break;
 		}
 		case Keyword::InitToZero:
 		{
-			ConsumeToken(Token::Equals, b);
-			initToZero = ConsumeBool(b);
+			ConsumeToken(TokenType::Equals, t);
+			initToZero = ConsumeBool(t);
 			break;
 		}
 		case Keyword::InitData:
 		{
-			ConsumeToken(Token::Equals, b);
-			BufferString id = ConsumeIdentifier(b);
+			ConsumeToken(TokenType::Equals, t);
+			const char* id = ConsumeIdentifier(t);
 			Keyword key = LookupKeyword(id);
 			if (key == Keyword::Float)
 			{
-				ConsumeToken(Token::LBrace, b);
+				ConsumeToken(TokenType::LBrace, t);
 
 				while (true)
 				{
-					if (TryConsumeToken(Token::RBrace, b))
+					if (TryConsumeToken(TokenType::RBrace, t))
 						break;
 
-					float f = ConsumeFloatLiteral(b);
+					float f = ConsumeFloatLiteral(t);
 					initDataFloat.push_back(f);
 
-					if (TryConsumeToken(Token::RBrace, b))
+					if (TryConsumeToken(TokenType::RBrace, t))
 						break;
 					else 
-						ConsumeToken(Token::Comma, b);
+						ConsumeToken(TokenType::Comma, t);
 				}
 			}
 			else if (key == Keyword::U16)
 			{
-				ConsumeToken(Token::LBrace, b);
+				ConsumeToken(TokenType::LBrace, t);
 
 				while (true)
 				{
-					if (TryConsumeToken(Token::RBrace, b))
+					if (TryConsumeToken(TokenType::RBrace, t))
 						break;
 
-					u32 val = ConsumeUintLiteral(b);
+					u32 val = ConsumeUintLiteral(t);
 					ParserAssert(val < 65536, "Given literal is outside of u16 range.");
 					u16 l = (u16)val;
 					initDataU16.push_back(l);
 
-					if (TryConsumeToken(Token::RBrace, b))
+					if (TryConsumeToken(TokenType::RBrace, t))
 						break;
 					else 
-						ConsumeToken(Token::Comma, b);
+						ConsumeToken(TokenType::Comma, t);
 				}
 			}
 			else if (key == Keyword::U32)
 			{
-				ConsumeToken(Token::LBrace, b);
+				ConsumeToken(TokenType::LBrace, t);
 
 				while (true)
 				{
-					if (TryConsumeToken(Token::RBrace, b))
+					if (TryConsumeToken(TokenType::RBrace, t))
 						break;
 					
-					u32 val = ConsumeUintLiteral(b);
+					u32 val = ConsumeUintLiteral(t);
 					initDataU32.push_back(val);
 
-					if (TryConsumeToken(Token::RBrace, b))
+					if (TryConsumeToken(TokenType::RBrace, t))
 						break;
 					else 
-						ConsumeToken(Token::Comma, b);
+						ConsumeToken(TokenType::Comma, t);
 				}
 			}
 			else if (ps.objMap.count(id) > 0)
 			{
 				obj = ps.objMap[id];
-				ConsumeToken(Token::Period, b);
-				BufferString sub = ConsumeIdentifier(b);
+				ConsumeToken(TokenType::Period, t);
+				const char* sub = ConsumeIdentifier(t);
 				Keyword subkey = LookupKeyword(sub);
 				if (subkey == Keyword::Vertices)
 				{
@@ -2216,22 +2189,22 @@ Buffer* ConsumeBufferDef(
 				}
 				else
 				{
-					ParserError("unexpected obj subscript %.*s", id.len, id.base);
+					ParserError("unexpected obj subscript %s", id);
 				}
 			}
 			else
 			{
-				ParserError("unexpected data type or obj import %.*s", id.len, id.base);
+				ParserError("unexpected data type or obj import %s", id);
 			}
 			break;
 		}
 		default:
-			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+			ParserError("unexpected field %s", fieldId);
 		}
 
-		ConsumeToken(Token::Semicolon, b);
+		ConsumeToken(TokenType::Semicolon, t);
 
-		if (TryConsumeToken(Token::RBrace, b))
+		if (TryConsumeToken(TokenType::RBrace, t))
 			break;
 	}
 
@@ -2290,7 +2263,7 @@ Buffer* ConsumeBufferDef(
 }
 
 Texture* ConsumeTextureDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
 	RenderDescription* rd = ps.rd;
@@ -2307,10 +2280,10 @@ Texture* ConsumeTextureDef(
 		StructEntryDef(Texture, TextureFormat, Format),
 		StructEntryDef(Texture, String, DDSPath),
 	};
-	constexpr Token Delim = Token::Semicolon;
+	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		b, tex, def, "Texture");
+		t, tex, def, "Texture");
 
 	ParserAssert(tex->DDSPath || tex->SizeExpr, 
 		"Texture size must be provided if not populated from DDS");
@@ -2321,7 +2294,7 @@ Texture* ConsumeTextureDef(
 }
 
 Sampler* ConsumeSamplerDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
 	RenderDescription* rd = ps.rd;
@@ -2344,93 +2317,92 @@ Sampler* ConsumeSamplerDef(
 		StructEntryDef(Sampler, Float, MinLOD),
 		StructEntryDef(Sampler, Float, MaxLOD),
 	};
-	constexpr Token Delim = Token::Semicolon;
+	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		b, s, def, "Sampler");
+		t, s, def, "Sampler");
 	return s;
 }
 
 Dispatch* ConsumeDispatchDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
 	RenderDescription* rd = ps.rd;
 
-	ConsumeToken(Token::LBrace, b);
+	ConsumeToken(TokenType::LBrace, t);
 
 	Dispatch* dc = new Dispatch();
 	rd->Dispatches.push_back(dc);
 
 	while (true)
 	{
-		BufferString fieldId = ConsumeIdentifier(b);
+		const char* fieldId = ConsumeIdentifier(t);
 		Keyword key = LookupKeyword(fieldId);
 		switch (key)
 		{
 		case Keyword::Shader:
 		{
-			ConsumeToken(Token::Equals, b);
-			ComputeShader* cs = ConsumeComputeShaderRefOrDef(b, ps);
+			ConsumeToken(TokenType::Equals, t);
+			ComputeShader* cs = ConsumeComputeShaderRefOrDef(t, ps);
 			dc->Shader = cs;
 			break;
 		}
 		case Keyword::ThreadPerPixel:
 		{
-			ConsumeToken(Token::Equals, b);
-			dc->ThreadPerPixel = ConsumeBool(b);
+			ConsumeToken(TokenType::Equals, t);
+			dc->ThreadPerPixel = ConsumeBool(t);
 			break;
 		}
 		case Keyword::Groups:
 		{
-			ConsumeToken(Token::Equals, b);
-			ConsumeToken(Token::LBrace, b);
-			dc->Groups.x = ConsumeUintLiteral(b);
-			ConsumeToken(Token::Comma, b);
-			dc->Groups.y = ConsumeUintLiteral(b);
-			ConsumeToken(Token::Comma, b);
-			dc->Groups.z = ConsumeUintLiteral(b);
-			ConsumeToken(Token::RBrace, b);
+			ConsumeToken(TokenType::Equals, t);
+			ConsumeToken(TokenType::LBrace, t);
+			dc->Groups.x = ConsumeUintLiteral(t);
+			ConsumeToken(TokenType::Comma, t);
+			dc->Groups.y = ConsumeUintLiteral(t);
+			ConsumeToken(TokenType::Comma, t);
+			dc->Groups.z = ConsumeUintLiteral(t);
+			ConsumeToken(TokenType::RBrace, t);
 			break;
 		}
 		case Keyword::IndirectArgs:
 		{
-			ConsumeToken(Token::Equals, b);
-			BufferString id = ConsumeIdentifier(b);
-			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
-				id.len, id.base);
+			ConsumeToken(TokenType::Equals, t);
+			const char* id = ConsumeIdentifier(t);
+			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %s", id);
 			ParseState::Resource& res = ps.resMap[id];
 			ParserAssert(res.type == ParseState::ResType::Buffer, 
-				"Resource (%.*s) must be a buffer", id.len, id.base);
+				"Resource (%s) must be a buffer", id);
 			dc->IndirectArgs = reinterpret_cast<Buffer*>(res.m);
 			break;
 		}
 		case Keyword::IndirectArgsOffset:
 		{
-			ConsumeToken(Token::Equals, b);
-			dc->IndirectArgsOffset = ConsumeUintLiteral(b);
+			ConsumeToken(TokenType::Equals, t);
+			dc->IndirectArgsOffset = ConsumeUintLiteral(t);
 			break;
 		}
 		case Keyword::Bind:
 		{
-			Bind bind = ConsumeBind(b, ps);
+			Bind bind = ConsumeBind(t, ps);
 			dc->Binds.push_back(bind);
 			break;
 		}
 		case Keyword::SetConstant:
 		{
-			SetConstant sc = ConsumeSetConstant(b,ps);
+			SetConstant sc = ConsumeSetConstant(t,ps);
 			dc->Constants.push_back(sc);
 			break;
 		}
 		default:
-			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+			ParserError("unexpected field %s", fieldId);
 		}
 
 		if (key != Keyword::SetConstant)
-			ConsumeToken(Token::Semicolon, b);
+			ConsumeToken(TokenType::Semicolon, t);
 
-		if (TryConsumeToken(Token::RBrace, b))
+		if (TryConsumeToken(TokenType::RBrace, t))
 			break;
 	}
 
@@ -2438,12 +2410,12 @@ Dispatch* ConsumeDispatchDef(
 }
 
 Draw* ConsumeDrawDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
 	RenderDescription* rd = ps.rd;
 
-	ConsumeToken(Token::LBrace, b);
+	ConsumeToken(TokenType::LBrace, t);
 
 	Draw* draw = new Draw();
 	rd->Draws.push_back(draw);
@@ -2453,90 +2425,89 @@ Draw* ConsumeDrawDef(
 
 	while (true)
 	{
-		BufferString fieldId = ConsumeIdentifier(b);
+		const char* fieldId = ConsumeIdentifier(t);
 		Keyword key = LookupKeyword(fieldId);
 		switch (key)
 		{
 		case Keyword::Topology:
 		{
-			ConsumeToken(Token::Equals, b);
-			draw->Topology = ConsumeTopology(b);
+			ConsumeToken(TokenType::Equals, t);
+			draw->Topology = ConsumeTopology(t);
 			break;
 		}
 		case Keyword::RState:
 		{
-			ConsumeToken(Token::Equals, b);
-			draw->RState = ConsumeRasterizerStateRefOrDef(b, ps);
+			ConsumeToken(TokenType::Equals, t);
+			draw->RState = ConsumeRasterizerStateRefOrDef(t, ps);
 			break;
 		}
 		case Keyword::DSState:
 		{
-			ConsumeToken(Token::Equals, b);
-			draw->DSState = ConsumeDepthStencilStateRefOrDef(b, ps);
+			ConsumeToken(TokenType::Equals, t);
+			draw->DSState = ConsumeDepthStencilStateRefOrDef(t, ps);
 			break;
 		}
 		case Keyword::VShader:
 		{
-			ConsumeToken(Token::Equals, b);
-			draw->VShader = ConsumeVertexShaderRefOrDef(b, ps);
+			ConsumeToken(TokenType::Equals, t);
+			draw->VShader = ConsumeVertexShaderRefOrDef(t, ps);
 			break;
 		}
 		case Keyword::PShader:
 		{
-			ConsumeToken(Token::Equals, b);
-			draw->PShader = ConsumePixelShaderRefOrDef(b, ps);
+			ConsumeToken(TokenType::Equals, t);
+			draw->PShader = ConsumePixelShaderRefOrDef(t, ps);
 			break;
 		}
 		case Keyword::VertexBuffer:
 		{
-			ConsumeToken(Token::Equals, b);
-			BufferString id = ConsumeIdentifier(b);
-			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
-				id.len, id.base);
+			ConsumeToken(TokenType::Equals, t);
+			const char* id = ConsumeIdentifier(t);
+			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %s", id);
 			ParseState::Resource& res = ps.resMap[id];
 			ParserAssert(res.type == ParseState::ResType::Buffer, 
-				"Resource (%.*s) must be a buffer", id.len, id.base);
+				"Resource (%s) must be a buffer", id);
 			draw->VertexBuffer = reinterpret_cast<Buffer*>(res.m);
 			break;
 		}
 		case Keyword::IndexBuffer:
 		{
-			ConsumeToken(Token::Equals, b);
-			BufferString id = ConsumeIdentifier(b);
-			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %.*s", 
-				id.len, id.base);
+			ConsumeToken(TokenType::Equals, t);
+			const char* id = ConsumeIdentifier(t);
+			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %s", 
+				id);
 			ParseState::Resource& res = ps.resMap[id];
 			ParserAssert(res.type == ParseState::ResType::Buffer, 
-				"Resource (%.*s) must be a buffer", id.len, id.base);
+				"Resource (%s) must be a buffer", id);
 			draw->IndexBuffer = reinterpret_cast<Buffer*>(res.m);
 			break;
 		}
 		case Keyword::VertexCount:
 		{
-			ConsumeToken(Token::Equals, b);
-			draw->VertexCount = ConsumeUintLiteral(b);
+			ConsumeToken(TokenType::Equals, t);
+			draw->VertexCount = ConsumeUintLiteral(t);
 			break;
 		}
 		case Keyword::StencilRef:
 		{
-			ConsumeToken(Token::Equals, b);
-			draw->StencilRef = ConsumeUcharLiteral(b);
+			ConsumeToken(TokenType::Equals, t);
+			draw->StencilRef = ConsumeUcharLiteral(t);
 			break;
 		}
 		case Keyword::RenderTarget:
 		{
-			ConsumeToken(Token::Equals, b);
+			ConsumeToken(TokenType::Equals, t);
 			TextureTarget target;
-			if (TryConsumeToken(Token::At, b))
+			if (TryConsumeToken(TokenType::At, t))
 			{
 				target.IsSystem = true;
-				target.System = ConsumeSystemValue(b);
+				target.System = ConsumeSystemValue(t);
 			}
 			else
 			{
 				target.IsSystem = false;
-				BufferString id = ConsumeIdentifier(b);
-				View* v = ConsumeViewRefOrDef(b, ps, id);
+				const char* id = ConsumeIdentifier(t);
+				View* v = ConsumeViewRefOrDef(t, ps, id);
 				ParserAssert(v, "RenderTarget must be a RTV.");
 				if (v->Type == ViewType::Auto)
 					v->Type = ViewType::RTV;
@@ -2548,18 +2519,18 @@ Draw* ConsumeDrawDef(
 		}
 		case Keyword::DepthStencil:
 		{
-			ConsumeToken(Token::Equals, b);
+			ConsumeToken(TokenType::Equals, t);
 			TextureTarget target;
-			if (TryConsumeToken(Token::At, b))
+			if (TryConsumeToken(TokenType::At, t))
 			{
 				target.IsSystem = true;
-				target.System = ConsumeSystemValue(b);
+				target.System = ConsumeSystemValue(t);
 			}
 			else
 			{
 				target.IsSystem = false;
-				BufferString id = ConsumeIdentifier(b);
-				View* v = ConsumeViewRefOrDef(b, ps, id);
+				const char* id = ConsumeIdentifier(t);
+				View* v = ConsumeViewRefOrDef(t, ps, id);
 				ParserAssert(v, "DepthStencil must be a DSV.");
 				if (v->Type == ViewType::Auto)
 					v->Type = ViewType::DSV;
@@ -2571,36 +2542,36 @@ Draw* ConsumeDrawDef(
 		}
 		case Keyword::BindVS:
 		{
-			Bind bind = ConsumeBind(b, ps);
+			Bind bind = ConsumeBind(t, ps);
 			draw->VSBinds.push_back(bind);
 			break;
 		}
 		case Keyword::BindPS:
 		{
-			Bind bind = ConsumeBind(b, ps);
+			Bind bind = ConsumeBind(t, ps);
 			draw->PSBinds.push_back(bind);
 			break;
 		}
 		case Keyword::SetConstantVS:
 		{
-			SetConstant sc = ConsumeSetConstant(b,ps);
+			SetConstant sc = ConsumeSetConstant(t,ps);
 			draw->VSConstants.push_back(sc);
 			break;
 		}
 		case Keyword::SetConstantPS:
 		{
-			SetConstant sc = ConsumeSetConstant(b,ps);
+			SetConstant sc = ConsumeSetConstant(t,ps);
 			draw->PSConstants.push_back(sc);
 			break;
 		}
 		default:
-			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+			ParserError("unexpected field %s", fieldId);
 		}
 
 		if (key != Keyword::SetConstantVS && key != Keyword::SetConstantPS)
-			ConsumeToken(Token::Semicolon, b);
+			ConsumeToken(TokenType::Semicolon, t);
 
-		if (TryConsumeToken(Token::RBrace, b))
+		if (TryConsumeToken(TokenType::RBrace, t))
 			break;
 	}
 
@@ -2608,26 +2579,26 @@ Draw* ConsumeDrawDef(
 }
 
 ClearColor* ConsumeClearColorDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
 	RenderDescription* rd = ps.rd;
 
-	ConsumeToken(Token::LBrace, b);
+	ConsumeToken(TokenType::LBrace, t);
 
 	ClearColor* clear = new ClearColor();
 	rd->ClearColors.push_back(clear);
 
 	while (true)
 	{
-		BufferString fieldId = ConsumeIdentifier(b);
-		ConsumeToken(Token::Equals, b);
+		const char* fieldId = ConsumeIdentifier(t);
+		ConsumeToken(TokenType::Equals, t);
 		Keyword key = LookupKeyword(fieldId);
 
 		if (key == Keyword::Target)
 		{
-			BufferString id = ConsumeIdentifier(b);
-			View* v = ConsumeViewRefOrDef(b, ps, id);
+			const char* id = ConsumeIdentifier(t);
+			View* v = ConsumeViewRefOrDef(t, ps, id);
 			ParserAssert(v, "Target must be a RTV.");
 			if (v->Type == ViewType::Auto)
 				v->Type = ViewType::RTV;
@@ -2636,23 +2607,23 @@ ClearColor* ConsumeClearColorDef(
 		}
 		else if (key == Keyword::Color)
 		{
-			ConsumeToken(Token::LBrace, b);
-			clear->Color.x = ConsumeFloatLiteral(b);
-			ConsumeToken(Token::Comma, b);
-			clear->Color.y = ConsumeFloatLiteral(b);
-			ConsumeToken(Token::Comma, b);
-			clear->Color.z = ConsumeFloatLiteral(b);
-			ConsumeToken(Token::Comma, b);
-			clear->Color.w = ConsumeFloatLiteral(b);
-			ConsumeToken(Token::RBrace, b);
+			ConsumeToken(TokenType::LBrace, t);
+			clear->Color.x = ConsumeFloatLiteral(t);
+			ConsumeToken(TokenType::Comma, t);
+			clear->Color.y = ConsumeFloatLiteral(t);
+			ConsumeToken(TokenType::Comma, t);
+			clear->Color.z = ConsumeFloatLiteral(t);
+			ConsumeToken(TokenType::Comma, t);
+			clear->Color.w = ConsumeFloatLiteral(t);
+			ConsumeToken(TokenType::RBrace, t);
 		}
 		else 
 		{
-			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+			ParserError("unexpected field %s", fieldId);
 		}
 
-		ConsumeToken(Token::Semicolon, b);
-		if (TryConsumeToken(Token::RBrace, b))
+		ConsumeToken(TokenType::Semicolon, t);
+		if (TryConsumeToken(TokenType::RBrace, t))
 			break;
 	}
 
@@ -2661,26 +2632,26 @@ ClearColor* ConsumeClearColorDef(
 }
 
 ClearDepth* ConsumeClearDepthDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
 	RenderDescription* rd = ps.rd;
 
-	ConsumeToken(Token::LBrace, b);
+	ConsumeToken(TokenType::LBrace, t);
 
 	ClearDepth* clear = new ClearDepth();
 	rd->ClearDepths.push_back(clear);
 
 	while (true)
 	{
-		BufferString fieldId = ConsumeIdentifier(b);
-		ConsumeToken(Token::Equals, b);
+		const char* fieldId = ConsumeIdentifier(t);
+		ConsumeToken(TokenType::Equals, t);
 		Keyword key = LookupKeyword(fieldId);
 
 		if (key == Keyword::Target)
 		{
-			BufferString id = ConsumeIdentifier(b);
-			View* v = ConsumeViewRefOrDef(b, ps, id);
+			const char* id = ConsumeIdentifier(t);
+			View* v = ConsumeViewRefOrDef(t, ps, id);
 			ParserAssert(v, "Target must be a DSV.");
 			if (v->Type == ViewType::Auto)
 				v->Type = ViewType::DSV;
@@ -2689,15 +2660,15 @@ ClearDepth* ConsumeClearDepthDef(
 		}
 		else if (key == Keyword::Depth)
 		{
-			clear->Depth = ConsumeFloatLiteral(b);
+			clear->Depth = ConsumeFloatLiteral(t);
 		}
 		else 
 		{
-			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+			ParserError("unexpected field %s", fieldId);
 		}
 
-		ConsumeToken(Token::Semicolon, b);
-		if (TryConsumeToken(Token::RBrace, b))
+		ConsumeToken(TokenType::Semicolon, t);
+		if (TryConsumeToken(TokenType::RBrace, t))
 			break;
 	}
 
@@ -2706,26 +2677,26 @@ ClearDepth* ConsumeClearDepthDef(
 }
 
 ClearStencil* ConsumeClearStencilDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
 	RenderDescription* rd = ps.rd;
 
-	ConsumeToken(Token::LBrace, b);
+	ConsumeToken(TokenType::LBrace, t);
 
 	ClearStencil* clear = new ClearStencil();
 	rd->ClearStencils.push_back(clear);
 
 	while (true)
 	{
-		BufferString fieldId = ConsumeIdentifier(b);
-		ConsumeToken(Token::Equals, b);
+		const char* fieldId = ConsumeIdentifier(t);
+		ConsumeToken(TokenType::Equals, t);
 		Keyword key = LookupKeyword(fieldId);
 
 		if (key == Keyword::Target)
 		{
-			BufferString id = ConsumeIdentifier(b);
-			View* v = ConsumeViewRefOrDef(b, ps, id);
+			const char* id = ConsumeIdentifier(t);
+			View* v = ConsumeViewRefOrDef(t, ps, id);
 			ParserAssert(v, "Target must be a DSV.");
 			if (v->Type == ViewType::Auto)
 				v->Type = ViewType::DSV;
@@ -2734,15 +2705,15 @@ ClearStencil* ConsumeClearStencilDef(
 		}
 		else if (key == Keyword::Stencil)
 		{
-			clear->Stencil = ConsumeUcharLiteral(b);
+			clear->Stencil = ConsumeUcharLiteral(t);
 		}
 		else 
 		{
-			ParserError("unexpected field %.*s", fieldId.len, fieldId.base);
+			ParserError("unexpected field %s", fieldId);
 		}
 
-		ConsumeToken(Token::Semicolon, b);
-		if (TryConsumeToken(Token::RBrace, b))
+		ConsumeToken(TokenType::Semicolon, t);
+		if (TryConsumeToken(TokenType::RBrace, t))
 			break;
 	}
 
@@ -2751,44 +2722,43 @@ ClearStencil* ConsumeClearStencilDef(
 }
 
 Pass ConsumePassRefOrDef(
-	BufferIter& b,
+	TokenIter& t,
 	ParseState& ps)
 {
-	BufferString id = ConsumeIdentifier(b);
+	const char* id = ConsumeIdentifier(t);
 	Keyword key = LookupKeyword(id);
 	Pass pass;
 	pass.Name = nullptr; // Default to no name for the anonymous passes
 	if (key == Keyword::Dispatch || key == Keyword::DispatchIndirect)
 	{
 		pass.Type = PassType::Dispatch;
-		pass.Dispatch = ConsumeDispatchDef(b, ps);
+		pass.Dispatch = ConsumeDispatchDef(t, ps);
 		pass.Dispatch->Indirect = (key == Keyword::DispatchIndirect);
 	}
 	else if (key == Keyword::Draw || key == Keyword::DrawIndexed)
 	{
 		pass.Type = PassType::Draw;
-		pass.Draw = ConsumeDrawDef(b, ps);
+		pass.Draw = ConsumeDrawDef(t, ps);
 		pass.Draw->Type = (key == Keyword::Draw) ? DrawType::Draw : DrawType::DrawIndexed;
 	}
 	else if (key == Keyword::ClearColor)
 	{
 		pass.Type = PassType::ClearColor;
-		pass.ClearColor = ConsumeClearColorDef(b, ps);
+		pass.ClearColor = ConsumeClearColorDef(t, ps);
 	}
 	else if (key == Keyword::ClearDepth)
 	{
 		pass.Type = PassType::ClearDepth;
-		pass.ClearDepth = ConsumeClearDepthDef(b, ps);
+		pass.ClearDepth = ConsumeClearDepthDef(t, ps);
 	}
 	else if (key == Keyword::ClearStencil)
 	{
 		pass.Type = PassType::ClearStencil;
-		pass.ClearStencil = ConsumeClearStencilDef(b, ps);
+		pass.ClearStencil = ConsumeClearStencilDef(t, ps);
 	}
 	else
 	{
-		ParserAssert(ps.passMap.count(id) != 0, "couldn't find pass %.*s", 
-			id.len, id.base);
+		ParserAssert(ps.passMap.count(id) != 0, "couldn't find pass %s", id);
 		pass = ps.passMap[id];
 	}
 	return pass;
@@ -2798,47 +2768,44 @@ void ParseMain()
 {
 	ParseState& ps = *GPS;
 	RenderDescription* rd = ps.rd;
-	BufferIter& b = ps.b;
+	TokenIter& t = ps.t;
 
-	while (b.next != b.end)
+	while (t.next != t.end)
 	{
-		BufferString id = ConsumeIdentifier(b);
+		const char* id = ConsumeIdentifier(t);
 		Keyword key = LookupKeyword(id);
 		switch (key)
 		{
 		case Keyword::ComputeShader:
 		{
-			ComputeShader* cs = ConsumeComputeShaderDef(b, ps);
-			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.csMap.count(nameId) == 0, "Shader %.*s already defined", 
-				nameId.len, nameId.base);
+			ComputeShader* cs = ConsumeComputeShaderDef(t, ps);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.csMap.count(nameId) == 0, "Shader %s already defined", nameId);
 			ps.csMap[nameId] = cs;
 			break;
 		}
 		case Keyword::VertexShader:
 		{
-			VertexShader* vs = ConsumeVertexShaderDef(b, ps);
-			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.vsMap.count(nameId) == 0, "Shader %.*s already defined", 
-				nameId.len, nameId.base);
+			VertexShader* vs = ConsumeVertexShaderDef(t, ps);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.vsMap.count(nameId) == 0, "Shader %s already defined", nameId);
 			ps.vsMap[nameId] = vs;
 			break;
 		}
 		case Keyword::PixelShader:
 		{
-			PixelShader* pis = ConsumePixelShaderDef(b, ps);
-			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.psMap.count(nameId) == 0, "Shader %.*s already defined", 
-				nameId.len, nameId.base);
+			PixelShader* pis = ConsumePixelShaderDef(t, ps);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.psMap.count(nameId) == 0, "Shader %s already defined", nameId);
 			ps.psMap[nameId] = pis;
 			break;
 		}
 		case Keyword::Buffer:
 		{
-			Buffer* buf = ConsumeBufferDef(b, ps);
-			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %.*s already defined", 
-				nameId.len, nameId.base);
+			Buffer* buf = ConsumeBufferDef(t, ps);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %s already defined", 
+				nameId);
 			ParseState::Resource& res = ps.resMap[nameId];
 			res.type = ParseState::ResType::Buffer;
 			res.m = buf;
@@ -2846,10 +2813,10 @@ void ParseMain()
 		}
 		case Keyword::Texture:
 		{
-			Texture* tex = ConsumeTextureDef(b,ps);
-			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %.*s already defined",
-				nameId.len, nameId.base);
+			Texture* tex = ConsumeTextureDef(t,ps);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %s already defined",
+				nameId);
 			ParseState::Resource& res = ps.resMap[nameId];
 			res.type = ParseState::ResType::Texture;
 			res.m = tex;
@@ -2857,10 +2824,10 @@ void ParseMain()
 		}
 		case Keyword::Sampler:
 		{
-			Sampler* s = ConsumeSamplerDef(b,ps);
-			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %.*s already defined",
-				nameId.len, nameId.base);
+			Sampler* s = ConsumeSamplerDef(t,ps);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %s already defined",
+				nameId);
 			ParseState::Resource& res = ps.resMap[nameId];
 			res.type = ParseState::ResType::Sampler;
 			res.m = s;
@@ -2868,10 +2835,10 @@ void ParseMain()
 		}
 		case Keyword::SRV:
 		{
-			View* v = ConsumeViewDef(b,ps, ViewType::SRV);
-			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %.*s already defined",
-				nameId.len, nameId.base);
+			View* v = ConsumeViewDef(t,ps, ViewType::SRV);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %s already defined",
+				nameId);
 			ParseState::Resource& res = ps.resMap[nameId];
 			res.type = ParseState::ResType::View;
 			res.m = v;
@@ -2879,10 +2846,10 @@ void ParseMain()
 		}
 		case Keyword::UAV:
 		{
-			View* v = ConsumeViewDef(b,ps, ViewType::UAV);
-			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %.*s already defined",
-				nameId.len, nameId.base);
+			View* v = ConsumeViewDef(t,ps, ViewType::UAV);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %s already defined",
+				nameId);
 			ParseState::Resource& res = ps.resMap[nameId];
 			res.type = ParseState::ResType::View;
 			res.m = v;
@@ -2890,10 +2857,10 @@ void ParseMain()
 		}
 		case Keyword::RTV:
 		{
-			View* v = ConsumeViewDef(b,ps, ViewType::RTV);
-			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %.*s already defined",
-				nameId.len, nameId.base);
+			View* v = ConsumeViewDef(t,ps, ViewType::RTV);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %s already defined",
+				nameId);
 			ParseState::Resource& res = ps.resMap[nameId];
 			res.type = ParseState::ResType::View;
 			res.m = v;
@@ -2901,10 +2868,10 @@ void ParseMain()
 		}
 		case Keyword::DSV:
 		{
-			View* v = ConsumeViewDef(b,ps, ViewType::DSV);
-			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %.*s already defined",
-				nameId.len, nameId.base);
+			View* v = ConsumeViewDef(t,ps, ViewType::DSV);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.resMap.count(nameId) == 0, "Resource %s already defined",
+				nameId);
 			ParseState::Resource& res = ps.resMap[nameId];
 			res.type = ParseState::ResType::View;
 			res.m = v;
@@ -2912,39 +2879,39 @@ void ParseMain()
 		}
 		case Keyword::RasterizerState:
 		{
-			RasterizerState* rs = ConsumeRasterizerStateDef(b,ps);
-			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.rsMap.count(nameId) == 0, "Rasterizer state %.*s already defined",
-				nameId.len, nameId.base);
+			RasterizerState* rs = ConsumeRasterizerStateDef(t,ps);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.rsMap.count(nameId) == 0, "Rasterizer state %s already defined",
+				nameId);
 			ps.rsMap[nameId] = rs;
 			break;
 		}
 		case Keyword::DepthStencilState:
 		{
-			DepthStencilState* rs = ConsumeDepthStencilStateDef(b,ps);
-			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.dssMap.count(nameId) == 0, "Rasterizer state %.*s already defined",
-				nameId.len, nameId.base);
+			DepthStencilState* rs = ConsumeDepthStencilStateDef(t,ps);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.dssMap.count(nameId) == 0, "Rasterizer state %s already defined",
+				nameId);
 			ps.dssMap[nameId] = rs;
 			break;
 		}
 		case Keyword::ObjImport:
 		{
-			ObjImport* obj = ConsumeObjImportDef(b,ps);
-			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.objMap.count(nameId) == 0, "Obj import %.*s already defined",
-				nameId.len, nameId.base);
+			ObjImport* obj = ConsumeObjImportDef(t,ps);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.objMap.count(nameId) == 0, "Obj import %s already defined",
+				nameId);
 			ps.objMap[nameId] = obj;
 			break;
 		}
 		case Keyword::Dispatch:
 		case Keyword::DispatchIndirect:
 		{
-			Dispatch* dc = ConsumeDispatchDef(b, ps);
+			Dispatch* dc = ConsumeDispatchDef(t, ps);
 			dc->Indirect = (key == Keyword::DispatchIndirect);
-			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %.*s already defined", 
-				nameId.len, nameId.base);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined", 
+				nameId);
 			Pass pass;
 			pass.Name = AddStringToDescriptionData(nameId, rd);
 			pass.Type = PassType::Dispatch;
@@ -2955,11 +2922,11 @@ void ParseMain()
 		case Keyword::Draw:
 		case Keyword::DrawIndexed:
 		{
-			Draw* draw = ConsumeDrawDef(b, ps);
+			Draw* draw = ConsumeDrawDef(t, ps);
 			draw->Type = (key == Keyword::Draw) ? DrawType::Draw : DrawType::DrawIndexed;
-			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %.*s already defined", 
-				nameId.len, nameId.base);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined", 
+				nameId);
 			Pass pass;
 			pass.Name = AddStringToDescriptionData(nameId, rd);
 			pass.Type = PassType::Draw;
@@ -2969,10 +2936,10 @@ void ParseMain()
 		}
 		case Keyword::ClearColor:
 		{
-			ClearColor* clear = ConsumeClearColorDef(b,ps);
-			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %.*s already defined", 
-				nameId.len, nameId.base);
+			ClearColor* clear = ConsumeClearColorDef(t,ps);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined", 
+				nameId);
 			Pass pass;
 			pass.Name = AddStringToDescriptionData(nameId, rd);
 			pass.Type = PassType::ClearColor;
@@ -2982,10 +2949,10 @@ void ParseMain()
 		}
 		case Keyword::ClearDepth:
 		{
-			ClearDepth* clear = ConsumeClearDepthDef(b,ps);
-			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %.*s already defined", 
-				nameId.len, nameId.base);
+			ClearDepth* clear = ConsumeClearDepthDef(t,ps);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined", 
+				nameId);
 			Pass pass;
 			pass.Name = AddStringToDescriptionData(nameId, rd);
 			pass.Type = PassType::ClearDepth;
@@ -2995,10 +2962,10 @@ void ParseMain()
 		}
 		case Keyword::ClearStencil:
 		{
-			ClearStencil* clear = ConsumeClearStencilDef(b,ps);
-			BufferString nameId = ConsumeIdentifier(b);
-			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %.*s already defined", 
-				nameId.len, nameId.base);
+			ClearStencil* clear = ConsumeClearStencilDef(t,ps);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined", 
+				nameId);
 			Pass pass;
 			pass.Name = AddStringToDescriptionData(nameId, rd);
 			pass.Type = PassType::ClearStencil;
@@ -3008,36 +2975,33 @@ void ParseMain()
 		}
 		case Keyword::Passes:
 		{
-			ConsumeToken(Token::LBrace, b);
+			ConsumeToken(TokenType::LBrace, t);
 
 			while (true)
 			{
-				Pass pass = ConsumePassRefOrDef(b, ps);
+				Pass pass = ConsumePassRefOrDef(t, ps);
 				rd->Passes.push_back(pass);
 
-				if (TryConsumeToken(Token::RBrace, b))
+				if (TryConsumeToken(TokenType::RBrace, t))
 					break;
 				else 
-					ConsumeToken(Token::Comma, b);
+					ConsumeToken(TokenType::Comma, t);
 			}
 			break;
 		}
 		case Keyword::Tuneable:
 		{
-			ConsumeTuneable(b,ps);
+			ConsumeTuneable(t,ps);
 			break;
 		}
 		case Keyword::Constant:
 		{
-			ConsumeConstant(b,ps);
+			ConsumeConstant(t,ps);
 			break;
 		}
 		default:
-			ParserError("Unexpected structure: %.*s", id.len, id.base);
+			ParserError("Unexpected structure: %s", id);
 		}
-
-		// Skip trailing whitespace so we don't miss the exit condition for this loop. 
-		SkipWhitespace(b);
 	}
 }
 
@@ -3048,22 +3012,37 @@ RenderDescription* ParseBuffer(
 	const char* workingDir,
 	ErrorState* es)
 {
-	ParseState ps;
-	ps.rd = new RenderDescription();
-	ps.b = { buffer, buffer + bufferSize };
-	ps.workingDirectory = workingDir;
-	ParseStateInit(&ps);
-
-	GPS = &ps;
 	es->Success = true;
 
+	TokenizerState ts;
+	TokenizerStateInit(ts);
 	try {
-		ParseMain();
+		Tokenize(buffer, buffer+bufferSize, ts);
 	}
 	catch (ErrorInfo pe)
 	{
 		es->Success = false;
 		es->Info = pe;
+	}
+
+	ParseState ps;
+	ps.rd = new RenderDescription();
+	ps.workingDirectory = workingDir;
+	ParseStateInit(&ps);
+
+	GPS = &ps;
+
+	if (es->Success)
+	{
+		ps.t = { &ts.tokens[0], &ts.tokens[0] + ts.tokens.size() };
+		try {
+			ParseMain();
+		}
+		catch (ErrorInfo pe)
+		{
+			es->Success = false;
+			es->Info = pe;
+		}
 	}
 
 	GPS = nullptr;
@@ -3075,7 +3054,7 @@ RenderDescription* ParseBuffer(
 	}
 	else
 	{
-		Assert(ps.b.next == ps.b.end, "Didn't consume full buffer.");
+		Assert(ps.t.next == ps.t.end, "Didn't consume full buffer.");
 		return ps.rd;
 	}
 }
