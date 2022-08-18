@@ -1,0 +1,99 @@
+
+ObjImport {
+	ObjPath = "monkey.obj";
+} monkeyObj
+
+Buffer {
+	Flags = { Vertex };
+	InitData = monkeyObj.vertices;
+} verts
+
+Buffer {
+	Flags = { Index };
+	InitData = monkeyObj.indices;
+} indices
+
+
+Sampler {
+	Filter = { All = Point };
+	AddressMode = { UVW=Clamp };
+} PointSampler
+
+Texture {
+	Format = R8G8B8A8_UNORM;
+	Size = DisplaySize();
+	Flags = { RTV, SRV };
+} RT0
+
+Texture {
+	Format = R11G11B10_FLOAT;
+	Size = DisplaySize();
+	Flags = { RTV, SRV };
+} RT1
+
+Texture {
+	Format = R16G16_UNORM;
+	Size = DisplaySize();
+	Flags = { RTV, SRV };
+} RT2
+
+Texture {
+	Format = R16_TYPELESS;
+	Size = { DisplaySize() };
+	Flags = { SRV, DSV };
+} DS
+
+DSV {
+	Resource = DS;
+	Format = D16_UNORM;
+} DSView
+
+SRV {
+	Resource = DS;
+	Format = R16_UNORM;
+} DSSrv
+
+DrawIndexed {
+	Topology = TriList;
+	VShader = VertexShader {
+		ShaderPath = "vertex.hlsl";
+		EntryPoint = "VSMain";
+	};
+	PShader = PixelShader {
+		ShaderPath = "pixel.hlsl";
+		EntryPoint = "PSMain";
+	};
+	VertexBuffer = verts;
+	IndexBuffer = indices;
+	RenderTarget = RT0;
+	RenderTarget = RT1;
+	RenderTarget = RT2;
+	DepthStencil = DSView;
+	SetConstantVs Matrix = 
+		projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 0.1, 10)
+		* 
+		lookAt(float3(2,0,0), float3(0,0,0));
+} objDraw
+
+Dispatch {
+	Shader = ComputeShader {
+		ShaderPath = "CopyTexture.hlsl";
+		EntryPoint = "CSMain";
+	};
+	ThreadPerPixel = true; 
+	Bind OutTexture = @BackBuffer;
+	Bind InTex0 = RT0;
+	Bind InTex1 = RT1;
+	Bind InTex2 = RT2;
+	Bind InDS = DSSrv;
+	setconstant TextureSize = DisplaySize();
+} copy
+
+Passes {
+	ClearColor{ Target=RT0; Color={0,0,0,0}; },
+	ClearColor{ Target=RT1; Color={0,0,0,0}; },
+	ClearColor{ Target=RT2; Color={0,0,0,0}; },
+	ClearDepth{ Target=DSView; Depth=1; },
+	objDraw,
+	copy
+}
