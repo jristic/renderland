@@ -20,7 +20,6 @@
 **** Expand draw pipeline support.
 	* Viewport.
 	* Blend state.
-	* Multiple RT support. 
 	* Instancing for draws.
 	* Indirect draws.
 	* Append and consume buffers.

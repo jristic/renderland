@@ -1270,7 +1270,7 @@ void ExecuteDraw(
 	ID3D11RenderTargetView* rtViews[8] = {};
 	D3D11_VIEWPORT vp[8] = {};
 	u32 rtCount = 0;
-	for (TextureTarget target : draw->RenderTarget)
+	for (TextureTarget target : draw->RenderTargets)
 	{
 		if (target.IsSystem)
 		{

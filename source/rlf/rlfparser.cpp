@@ -330,6 +330,7 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(VertexCount) \
 	RLF_KEYWORD_ENTRY(StencilRef) \
 	RLF_KEYWORD_ENTRY(RenderTarget) \
+	RLF_KEYWORD_ENTRY(RenderTargets) \
 	RLF_KEYWORD_ENTRY(DepthStencil) \
 	RLF_KEYWORD_ENTRY(BindVS) \
 	RLF_KEYWORD_ENTRY(BindPS) \
@@ -2496,6 +2497,7 @@ Draw* ConsumeDrawDef(
 		}
 		case Keyword::RenderTarget:
 		{
+			draw->RenderTargets.clear();
 			ConsumeToken(TokenType::Equals, t);
 			TextureTarget target;
 			if (TryConsumeToken(TokenType::At, t))
@@ -2514,7 +2516,42 @@ Draw* ConsumeDrawDef(
 				ParserAssert(v->Type == ViewType::RTV, "RenderTarget must be a RTV.");
 				target.View = v;
 			}
-			draw->RenderTarget.push_back(target);
+			draw->RenderTargets.push_back(target);
+			break;
+		}
+		case Keyword::RenderTargets:
+		{
+			draw->RenderTargets.clear();
+			ConsumeToken(TokenType::Equals, t);
+			ConsumeToken(TokenType::LBrace, t);
+			while (true)
+			{
+				if (TryConsumeToken(TokenType::RBrace, t))
+					break;
+				TextureTarget target;
+				if (TryConsumeToken(TokenType::At, t))
+				{
+					target.IsSystem = true;
+					target.System = ConsumeSystemValue(t);
+				}
+				else
+				{
+					target.IsSystem = false;
+					const char* id = ConsumeIdentifier(t);
+					View* v = ConsumeViewRefOrDef(t, ps, id);
+					ParserAssert(v, "RenderTarget must be a RTV.");
+					if (v->Type == ViewType::Auto)
+						v->Type = ViewType::RTV;
+					ParserAssert(v->Type == ViewType::RTV, "RenderTarget must be a RTV.");
+					target.View = v;
+				}
+				draw->RenderTargets.push_back(target);
+				if (!TryConsumeToken(TokenType::Comma, t))
+				{
+					ConsumeToken(TokenType::RBrace, t);
+					break;
+				}
+			}
 			break;
 		}
 		case Keyword::DepthStencil:

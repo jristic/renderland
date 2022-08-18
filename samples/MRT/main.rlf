@@ -65,9 +65,7 @@ DrawIndexed {
 	};
 	VertexBuffer = verts;
 	IndexBuffer = indices;
-	RenderTarget = RT0;
-	RenderTarget = RT1;
-	RenderTarget = RT2;
+	RenderTargets = { RT0, RT1, RT2 };
 	DepthStencil = DSView;
 	SetConstantVs Matrix = 
 		projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 0.1, 10)
