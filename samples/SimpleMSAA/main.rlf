@@ -1,0 +1,83 @@
+
+ObjImport {
+	ObjPath = "monkey.obj";
+} monkeyObj
+
+Buffer {
+	Flags = { Vertex };
+	InitData = monkeyObj.vertices;
+} verts
+
+Buffer {
+	Flags = { Index };
+	InitData = monkeyObj.indices;
+} indices
+
+Sampler {
+	Filter = { All = Point };
+	AddressMode = { UVW=Clamp };
+} PointSampler
+
+Texture {
+	Format = R8G8B8A8_UNORM;
+	Size = DisplaySize();
+	Flags = { RTV, SRV };
+	SampleCount = 4;
+} RT_MS
+
+Texture {
+	Format = R8G8B8A8_UNORM;
+	Size = DisplaySize();
+	Flags = { SRV };
+} RT
+
+Texture {
+	Format = D24_UNORM_S8_UINT;
+	Size = { DisplaySize() };
+	Flags = { DSV };
+	SampleCount = 4;
+} DS_MS
+
+
+DrawIndexed {
+	Topology = TriList;
+	VShader = VertexShader {
+		ShaderPath = "vertex.hlsl";
+		EntryPoint = "VSMain";
+	};
+	PShader = PixelShader {
+		ShaderPath = "pixel.hlsl";
+		EntryPoint = "PSMain";
+	};
+	VertexBuffer = verts;
+	IndexBuffer = indices;
+	RenderTarget = RT_MS;
+	DepthStencil = DS_MS;
+	RState = RasterizerState {
+		MultisampleEnable = true;
+	};
+	SetConstantVs Matrix = 
+		projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 0.1, 10)
+		* 
+		lookAt(float3(2,0,0), float3(0,0,0));
+} objDraw
+
+Dispatch {
+	Shader = ComputeShader {
+		ShaderPath = "CopyTexture.hlsl";
+		EntryPoint = "CSMain";
+	};
+	ThreadPerPixel = true; 
+	Bind OutTexture = @BackBuffer;
+	Bind InTexture = RT;
+	Bind Sampler= PointSampler;
+	setconstant TextureSize = DisplaySize();
+} copy
+
+Passes {
+	ClearColor{ Target=RT_MS; Color={0,0,0,1}; },
+	ClearDepth{ Target=DS_MS; Depth=1; },
+	objDraw,
+	Resolve{ Src=RT_MS; Dst=RT; },
+	copy
+}

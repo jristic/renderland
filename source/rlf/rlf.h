@@ -33,6 +33,7 @@ namespace rlf
 		ClearColor,
 		ClearDepth,
 		ClearStencil,
+		Resolve,
 	};
 	enum class SystemValue
 	{
@@ -137,9 +138,8 @@ namespace rlf
 		float DepthBiasClamp;
 		bool DepthClipEnable;
 		bool ScissorEnable;
-		// TODO: MSAA support
-		// bool MultisampleEnable;
-		// bool AntialiasedLineEnable;
+		bool MultisampleEnable;
+		bool AntialiasedLineEnable;
 		ID3D11RasterizerState* RSObject;
 	};
 	struct StencilOpDesc
@@ -208,6 +208,7 @@ namespace rlf
 		TextureFormat Format;
 		const char* DDSPath;
 		TextureFlag Flags;
+		u32 SampleCount;
 		std::set<View*> Views;
 		ID3D11Texture2D* TextureObject;
 	};
@@ -332,6 +333,11 @@ namespace rlf
 		View* Target;
 		u8 Stencil;
 	};
+	struct Resolve
+	{
+		Texture* Src;
+		Texture* Dst;
+	};
 	struct Pass
 	{
 		const char* Name;
@@ -342,6 +348,7 @@ namespace rlf
 			ClearColor* ClearColor;
 			ClearDepth* ClearDepth;
 			ClearStencil* ClearStencil;
+			Resolve* Resolve;
 		};
 	};
 	struct Constant
@@ -367,6 +374,7 @@ namespace rlf
 		std::vector<ClearColor*> ClearColors;
 		std::vector<ClearDepth*> ClearDepths;
 		std::vector<ClearStencil*> ClearStencils;
+		std::vector<Resolve*> Resolves;
 		std::vector<ComputeShader*> CShaders;
 		std::vector<VertexShader*> VShaders;
 		std::vector<PixelShader*> PShaders;

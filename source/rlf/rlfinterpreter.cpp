@@ -353,7 +353,7 @@ void CreateTexture(ID3D11Device* device, Texture* tex)
 	desc.MipLevels = 1;
 	desc.ArraySize = 1;
 	desc.Format = D3DTextureFormat[(u32)tex->Format];
-	desc.SampleDesc.Count = 1;
+	desc.SampleDesc.Count = tex->SampleCount;
 	desc.SampleDesc.Quality = 0;
 	desc.Usage = D3D11_USAGE_DEFAULT;
 	desc.BindFlags = RlfToD3d(tex->Flags);
@@ -398,7 +398,8 @@ void CreateView(ID3D11Device* device, View* v)
 		}
 		else if (v->ResourceType == ResourceType::Texture)
 		{
-			vd.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+			vd.ViewDimension = v->Texture->SampleCount > 1 ? 
+				D3D11_SRV_DIMENSION_TEXTURE2DMS : D3D11_SRV_DIMENSION_TEXTURE2D;
 			vd.Texture2D.MostDetailedMip = 0;
 			vd.Texture2D.MipLevels = (u32)-1;
 		}
@@ -435,7 +436,8 @@ void CreateView(ID3D11Device* device, View* v)
 		D3D11_RENDER_TARGET_VIEW_DESC vd;
 		vd.Format = fmt;
 		Assert(v->ResourceType == ResourceType::Texture, "Invalid");
-		vd.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+		vd.ViewDimension = v->Texture->SampleCount > 1 ? 
+			D3D11_RTV_DIMENSION_TEXTURE2DMS : D3D11_RTV_DIMENSION_TEXTURE2D;
 		vd.Texture2D.MipSlice = 0;
 		HRESULT hr = device->CreateRenderTargetView(res, &vd, &v->RTVObject);
 		CheckHresult(hr, "RTV");
@@ -445,7 +447,8 @@ void CreateView(ID3D11Device* device, View* v)
 		D3D11_DEPTH_STENCIL_VIEW_DESC vd;
 		vd.Format = fmt;
 		Assert(v->ResourceType == ResourceType::Texture, "Invalid");
-		vd.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+		vd.ViewDimension = v->Texture->SampleCount > 1 ? 
+			D3D11_DSV_DIMENSION_TEXTURE2DMS : D3D11_DSV_DIMENSION_TEXTURE2D;
 		vd.Texture2D.MipSlice = 0;
 		vd.Flags = 0;
 		HRESULT hr = device->CreateDepthStencilView(res, &vd, &v->DSVObject);
@@ -886,6 +889,8 @@ void InitMain(
 		desc.DepthBiasClamp = rs->DepthBiasClamp;
 		desc.DepthClipEnable = rs->DepthClipEnable;
 		desc.ScissorEnable = rs->ScissorEnable;
+		desc.MultisampleEnable = rs->MultisampleEnable;
+		desc.AntialiasedLineEnable = rs->AntialiasedLineEnable;
 		device->CreateRasterizerState(&desc, &rs->RSObject);
 	}
 
@@ -1390,6 +1395,12 @@ void _Execute(
 		{
 			ctx->ClearDepthStencilView(pass.ClearStencil->Target->DSVObject, D3D11_CLEAR_STENCIL,
 				0.f, pass.ClearStencil->Stencil);
+		}
+		else if (pass.Type == PassType::Resolve)
+		{
+			ctx->ResolveSubresource(pass.Resolve->Dst->TextureObject, 0, 
+				pass.Resolve->Src->TextureObject, 0, 
+				D3DTextureFormat[(u32)pass.Resolve->Dst->Format]);
 		}
 		else
 		{

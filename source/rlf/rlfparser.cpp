@@ -306,6 +306,7 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(Size) \
 	RLF_KEYWORD_ENTRY(Format) \
 	RLF_KEYWORD_ENTRY(DDSPath) \
+	RLF_KEYWORD_ENTRY(SampleCount) \
 	RLF_KEYWORD_ENTRY(Filter) \
 	RLF_KEYWORD_ENTRY(AddressMode) \
 	RLF_KEYWORD_ENTRY(MipLODBias) \
@@ -374,6 +375,8 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(DepthBiasClamp) \
 	RLF_KEYWORD_ENTRY(DepthClipEnable) \
 	RLF_KEYWORD_ENTRY(ScissorEnable) \
+	RLF_KEYWORD_ENTRY(MultisampleEnable) \
+	RLF_KEYWORD_ENTRY(AntialiasedLineEnable) \
 	RLF_KEYWORD_ENTRY(ObjPath) \
 	RLF_KEYWORD_ENTRY(Vertices) \
 	RLF_KEYWORD_ENTRY(Indices) \
@@ -417,6 +420,9 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(Tuneable) \
 	RLF_KEYWORD_ENTRY(Resource) \
 	RLF_KEYWORD_ENTRY(NumElements) \
+	RLF_KEYWORD_ENTRY(Resolve) \
+	RLF_KEYWORD_ENTRY(Src) \
+	RLF_KEYWORD_ENTRY(Dst) \
 
 #define RLF_KEYWORD_ENTRY(name) name,
 enum class Keyword
@@ -1696,6 +1702,8 @@ RasterizerState* ConsumeRasterizerStateDef(
 		StructEntryDef(RasterizerState, Float, DepthBiasClamp),
 		StructEntryDef(RasterizerState, Float, DepthClipEnable),
 		StructEntryDef(RasterizerState, Bool, ScissorEnable),
+		StructEntryDef(RasterizerState, Bool, MultisampleEnable),
+		StructEntryDef(RasterizerState, Bool, AntialiasedLineEnable),
 	};
 	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
@@ -2274,12 +2282,14 @@ Texture* ConsumeTextureDef(
 
 	// non-zero defaults
 	tex->Format = TextureFormat::R8G8B8A8_UNORM;
+	tex->SampleCount = 1;
 
 	static StructEntry def[] = {
 		StructEntryDef(Texture, TextureFlag, Flags),
 		StructEntryDefEx(Texture, Ast, Size, SizeExpr),
 		StructEntryDef(Texture, TextureFormat, Format),
 		StructEntryDef(Texture, String, DDSPath),
+		StructEntryDef(Texture, Uint, SampleCount),
 	};
 	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
@@ -2758,6 +2768,51 @@ ClearStencil* ConsumeClearStencilDef(
 	return clear;
 }
 
+Resolve* ConsumeResolveDef(
+	TokenIter& t,
+	ParseState& ps)
+{
+	RenderDescription* rd = ps.rd;
+
+	ConsumeToken(TokenType::LBrace, t);
+
+	Resolve* resolve = new Resolve();
+	rd->Resolves.push_back(resolve);
+
+	while (true)
+	{
+		const char* fieldId = ConsumeIdentifier(t);
+		ConsumeToken(TokenType::Equals, t);
+		Keyword key = LookupKeyword(fieldId);
+
+		if (key == Keyword::Src || key == Keyword::Dst)
+		{
+			const char* rid = ConsumeIdentifier(t);
+			ParserAssert(ps.resMap.count(rid) != 0, "Couldn't find resource %s", 
+				rid);
+			ParseState::Resource& res = ps.resMap[rid];
+			ParserAssert(res.type == ParseState::ResType::Texture, 
+				"Referenced resource (%s) must be Texture.", rid);
+			if (key == Keyword::Src)
+				resolve->Src = (Texture*)res.m;
+			else
+				resolve->Dst = (Texture*)res.m;
+		}
+		else 
+		{
+			ParserError("unexpected field %s", fieldId);
+		}
+
+		ConsumeToken(TokenType::Semicolon, t);
+		if (TryConsumeToken(TokenType::RBrace, t))
+			break;
+	}
+
+	ParserAssert(resolve->Src, "Target must be set.");
+	ParserAssert(resolve->Dst, "Target must be set.");
+	return resolve;
+}
+
 Pass ConsumePassRefOrDef(
 	TokenIter& t,
 	ParseState& ps)
@@ -2792,6 +2847,11 @@ Pass ConsumePassRefOrDef(
 	{
 		pass.Type = PassType::ClearStencil;
 		pass.ClearStencil = ConsumeClearStencilDef(t, ps);
+	}
+	else if (key == Keyword::Resolve)
+	{
+		pass.Type = PassType::Resolve;
+		pass.Resolve = ConsumeResolveDef(t, ps);
 	}
 	else
 	{
@@ -3110,6 +3170,8 @@ void ReleaseData(RenderDescription* data)
 		delete clear;
 	for (ClearStencil* clear : data->ClearStencils)
 		delete clear;
+	for (Resolve* resolve : data->Resolves)
+		delete resolve;
 	for (ComputeShader* cs : data->CShaders)
 		delete cs;
 	for (VertexShader* vs : data->VShaders)
