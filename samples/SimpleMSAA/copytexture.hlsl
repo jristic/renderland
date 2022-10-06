@@ -13,10 +13,28 @@ cbuffer ConstantBuffer : register(b0)
 [numthreads(8,8,1)]
 void CSMain(uint3 DTid : SV_DispatchThreadID)
 {
-	if (any(DTid.xy > TextureSize))
+	if (any(DTid.xy > (uint2)TextureSize))
 		return;
 
 	float4 val = InTexture.SampleLevel(Sampler, DTid.xy/TextureSize, 0);
+
+	OutTexture[DTid.xy] = val;
+}
+
+uint NumSamples;
+Texture2DMS<float4> InTexture_MS;
+
+[numthreads(8,8,1)]
+void CSAlt(uint3 DTid : SV_DispatchThreadID)
+{
+	if (any(DTid.xy > (uint2)TextureSize))
+		return;
+
+	float4 val = 0;
+	for (uint sample = 0 ; sample < NumSamples ; ++sample)
+		val += InTexture_MS.Load(DTid.xy, sample);
+	val /= NumSamples;
+	val.a = 1;
 
 	OutTexture[DTid.xy] = val;
 }

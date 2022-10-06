@@ -7,12 +7,11 @@ RenderLand's goal is to allow one to experiment and prototype graphics technique
 ## Status
 RenderLand is an early work in progress. Currently RLF doesn't allow specifying all the possibilities one would expect from D3D, including but not limited to:
 * Viewport and Blend state. 
-* Multiple render targets.
 * Multiple vertex buffers.
 * Instancing for draws.
 * Indirect draws.
+* Texture types: Array, 3D, Cube
 * Append/consume buffers.
-* MSAA.  
 
 Furthermore, the following features are not yet implemented/complete:
 * Robust dynamic expressions for filling constant buffers. 

@@ -22,9 +22,9 @@
 	* Blend state.
 	* Instancing for draws.
 	* Indirect draws.
+	* Texture arrays, cubes, 3d textures.
 	* Append and consume buffers.
 	* Multiple vertex buffer support. 
-	* MSAA support.
 	* More fields should support dynamic expressions, like dispatch group counts. 
 
 *** Cleanup:
