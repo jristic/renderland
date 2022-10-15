@@ -2861,6 +2861,25 @@ Pass ConsumePassRefOrDef(
 	return pass;
 }
 
+void CheckPassName(const char* name)
+{
+	Keyword key = LookupKeyword(name);
+	switch (key) {
+		case Keyword::Dispatch:
+		case Keyword::DispatchIndirect:
+		case Keyword::Draw:
+		case Keyword::DrawIndexed:
+		case Keyword::ClearColor:
+		case Keyword::ClearDepth:
+		case Keyword::ClearStencil:
+		case Keyword::Resolve:
+			ParserError("Pass types may not be used as identifiers: %s", name);
+			break;
+		default:
+			break;
+	} 
+}
+
 void ParseMain()
 {
 	ParseState& ps = *GPS;
@@ -3007,6 +3026,7 @@ void ParseMain()
 			Dispatch* dc = ConsumeDispatchDef(t, ps);
 			dc->Indirect = (key == Keyword::DispatchIndirect);
 			const char* nameId = ConsumeIdentifier(t);
+			CheckPassName(nameId);
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined", 
 				nameId);
 			Pass pass;
@@ -3022,6 +3042,7 @@ void ParseMain()
 			Draw* draw = ConsumeDrawDef(t, ps);
 			draw->Type = (key == Keyword::Draw) ? DrawType::Draw : DrawType::DrawIndexed;
 			const char* nameId = ConsumeIdentifier(t);
+			CheckPassName(nameId);
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined", 
 				nameId);
 			Pass pass;
@@ -3035,6 +3056,7 @@ void ParseMain()
 		{
 			ClearColor* clear = ConsumeClearColorDef(t,ps);
 			const char* nameId = ConsumeIdentifier(t);
+			CheckPassName(nameId);
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined", 
 				nameId);
 			Pass pass;
@@ -3048,6 +3070,7 @@ void ParseMain()
 		{
 			ClearDepth* clear = ConsumeClearDepthDef(t,ps);
 			const char* nameId = ConsumeIdentifier(t);
+			CheckPassName(nameId);
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined", 
 				nameId);
 			Pass pass;
@@ -3061,6 +3084,7 @@ void ParseMain()
 		{
 			ClearStencil* clear = ConsumeClearStencilDef(t,ps);
 			const char* nameId = ConsumeIdentifier(t);
+			CheckPassName(nameId);
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined", 
 				nameId);
 			Pass pass;

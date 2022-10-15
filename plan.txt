@@ -28,6 +28,7 @@
 	* More fields should support dynamic expressions, like dispatch group counts. 
 
 *** Cleanup:
+	* Parser errors which happen post-consume point to the token after the one actually in question
 	* Handle various errors in specifying views/resources (mainly providing the wrong kind).
 	* Refactor system values.
 	* Texture flag cleanup -> SRV/UAV/RTV/DSV can be determined from usage. or keep it explicit?
@@ -36,6 +37,7 @@
 *** UI:
 	* Event-viewer style list of the passes in a frame. 
 	* Debug viz tools for seeing the contents of textures/buffers/rendertargets/depthstencils at any given point in the frame. 
+	* Sample browser for faster way to open various samples for testing
 
 Samples:
 	* Shadow-sampling methods comparison. 
