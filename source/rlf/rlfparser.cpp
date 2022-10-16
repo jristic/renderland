@@ -1122,7 +1122,7 @@ ast::Node* ConsumeAstRecurse(TokenIter& t, ParseState& ps)
 			if (TryConsumeToken(TokenType::LParen, t))
 			{
 				ast::Function* func = AllocateAst<ast::Function>(ps.rd);
-				func->Name = std::string(id);
+				func->Name = AddStringToDescriptionData(id, rd);
 				if (!TryConsumeToken(TokenType::RParen, t))
 				{
 					while (true)
