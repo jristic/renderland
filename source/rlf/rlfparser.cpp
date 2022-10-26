@@ -3148,6 +3148,7 @@ RenderDescription* ParseBuffer(
 
 	ParseState ps;
 	ps.rd = new RenderDescription();
+	alloc::Init(&ps.rd->Alloc);
 	ps.workingDirectory = workingDir;
 	ParseStateInit(&ps);
 
@@ -3222,8 +3223,12 @@ void ReleaseData(RenderDescription* data)
 		delete t;
 	for (void* mem : data->Mems)
 		free(mem);
+	// ASTs still use new/delete as they've not been made rid of stl containers.
 	for (ast::Node* ast : data->Asts)
 		delete ast;
+
+	alloc::FreeAll(&data->Alloc);
+
 	delete data;
 }
 

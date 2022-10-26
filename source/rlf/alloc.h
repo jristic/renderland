@@ -19,7 +19,7 @@ T* Allocate(LinAlloc* Alloc)
 {
 	void* Mem = Allocate(Alloc, sizeof(T));
 	T* Obj = (T*)Mem;
-	Obj->T();
+	ZeroMemory(Obj, sizeof(T));
 	return Obj;
 }
 

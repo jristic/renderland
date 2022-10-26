@@ -2,6 +2,7 @@
 #include "rlf/error.h"
 #include "rlf/types.h"
 #include "rlf/textureformat.h"
+#include "rlf/alloc.h"
 #include "rlf/ast.h"
 
 // forward declares
@@ -390,5 +391,7 @@ namespace rlf
 		std::set<std::string> Strings;
 		std::vector<void*> Mems;
 		std::vector<ast::Node*> Asts;
+
+		alloc::LinAlloc Alloc;
 	};
 }
