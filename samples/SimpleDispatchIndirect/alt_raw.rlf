@@ -15,7 +15,7 @@ Passes {
 		Bind OutArgs = UAV { Resource=iargs; Format=R32_TYPELESS; };
 		setconstant Time = time();
 	},
-	DispatchIndirect {
+	Dispatch {
 		Shader = ComputeShader {
 			ShaderPath = "main.hlsl";
 			EntryPoint = "ConsumerMain";

@@ -1199,7 +1199,7 @@ void ExecuteDispatch(
 			Assert(false, "invalid type %d", bind.Type);
 		}
 	}
-	if (dc->Indirect)
+	if (dc->IndirectArgs)
 	{
 		ctx->DispatchIndirect(dc->IndirectArgs->BufferObject, dc->IndirectArgsOffset);
 	}

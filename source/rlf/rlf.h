@@ -276,7 +276,6 @@ namespace rlf
 		ComputeShader* Shader;
 		bool ThreadPerPixel;
 		uint3 Groups;
-		bool Indirect;
 		Buffer* IndirectArgs;
 		u32 IndirectArgsOffset;
 		std::vector<Bind> Binds;

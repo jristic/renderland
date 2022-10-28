@@ -275,7 +275,6 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(DepthStencilState) \
 	RLF_KEYWORD_ENTRY(ObjImport) \
 	RLF_KEYWORD_ENTRY(Dispatch) \
-	RLF_KEYWORD_ENTRY(DispatchIndirect) \
 	RLF_KEYWORD_ENTRY(Draw) \
 	RLF_KEYWORD_ENTRY(ClearColor) \
 	RLF_KEYWORD_ENTRY(ClearDepth) \
@@ -2827,11 +2826,10 @@ Pass ConsumePassRefOrDef(
 	Keyword key = LookupKeyword(id);
 	Pass pass;
 	pass.Name = nullptr; // Default to no name for the anonymous passes
-	if (key == Keyword::Dispatch || key == Keyword::DispatchIndirect)
+	if (key == Keyword::Dispatch)
 	{
 		pass.Type = PassType::Dispatch;
 		pass.Dispatch = ConsumeDispatchDef(t, ps);
-		pass.Dispatch->Indirect = (key == Keyword::DispatchIndirect);
 	}
 	else if (key == Keyword::Draw)
 	{
@@ -2871,7 +2869,6 @@ void CheckPassName(const char* name)
 	Keyword key = LookupKeyword(name);
 	switch (key) {
 		case Keyword::Dispatch:
-		case Keyword::DispatchIndirect:
 		case Keyword::Draw:
 		case Keyword::ClearColor:
 		case Keyword::ClearDepth:
@@ -3025,10 +3022,8 @@ void ParseMain()
 			break;
 		}
 		case Keyword::Dispatch:
-		case Keyword::DispatchIndirect:
 		{
 			Dispatch* dc = ConsumeDispatchDef(t, ps);
-			dc->Indirect = (key == Keyword::DispatchIndirect);
 			const char* nameId = ConsumeIdentifier(t);
 			CheckPassName(nameId);
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined", 
