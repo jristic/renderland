@@ -32,7 +32,7 @@ Texture {
 } DS
 
 
-DrawIndexed {
+Draw {
 	Topology = TriList;
 	VShader = VertexShader {
 		ShaderPath = "vertex.hlsl";

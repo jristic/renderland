@@ -101,7 +101,7 @@ Dispatch {
 	setconstant LightPos = LightPos;
 } generateBlocker
 
-DrawIndexed {
+Draw {
 	Topology = TriList;
 	VShader = VertexShader {
 		ShaderPath = "shaders.hlsl";
@@ -113,7 +113,7 @@ DrawIndexed {
 	SetConstantVs Matrix = ProjView;
 } drawFloorDepth
 
-DrawIndexed {
+Draw {
 	Topology = TriList;
 	VShader = VertexShader {
 		ShaderPath = "shaders.hlsl";
@@ -125,7 +125,7 @@ DrawIndexed {
 	SetConstantVs Matrix = ProjView;
 } drawBlockerDepth
 
-DrawIndexed {
+Draw {
 	Topology = TriList;
 	VShader = VertexShader {
 		ShaderPath = "shaders.hlsl";
@@ -148,7 +148,7 @@ DrawIndexed {
 	SetConstantVs Matrix = ProjView;
 } applyVolumes
 
-DrawIndexed {
+Draw {
 	Topology = TriList;
 	VShader = VertexShader {
 		ShaderPath = "shaders.hlsl";
@@ -174,7 +174,7 @@ DrawIndexed {
 	SetConstantVs Matrix = ProjView;
 } drawFloorColor
 
-DrawIndexed {
+Draw {
 	Topology = TriList;
 	VShader = VertexShader {
 		ShaderPath = "shaders.hlsl";

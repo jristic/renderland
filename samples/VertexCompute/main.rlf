@@ -26,7 +26,7 @@ Dispatch {
 	setconstant VertCount = VertCount;
 } updateVerts
 
-DrawIndexed {
+Draw {
 	Topology = TriList;
 	VShader = VertexShader {
 		ShaderPath = "vertex.hlsl";

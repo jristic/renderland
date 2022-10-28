@@ -90,7 +90,7 @@ SRV {
 	Format = R24_UNORM_X8_TYPELESS;
 } ShadowDSSrv
 
-DrawIndexed {
+Draw {
 	Topology = TriList;
 	VShader = VertexShader {
 		ShaderPath = "shaders.hlsl";
@@ -103,7 +103,7 @@ DrawIndexed {
 } renderShadowMap
 
 
-DrawIndexed {
+Draw {
 	Topology = TriList;
 	VShader = VertexShader {
 		ShaderPath = "shaders.hlsl";
@@ -127,7 +127,7 @@ DrawIndexed {
 	bindps ShadowSampler = PointSampler;
 } objDraw
 
-DrawIndexed {
+Draw {
 	Topology = TriList;
 	VShader = VertexShader {
 		ShaderPath = "shaders.hlsl";

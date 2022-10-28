@@ -76,12 +76,6 @@ namespace rlf
 		TriList,
 		TriStrip,
 	};
-	enum class DrawType
-	{
-		Invalid,
-		Draw,
-		DrawIndexed,
-	};
 	enum BufferFlag
 	{
 		BufferFlag_Vertex = 1,
@@ -299,7 +293,6 @@ namespace rlf
 	};
 	struct Draw
 	{
-		DrawType Type;
 		Topology Topology;
 		RasterizerState* RState;
 		DepthStencilState* DSState;
@@ -308,6 +301,7 @@ namespace rlf
 		Buffer* VertexBuffer;
 		Buffer* IndexBuffer;
 		u32 VertexCount;
+		u32 InstanceCount;
 		u8 StencilRef;
 		std::vector<TextureTarget> RenderTargets;
 		std::vector<TextureTarget> DepthStencil;

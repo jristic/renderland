@@ -616,7 +616,7 @@ void PrepareConstants(
 				}
 			}
 		}
-		Assert(cvar, "Couldn't find constant %s in shader %s", set.VariableName, path);
+		InitAssert(cvar, "Couldn't find constant %s in shader %s", set.VariableName, path);
 		D3D11_SHADER_VARIABLE_DESC vd;
 		cvar->GetDesc(&vd);
 		set.Offset = vd.StartOffset;
@@ -1334,25 +1334,22 @@ void ExecuteDraw(
 		draw->StencilRef);
 	u32 offset = 0;
 	Buffer* vb = draw->VertexBuffer;
+	Buffer* ib = draw->IndexBuffer;
 	if (vb)
 		ctx->IASetVertexBuffers(0, 1, &vb->BufferObject, &vb->ElementSize, 
 			&offset);
-	if (draw->Type == DrawType::Draw)
-	{
-		ctx->Draw(draw->VertexCount, 0);
-	}
-	else if (draw->Type == DrawType::DrawIndexed)
-	{
-		Buffer* ib = draw->IndexBuffer;
-		ExecuteAssert(ib, "DrawIndexed must have an index buffer");
+	if (ib)
 		ctx->IASetIndexBuffer(ib->BufferObject, ib->ElementSize == 2 ? 
 			DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT, 0);
+
+	if (ib && draw->InstanceCount > 0)
+		ctx->DrawIndexedInstanced(ib->ElementCount, draw->InstanceCount, 0, 0, 0);
+	else if (ib)
 		ctx->DrawIndexed(ib->ElementCount, 0, 0);
-	}
+	else if (draw->InstanceCount > 0)
+		ctx->DrawInstanced(draw->VertexCount, draw->InstanceCount, 0, 0);
 	else
-	{
-		Unimplemented();
-	}
+		ctx->Draw(draw->VertexCount, 0);
 }
 
 void _Execute(

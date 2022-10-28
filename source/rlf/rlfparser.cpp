@@ -277,7 +277,6 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(Dispatch) \
 	RLF_KEYWORD_ENTRY(DispatchIndirect) \
 	RLF_KEYWORD_ENTRY(Draw) \
-	RLF_KEYWORD_ENTRY(DrawIndexed) \
 	RLF_KEYWORD_ENTRY(ClearColor) \
 	RLF_KEYWORD_ENTRY(ClearDepth) \
 	RLF_KEYWORD_ENTRY(ClearStencil) \
@@ -329,6 +328,7 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(VertexBuffer) \
 	RLF_KEYWORD_ENTRY(IndexBuffer) \
 	RLF_KEYWORD_ENTRY(VertexCount) \
+	RLF_KEYWORD_ENTRY(InstanceCount) \
 	RLF_KEYWORD_ENTRY(StencilRef) \
 	RLF_KEYWORD_ENTRY(RenderTarget) \
 	RLF_KEYWORD_ENTRY(RenderTargets) \
@@ -2499,6 +2499,12 @@ Draw* ConsumeDrawDef(
 			draw->VertexCount = ConsumeUintLiteral(t);
 			break;
 		}
+		case Keyword::InstanceCount:
+		{
+			ConsumeToken(TokenType::Equals, t);
+			draw->InstanceCount = ConsumeUintLiteral(t);
+			break;
+		}
 		case Keyword::StencilRef:
 		{
 			ConsumeToken(TokenType::Equals, t);
@@ -2827,11 +2833,10 @@ Pass ConsumePassRefOrDef(
 		pass.Dispatch = ConsumeDispatchDef(t, ps);
 		pass.Dispatch->Indirect = (key == Keyword::DispatchIndirect);
 	}
-	else if (key == Keyword::Draw || key == Keyword::DrawIndexed)
+	else if (key == Keyword::Draw)
 	{
 		pass.Type = PassType::Draw;
 		pass.Draw = ConsumeDrawDef(t, ps);
-		pass.Draw->Type = (key == Keyword::Draw) ? DrawType::Draw : DrawType::DrawIndexed;
 	}
 	else if (key == Keyword::ClearColor)
 	{
@@ -2868,7 +2873,6 @@ void CheckPassName(const char* name)
 		case Keyword::Dispatch:
 		case Keyword::DispatchIndirect:
 		case Keyword::Draw:
-		case Keyword::DrawIndexed:
 		case Keyword::ClearColor:
 		case Keyword::ClearDepth:
 		case Keyword::ClearStencil:
@@ -3037,10 +3041,8 @@ void ParseMain()
 			break;
 		}
 		case Keyword::Draw:
-		case Keyword::DrawIndexed:
 		{
 			Draw* draw = ConsumeDrawDef(t, ps);
-			draw->Type = (key == Keyword::Draw) ? DrawType::Draw : DrawType::DrawIndexed;
 			const char* nameId = ConsumeIdentifier(t);
 			CheckPassName(nameId);
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined", 

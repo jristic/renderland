@@ -13,7 +13,7 @@ Buffer {
 	InitData = monkeyObj.indices;
 } indices
 
-DrawIndexed {
+Draw {
 	Topology = TriList;
 	VShader = VertexShader {
 		ShaderPath = "vertex.hlsl";

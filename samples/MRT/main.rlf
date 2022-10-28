@@ -53,7 +53,7 @@ SRV {
 	Format = R16_UNORM;
 } DSSrv
 
-DrawIndexed {
+Draw {
 	Topology = TriList;
 	VShader = VertexShader {
 		ShaderPath = "vertex.hlsl";

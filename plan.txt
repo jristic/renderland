@@ -20,11 +20,10 @@
 **** Expand draw pipeline support.
 	* Viewport.
 	* Blend state.
-	* Instancing for draws.
 	* Indirect draws.
 	* Texture arrays, cubes, 3d textures.
 	* Append and consume buffers.
-	* Multiple vertex buffer support. 
+	* Multiple vertex buffer and instanced buffer support. 
 	* More fields should support dynamic expressions, like dispatch group counts. 
 
 *** Cleanup:
