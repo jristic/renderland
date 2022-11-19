@@ -40,9 +40,13 @@ static ID3D11InfoQueue*			g_d3dInfoQueue = nullptr;
 static ID3D11DeviceContext*     g_pd3dDeviceContext = nullptr;
 static IDXGISwapChain*          g_pSwapChain = nullptr;
 static ID3D11RenderTargetView*  g_mainRenderTargetView = nullptr;
-static ID3D11UnorderedAccessView*  g_mainRenderTargetUav = nullptr;
-static ID3D11Texture2D* 		g_mainDepthStencilTex = nullptr;
-static ID3D11DepthStencilView*  g_mainDepthStencilView = nullptr;
+
+static ID3D11Texture2D* 		RlfDisplayTex = nullptr;
+static ID3D11RenderTargetView*  RlfDisplayRtv = nullptr;
+static ID3D11ShaderResourceView*  RlfDisplaySrv = nullptr;
+static ID3D11UnorderedAccessView*  RlfDisplayUav = nullptr;
+static ID3D11Texture2D* 		RlfDepthStencilTex = nullptr;
+static ID3D11DepthStencilView*  RlfDepthStencilView = nullptr;
 
 char* RlfFile = nullptr;
 u32 RlfFileSize = 0;
@@ -326,6 +330,66 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			CreateShader();
 		}
 
+		ImGui::Begin("Display", nullptr, ImGuiWindowFlags_NoCollapse);
+		{
+			ImVec2 vMin = ImGui::GetWindowContentRegionMin();
+			ImVec2 vMax = ImGui::GetWindowContentRegionMax();
+			DisplaySize.x = (u32)max(1, vMax.x - vMin.x);
+			DisplaySize.y = (u32)max(1, vMax.y - vMin.y);
+
+			if (RlfDisplayTex == nullptr || PrevDisplaySize != DisplaySize)
+			{
+				SafeRelease(RlfDisplayUav);
+				SafeRelease(RlfDisplaySrv);
+				SafeRelease(RlfDisplayRtv);
+				SafeRelease(RlfDisplayTex);
+				SafeRelease(RlfDepthStencilView);
+				SafeRelease(RlfDepthStencilTex);
+
+				D3D11_TEXTURE2D_DESC desc = {};
+				desc.Width = DisplaySize.x;
+				desc.Height = DisplaySize.y;
+				desc.MipLevels = 1;
+				desc.ArraySize = 1;
+				desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+				desc.SampleDesc.Count = 1;
+				desc.SampleDesc.Quality = 0;
+				desc.Usage = D3D11_USAGE_DEFAULT;
+				desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_UNORDERED_ACCESS |
+					D3D11_BIND_SHADER_RESOURCE;
+				desc.CPUAccessFlags = 0;
+				desc.MiscFlags = 0;
+				hr = g_pd3dDevice->CreateTexture2D(&desc, nullptr, &RlfDisplayTex);
+				Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
+
+				g_pd3dDevice->CreateRenderTargetView(RlfDisplayTex, nullptr, &RlfDisplayRtv);
+				g_pd3dDevice->CreateUnorderedAccessView(RlfDisplayTex, nullptr, &RlfDisplayUav);
+				g_pd3dDevice->CreateShaderResourceView(RlfDisplayTex, nullptr, &RlfDisplaySrv);
+
+				desc = {};
+				desc.Width = DisplaySize.x;
+				desc.Height = DisplaySize.y;
+				desc.MipLevels = 1;
+				desc.ArraySize = 1;
+				desc.Format = DXGI_FORMAT_D32_FLOAT;
+				desc.SampleDesc.Count = 1;
+				desc.SampleDesc.Quality = 0;
+				desc.Usage = D3D11_USAGE_DEFAULT;
+				desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+				desc.CPUAccessFlags = 0;
+				desc.MiscFlags = 0;
+
+				hr = g_pd3dDevice->CreateTexture2D(&desc, nullptr, &RlfDepthStencilTex);
+				Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
+				hr = g_pd3dDevice->CreateDepthStencilView(RlfDepthStencilTex, nullptr, 
+					&RlfDepthStencilView);
+				Assert(hr == S_OK, "failed to create depthstencil view, hr=%x", hr);
+			}
+			
+			ImGui::Image(RlfDisplaySrv, ImVec2(vMax.x-vMin.x, vMax.y-vMin.y));
+		}
+		ImGui::End();
+
 		if (ImGui::Begin("Compile Output"))
 		{
 			static float f = 0.0f;
@@ -477,9 +541,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			clear_color.z * clear_color.w, 
 			clear_color.w
 		};
-		g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, 
+		g_pd3dDeviceContext->ClearRenderTargetView(RlfDisplayRtv, 
 			clear_color_with_alpha);
-		g_pd3dDeviceContext->ClearDepthStencilView(g_mainDepthStencilView, 
+		g_pd3dDeviceContext->ClearDepthStencilView(RlfDepthStencilView, 
 			D3D11_CLEAR_DEPTH, 1.f, 0);
 
 		// Dispatch our shader
@@ -487,9 +551,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		{
 			rlf::ExecuteContext ctx = {};
 			ctx.D3dCtx = g_pd3dDeviceContext;
-			ctx.MainRtv = g_mainRenderTargetView;
-			ctx.MainRtUav = g_mainRenderTargetUav;
-			ctx.DefaultDepthView = g_mainDepthStencilView;
+			ctx.MainRtv = RlfDisplayRtv;
+			ctx.MainRtUav = RlfDisplayUav;
+			ctx.DefaultDepthView = RlfDepthStencilView;
 			ctx.DisplaySize = DisplaySize;
 			ctx.Time = time;
 			rlf::ErrorState es = {};
@@ -501,6 +565,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			}
 		}
 
+		const float clear_0[4] = {0,0,0,0};
+		g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, 
+			clear_0);
 		g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
 		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
@@ -550,42 +617,12 @@ void CreateRenderTarget()
 	// rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 	// g_pd3dDevice->CreateRenderTargetView(pBackBuffer, &rtvDesc, &g_mainRenderTargetView);
 	g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_mainRenderTargetView);
-	g_pd3dDevice->CreateUnorderedAccessView(pBackBuffer, nullptr, &g_mainRenderTargetUav);
 	pBackBuffer->Release();
-
-	D3D11_TEXTURE2D_DESC rtDesc = {};
-	pBackBuffer->GetDesc(&rtDesc);
-
-	DisplaySize.x = rtDesc.Width;
-	DisplaySize.y = rtDesc.Height;
-
-	D3D11_TEXTURE2D_DESC desc;
-	desc.Width = rtDesc.Width;
-	desc.Height = rtDesc.Height;
-	desc.MipLevels = 1;
-	desc.ArraySize = 1;
-	desc.Format = DXGI_FORMAT_D32_FLOAT;
-	desc.SampleDesc.Count = 1;
-	desc.SampleDesc.Quality = 0;
-	desc.Usage = D3D11_USAGE_DEFAULT;
-	desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
-	desc.CPUAccessFlags = 0;
-	desc.MiscFlags = 0;
-
-	HRESULT hr = g_pd3dDevice->CreateTexture2D(&desc, nullptr, &g_mainDepthStencilTex);
-	Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
-
-	hr = g_pd3dDevice->CreateDepthStencilView(g_mainDepthStencilTex, nullptr, 
-		&g_mainDepthStencilView);
-	Assert(hr == S_OK, "failed to create depthstencil view, hr=%x", hr);
 }
 
 void CleanupRenderTarget()
 {
 	SafeRelease(g_mainRenderTargetView);
-	SafeRelease(g_mainRenderTargetUav);
-	SafeRelease(g_mainDepthStencilView);
-	SafeRelease(g_mainDepthStencilTex);
 }
 
 void CreateShader()
