@@ -241,8 +241,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 	// Our state
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-	float time = 0;
-	float speed = 1;
+	float Time = 0;
+	float Speed = 1;
 	// bool showDemoWindow = true;
 	bool showPlaybackWindow = true;
 	bool showParametersWindow = true;
@@ -266,7 +266,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		ImGui_ImplWin32_NewFrame();
 		ImGui::NewFrame();
 
-		bool Reload = ImGui::IsKeyReleased(ImGuiKey_F5);
+		bool Reload = (!CurrentRenderDesc && !RlfCompileSuccess) || // first load
+			ImGui::IsKeyReleased(ImGuiKey_F5);
 		bool Quit = ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyReleased(ImGuiKey_Q);
 		if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyReleased(ImGuiKey_O))
 			ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey",
@@ -322,12 +323,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		{
 			::PostQuitMessage(0);
 			continue;
-		}
-		if (Reload)
-		{
-			time = 0;
-			CleanupShader();
-			CreateShader();
 		}
 
 		ImGui::Begin("Display", nullptr, ImGuiWindowFlags_NoCollapse);
@@ -459,20 +454,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			if (ImGui::Begin("Playback", &showPlaybackWindow))
 			{
 				if (ImGui::Button("<<"))
-					speed = -2;
+					Speed = -2;
 				ImGui::SameLine();
 				if (ImGui::Button("<"))
-					speed = -1;
+					Speed = -1;
 				ImGui::SameLine();
 				if (ImGui::Button("||"))
-					speed = 0;
+					Speed = 0;
 				ImGui::SameLine();
 				if (ImGui::Button(">"))
-					speed = 1;
+					Speed = 1;
 				ImGui::SameLine();
 				if (ImGui::Button(">>"))
-					speed = 2;
-				ImGui::Text("Time = %f", time);
+					Speed = 2;
+				ImGui::Text("Time = %f", Time);
 			}
 			ImGui::End();
 		}
@@ -532,6 +527,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			}
 		}
 
+		if (Reload)
+		{
+			Time = 0;
+			CleanupShader();
+			CreateShader();
+		}
+
 		// Rendering
 		ImGui::Render();
 		const float clear_color_with_alpha[4] =
@@ -555,7 +557,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			ctx.MainRtUav = RlfDisplayUav;
 			ctx.DefaultDepthView = RlfDepthStencilView;
 			ctx.DisplaySize = DisplaySize;
-			ctx.Time = time;
+			ctx.Time = Time;
 			rlf::ErrorState es = {};
 			rlf::Execute(&ctx, CurrentRenderDesc, &es);
 			if (!es.Success)
@@ -574,7 +576,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		g_pSwapChain->Present(1, 0); // Present with vsync
 		//g_pSwapChain->Present(0, 0); // Present without vsync
 
-		time = max(0, time + speed * io.DeltaTime);
+		Time = max(0, Time + Speed * io.DeltaTime);
 
 		RlfValidationErrorMessage = "Validation error:\n";
 		RlfValidationError = CheckD3DValidation(RlfValidationErrorMessage);
