@@ -10,6 +10,7 @@ struct Parameters
 	i32 WindowPosY;
 	i32 WindowWidth;
 	i32 WindowHeight;
+	i32 LayoutVersionApplied;
 };
 
 void LoadConfig(const char* configPath, Parameters* outConfig);

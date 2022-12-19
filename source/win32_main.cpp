@@ -14,6 +14,8 @@
 
 // External headers
 #include "imgui/imgui.h"
+#define IMGUI_DEFINE_MATH_OPERATORS
+#include "imgui/imgui_internal.h"
 #include "DirectXTex/DirectXTex.h"
 #include "ImGuiFileDialog/ImGuiFileDialog.h"
 
@@ -33,6 +35,8 @@
 #include "rlf/rlfinterpreter.h"
 
 #define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
+
+const int LAYOUT_VERSION = 1;
 
 static ID3D11Device*            g_pd3dDevice = nullptr;
 static ID3D11Debug*             g_d3dDebug = nullptr;
@@ -274,6 +278,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 				"Choose File", ".rlf", ".");
 
 		bool TuneablesChanged = false;
+		bool ResetLayout = false;
 
 		if (ImGui::BeginMainMenuBar())
 		{
@@ -294,14 +299,45 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 				ImGui::MenuItem("Event Viewer", "", &showEventsWindow);
 				ImGui::MenuItem("Playback", "", &showPlaybackWindow);
 				ImGui::MenuItem("Parameters", "", &showParametersWindow);
+	            ImGui::Separator();
+				if (ImGui::MenuItem("Reset layout"))
+					ResetLayout = true;
 				ImGui::EndMenu();
 			}
 			ImGui::Spacing(); ImGui::Spacing(); ImGui::Spacing();
 			ImGui::Text("Loaded: %s", Cfg.FilePath);
 			ImGui::EndMainMenuBar();
 		}
-		ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(),
-			ImGuiDockNodeFlags_PassthruCentralNode);
+
+		ImGuiViewport* viewport = ImGui::GetMainViewport();
+		ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(viewport, ImGuiDockNodeFlags_PassthruCentralNode);
+
+		if (Cfg.LayoutVersionApplied != LAYOUT_VERSION || ResetLayout)
+		{
+			// Clear out existing layout (includes children)
+			ImGui::DockBuilderRemoveNode(dockspace_id);
+			ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+			ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->Size);
+
+			ImGuiID dock_main_id = dockspace_id;
+			ImGuiID dockspace_bottom_id = ImGui::DockBuilderSplitNode(dock_main_id, 
+				ImGuiDir_Down, 0.20f, nullptr, &dock_main_id);
+			ImGuiID dockspace_left_id = ImGui::DockBuilderSplitNode(dock_main_id, 
+				ImGuiDir_Left, 0.15f, nullptr, &dock_main_id);
+			ImGuiID dockspace_right_id = ImGui::DockBuilderSplitNode(dock_main_id,
+				ImGuiDir_Right, 0.30f, nullptr, &dock_main_id);
+			ImGuiID dockspace_right_top_id = ImGui::DockBuilderSplitNode(dockspace_right_id,
+				ImGuiDir_Up, 0.10f, nullptr, &dockspace_right_id);
+
+			ImGui::DockBuilderDockWindow("Display", dock_main_id);
+			ImGui::DockBuilderDockWindow("Compile Output", dockspace_bottom_id);
+			ImGui::DockBuilderDockWindow("Event Viewer", dockspace_left_id);
+			ImGui::DockBuilderDockWindow("Playback", dockspace_right_top_id);
+			ImGui::DockBuilderDockWindow("Parameters", dockspace_right_id);
+			ImGui::DockBuilderFinish(dockspace_id);
+
+			Cfg.LayoutVersionApplied = LAYOUT_VERSION;
+		}
 
 		if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey")) 
 		{
@@ -422,11 +458,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 				ImGui::PopTextWrapPos();
 				ImGui::PopStyleColor();
 			}
-
-			// ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
-			// 	1000.0f / io.Framerate, io.Framerate);
-
-			// ImGui::Text("Exe directory: %s", ExeDirectoryPath.c_str());
 		}
 		ImGui::End();
 

@@ -59,6 +59,12 @@ void LoadConfig(const char* configPath, Parameters* outConfig)
 				if (val > 0) 
 					outConfig->WindowHeight = val;
 			}
+			else if (label == "LayoutVersionApplied")
+			{
+				int val = atoi(value.c_str());
+				if (val > 0)
+					outConfig->LayoutVersionApplied = val;
+			}
 			else
 			{
 				Prompt("Invalid config item: %s", label.c_str());
@@ -87,8 +93,10 @@ void SaveConfig(const char* configPath, const Parameters* cfg)
 	char buf[2048];
 	snprintf(buf, 2048,
 		"FilePath=%s\nMaximized=%s\nWindowPosX=%i\nWindowPosY=%i\n"
-		"WindowWidth=%i\nWindowHeight=%i\n", cfg->FilePath, cfg->Maximized ? "true" : "false",
-		cfg->WindowPosX, cfg->WindowPosY, cfg->WindowWidth, cfg->WindowHeight);
+		"WindowWidth=%i\nWindowHeight=%i\nLayoutVersionApplied=%i\n", 
+		cfg->FilePath, cfg->Maximized ? "true" : "false", cfg->WindowPosX, 
+		cfg->WindowPosY, cfg->WindowWidth, cfg->WindowHeight, 
+		cfg->LayoutVersionApplied);
 	fileio::WriteFile(file, buf, (u32)strlen(buf));
 	CloseHandle(file);
 }
