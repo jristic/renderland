@@ -2367,13 +2367,7 @@ Dispatch* ConsumeDispatchDef(
 		case Keyword::Groups:
 		{
 			ConsumeToken(TokenType::Equals, t);
-			ConsumeToken(TokenType::LBrace, t);
-			dc->Groups.x = ConsumeUintLiteral(t);
-			ConsumeToken(TokenType::Comma, t);
-			dc->Groups.y = ConsumeUintLiteral(t);
-			ConsumeToken(TokenType::Comma, t);
-			dc->Groups.z = ConsumeUintLiteral(t);
-			ConsumeToken(TokenType::RBrace, t);
+			dc->GroupsExpr = ConsumeAst(t, ps);
 			break;
 		}
 		case Keyword::IndirectArgs:

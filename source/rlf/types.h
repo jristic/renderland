@@ -53,6 +53,7 @@ namespace rlf
 			int4 Int4Val;
 			u32 UintVal;
 			uint2 Uint2Val;
+			uint3 Uint3Val;
 			uint4 Uint4Val;
 			float FloatVal;
 			float2 Float2Val;

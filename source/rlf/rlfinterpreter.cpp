@@ -2,6 +2,11 @@
 namespace rlf
 {
 
+void EvaluateExpression(ast::EvaluationContext& ec, ast::Node* ast, ast::Result& res);
+void EvaluateExpression(ast::EvaluationContext& ec, ast::Node* ast, ast::Result& res, 
+	VariableType expect, const char* name);
+
+
 // -----------------------------------------------------------------------------
 // ------------------------------ INITIALIZATION -------------------------------
 // -----------------------------------------------------------------------------
@@ -798,6 +803,9 @@ void InitMain(
 		CheckHresult(hr, "Buffer");
 	}
 
+	ast::EvaluationContext evCtx;
+	evCtx.DisplaySize = displaySize;
+	evCtx.Time = 0;
 	for (Texture* tex : rd->Textures)
 	{
 		if (tex->DDSPath)
@@ -829,23 +837,8 @@ void InitMain(
 		}
 		else
 		{
-			ast::EvaluationContext evCtx;
-			evCtx.DisplaySize = displaySize;
-			evCtx.Time = 0;
 			ast::Result res;
-			ErrorState es;
-			ast::Evaluate(evCtx, tex->SizeExpr, res, es);
-			if (!es.Success)
-			{
-				ErrorInfo ie;
-				ie.Location = es.Info.Location;
-				ie.Message = "AST evaluation error: " + es.Info.Message;
-				throw ie;
-			}
-			InitAssert( res.Type.Dim == 2, 
-				"Size expression expected to evaluate to 2 components but got: %d",
-				res.Type.Dim);
-			Convert(res, VariableFormat::Uint);
+			EvaluateExpression(evCtx, tex->SizeExpr, res, Uint2Type, "Texture::Size");
 			tex->Size = res.Value.Uint2Val;
 
 			CreateTexture(device, tex);
@@ -1080,31 +1073,40 @@ do {											\
 	}											\
 } while (0);									\
 
-void EvaluateConstants(ExecuteContext* ec, std::vector<Constant*>& cnsts)
+
+void EvaluateExpression(ast::EvaluationContext& ec, ast::Node* ast, ast::Result& res)
 {
-	ast::EvaluationContext evCtx;
-	evCtx.DisplaySize = ec->DisplaySize;
-	evCtx.Time = ec->Time;
+	ErrorState es;
+	ast::Evaluate(ec, ast, res, es);
+	if (!es.Success)
+	{
+		ErrorInfo ee;
+		ee.Location = es.Info.Location;
+		ee.Message = "AST evaluation error: " + es.Info.Message;
+		throw ee;
+	}
+}
+
+void EvaluateExpression(ast::EvaluationContext& ec, ast::Node* ast, ast::Result& res, 
+	VariableType expect, const char* name)
+{
+	EvaluateExpression(ec, ast, res);
+	ExecuteAssert( (expect.Fmt != VariableFormat::Float4x4 && 
+		res.Type.Fmt != VariableFormat::Float4x4) || expect.Fmt == res.Type.Fmt,
+		"%s expected type (%s) is not compatible with actual type (%s)",
+		name, TypeFmtToString(expect.Fmt), TypeFmtToString(res.Type.Fmt));
+	ExecuteAssert(expect.Dim == res.Type.Dim,
+		"%s size (%u) doe not match actual size (%u)",
+		name, expect.Dim, res.Type.Dim);
+	Convert(res, expect.Fmt);
+}
+
+void EvaluateConstants(ast::EvaluationContext& ec, std::vector<Constant*>& cnsts)
+{
 	for (Constant* cnst : cnsts)
 	{
 		ast::Result res;
-		ErrorState es;
-		ast::Evaluate(evCtx, cnst->Expr, res, es);
-		if (!es.Success)
-		{
-			ErrorInfo ee;
-			ee.Location = es.Info.Location;
-			ee.Message = "AST evaluation error: " + es.Info.Message;
-			throw ee;
-		}
-		ExecuteAssert( (cnst->Type.Fmt != VariableFormat::Float4x4 && 
-			res.Type.Fmt != VariableFormat::Float4x4) || cnst->Type.Fmt == res.Type.Fmt,
-			"Constant %s expected type (%s) is not compatible with actual type (%s)",
-			cnst->Name, TypeFmtToString(cnst->Type.Fmt), TypeFmtToString(res.Type.Fmt));
-		ExecuteAssert(cnst->Type.Dim == res.Type.Dim,
-			"Constant %s size (%u) doe not match actual size (%u)",
-			cnst->Name, cnst->Type.Dim, res.Type.Dim);
-		Convert(res, cnst->Type.Fmt);
+		EvaluateExpression(ec, cnst->Expr, res, cnst->Type, cnst->Name);
 		cnst->Value = res.Value;
 	}
 }
@@ -1119,24 +1121,11 @@ void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets,
 	for (const SetConstant& set : sets)
 	{
 		ast::Result res;
-		ErrorState es;
-		ast::Evaluate(evCtx, set.Value, res, es);
-		if (!es.Success)
-		{
-			ErrorInfo ee;
-			ee.Location = es.Info.Location;
-			ee.Message = "AST evaluation error: " + es.Info.Message;
-			throw ee;
-		}
+		EvaluateExpression(evCtx, set.Value, res, set.Type, set.VariableName);
 		u32 typeSize = res.Type.Dim * 4;
-		ExecuteAssert(set.Size == typeSize, 
+		Assert(set.Size == typeSize, 
 			"SetConstant %s does not match size, expected=%u got=%u",
 			set.VariableName, set.Size, typeSize);
-		if (set.Type != res.Type)
-			Convert(res, set.Type.Fmt);
-		// ExecuteAssert(set.Type == res.Type, 
-		// 	"SetConstant %s does not match type, expected=%s got=%s",
-		// 	set.VariableName, TypeToString(set.Type), TypeToString(res.Type));
 		if (res.Type.Fmt == VariableFormat::Bool)
 			for (u32 i = 0 ; i < res.Type.Dim ; ++i)
 				*(((u32*)(set.CB->BackingMemory+set.Offset)) + i) = 
@@ -1205,13 +1194,23 @@ void ExecuteDispatch(
 	}
 	else
 	{
-		uint3 groups = dc->Groups;
-		if (dc->ThreadPerPixel && ec->DisplaySize.x != 0 && ec->DisplaySize.y != 0)
+		uint3 groups = {};
+		if (dc->ThreadPerPixel)
 		{
+			Assert(ec->DisplaySize.x != 0 && ec->DisplaySize.y != 0, "Invalid display size for execution");
 			uint3 tgs = dc->Shader->ThreadGroupSize;
 			groups.x = (u32)((ec->DisplaySize.x - 1) / tgs.x) + 1;
 			groups.y = (u32)((ec->DisplaySize.y - 1) / tgs.y) + 1;
 			groups.z = 1;
+		}
+		else if (dc->GroupsExpr)
+		{
+			ast::Result res;
+			ast::EvaluationContext evCtx;
+			evCtx.DisplaySize = ec->DisplaySize;
+			evCtx.Time = ec->Time;
+			EvaluateExpression(evCtx, dc->GroupsExpr, res, Uint3Type, "Dispatch::Groups");
+			groups = res.Value.Uint3Val;
 		}
 
 		ctx->Dispatch(groups.x, groups.y, groups.z);
@@ -1358,7 +1357,10 @@ void _Execute(
 {
 	ID3D11DeviceContext* ctx = ec->D3dCtx;
 
-	EvaluateConstants(ec, rd->Constants);
+	ast::EvaluationContext evCtx;
+	evCtx.DisplaySize = ec->DisplaySize;
+	evCtx.Time = ec->Time;
+	EvaluateConstants(evCtx, rd->Constants);
 
 	// Clear state so we aren't polluted by previous program drawing or previous 
 	//	execution. 
