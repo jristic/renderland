@@ -7,6 +7,7 @@ struct EvaluationContext // TODO: collapse with executecontext?
 {
 	uint2 DisplaySize;
 	float Time;
+	u32 ChangedThisFrameFlags;
 };
 
 struct Result

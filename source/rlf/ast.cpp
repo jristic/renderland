@@ -8,7 +8,7 @@ void Evaluate(const EvaluationContext& ec, Node* ast, Result& res,
 {
 	es.Success = true;
 
-	if (ast->Constant() && ast->CacheValid)
+	if ((ast->Dep.VariesByFlags & ec.ChangedThisFrameFlags) == 0 && ast->CacheValid)
 	{
 		res = ast->CachedResult;
 		return;

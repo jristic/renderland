@@ -986,8 +986,7 @@ void ReleaseD3D(
 void HandleTextureParametersChanged(
 	ID3D11Device* device,
 	RenderDescription* rd,
-	uint2 displaySize,
-	u32 changedFlags,
+	ExecuteContext* ec,
 	ErrorState* errorState)
 {
 	errorState->Success = true;
@@ -998,25 +997,11 @@ void HandleTextureParametersChanged(
 			// DDS textures are always sized based on the file. 
 			if (tex->DDSPath)
 				continue;
-			if ((tex->SizeExpr->Dep.VariesByFlags & changedFlags) == 0)
+			if ((tex->SizeExpr->Dep.VariesByFlags & ec->EvCtx.ChangedThisFrameFlags) == 0)
 				continue;
-			ast::EvaluationContext evCtx;
-			evCtx.DisplaySize = displaySize;
-			evCtx.Time = 0;
+			
 			ast::Result res;
-			ErrorState es;
-			ast::Evaluate(evCtx, tex->SizeExpr, res, es);
-			if (!es.Success)
-			{
-				ErrorInfo ie;
-				ie.Location = es.Info.Location;
-				ie.Message = "AST evaluation error: " + es.Info.Message;
-				throw ie;
-			}
-			InitAssert( res.Type.Dim == 2, 
-				"Size expression expected to evaluate to 2 components but got: %d",
-				res.Type.Dim);
-			Convert(res, VariableFormat::Uint);
+			EvaluateExpression(ec->EvCtx, tex->SizeExpr, res, Uint2Type, "Texture::Size");
 			uint2 newSize = res.Value.Uint2Val;
 
 			if (tex->Size != newSize)
@@ -1115,13 +1100,10 @@ void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets,
 	std::vector<ConstantBuffer>& buffers)
 {
 	ID3D11DeviceContext* ctx = ec->D3dCtx;
-	ast::EvaluationContext evCtx;
-	evCtx.DisplaySize = ec->DisplaySize;
-	evCtx.Time = ec->Time;
 	for (const SetConstant& set : sets)
 	{
 		ast::Result res;
-		EvaluateExpression(evCtx, set.Value, res, set.Type, set.VariableName);
+		EvaluateExpression(ec->EvCtx, set.Value, res, set.Type, set.VariableName);
 		u32 typeSize = res.Type.Dim * 4;
 		Assert(set.Size == typeSize, 
 			"SetConstant %s does not match size, expected=%u got=%u",
@@ -1197,19 +1179,17 @@ void ExecuteDispatch(
 		uint3 groups = {};
 		if (dc->ThreadPerPixel)
 		{
-			Assert(ec->DisplaySize.x != 0 && ec->DisplaySize.y != 0, "Invalid display size for execution");
+			Assert(ec->EvCtx.DisplaySize.x != 0 && ec->EvCtx.DisplaySize.y != 0,
+				"Invalid display size for execution");
 			uint3 tgs = dc->Shader->ThreadGroupSize;
-			groups.x = (u32)((ec->DisplaySize.x - 1) / tgs.x) + 1;
-			groups.y = (u32)((ec->DisplaySize.y - 1) / tgs.y) + 1;
+			groups.x = (u32)((ec->EvCtx.DisplaySize.x - 1) / tgs.x) + 1;
+			groups.y = (u32)((ec->EvCtx.DisplaySize.y - 1) / tgs.y) + 1;
 			groups.z = 1;
 		}
 		else if (dc->GroupsExpr)
 		{
 			ast::Result res;
-			ast::EvaluationContext evCtx;
-			evCtx.DisplaySize = ec->DisplaySize;
-			evCtx.Time = ec->Time;
-			EvaluateExpression(evCtx, dc->GroupsExpr, res, Uint3Type, "Dispatch::Groups");
+			EvaluateExpression(ec->EvCtx, dc->GroupsExpr, res, Uint3Type, "Dispatch::Groups");
 			groups = res.Value.Uint3Val;
 		}
 
@@ -1281,8 +1261,8 @@ void ExecuteDraw(
 			if (target.System == SystemValue::BackBuffer)
 			{
 				rtViews[rtCount] = ec->MainRtv;
-				vp[rtCount].Width = (float)ec->DisplaySize.x;
-				vp[rtCount].Height = (float)ec->DisplaySize.y;
+				vp[rtCount].Width = (float)ec->EvCtx.DisplaySize.x;
+				vp[rtCount].Height = (float)ec->EvCtx.DisplaySize.y;
 			}
 			else 
 				Unimplemented();
@@ -1308,8 +1288,8 @@ void ExecuteDraw(
 			if (target.System == SystemValue::DefaultDepth)
 			{
 				dsView = ec->DefaultDepthView;
-				vp[rtCount].Width = (float)ec->DisplaySize.x;
-				vp[rtCount].Height = (float)ec->DisplaySize.y;
+				vp[rtCount].Width = (float)ec->EvCtx.DisplaySize.x;
+				vp[rtCount].Height = (float)ec->EvCtx.DisplaySize.y;
 			}
 			else
 				Unimplemented();
@@ -1357,10 +1337,7 @@ void _Execute(
 {
 	ID3D11DeviceContext* ctx = ec->D3dCtx;
 
-	ast::EvaluationContext evCtx;
-	evCtx.DisplaySize = ec->DisplaySize;
-	evCtx.Time = ec->Time;
-	EvaluateConstants(evCtx, rd->Constants);
+	EvaluateConstants(ec->EvCtx, rd->Constants);
 
 	// Clear state so we aren't polluted by previous program drawing or previous 
 	//	execution. 

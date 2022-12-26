@@ -12,22 +12,20 @@ namespace rlf
 	void ReleaseD3D(
 		RenderDescription* rd);
 
-	void HandleTextureParametersChanged(
-		ID3D11Device* device,
-		RenderDescription* rd,
-		uint2 displaySize,
-		u32 changedFlags,
-		ErrorState* errorState);
-
 	struct ExecuteContext
 	{
 		ID3D11DeviceContext* D3dCtx;
 		ID3D11RenderTargetView* MainRtv;
 		ID3D11UnorderedAccessView* MainRtUav;
 		ID3D11DepthStencilView* DefaultDepthView;
-		uint2 DisplaySize;
-		float Time;
+		ast::EvaluationContext EvCtx;
 	};
+
+	void HandleTextureParametersChanged(
+		ID3D11Device* device,
+		RenderDescription* rd,
+		ExecuteContext* ec,
+		ErrorState* errorState);
 
 	void Execute(
 		ExecuteContext* context,

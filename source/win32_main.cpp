@@ -247,7 +247,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	// Our state
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 	float Time = 0;
+	float LastTime = -1;
 	float Speed = 1;
+	bool FirstLoad = true;
 	// bool showDemoWindow = true;
 	bool showPlaybackWindow = true;
 	bool showParametersWindow = true;
@@ -271,8 +273,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		ImGui_ImplWin32_NewFrame();
 		ImGui::NewFrame();
 
-		bool Reload = (!CurrentRenderDesc && !RlfCompileSuccess) || // first load
-			ImGui::IsKeyReleased(ImGuiKey_F5);
+		bool Reload = FirstLoad || ImGui::IsKeyReleased(ImGuiKey_F5);
 		bool Quit = ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyReleased(ImGuiKey_Q);
 		if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyReleased(ImGuiKey_O))
 			ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey",
@@ -546,12 +547,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		u32 changed = 0;
 		changed |= (DisplaySize != PrevDisplaySize) ? rlf::ast::VariesBy_DisplaySize : 0;
 		changed |= TuneablesChanged ? rlf::ast::VariesBy_Tuneable : 0;
+		changed |= LastTime != Time ? rlf::ast::VariesBy_Time : 0;
 
-		if (RlfCompileSuccess && changed)
+		u32 VariesByForTexture = rlf::ast::VariesBy_Tuneable | rlf::ast::VariesBy_DisplaySize;
+
+		rlf::ExecuteContext ctx = {};
+		ctx.D3dCtx = g_pd3dDeviceContext;
+		ctx.MainRtv = RlfDisplayRtv;
+		ctx.MainRtUav = RlfDisplayUav;
+		ctx.DefaultDepthView = RlfDepthStencilView;
+		ctx.EvCtx.DisplaySize = DisplaySize;
+		ctx.EvCtx.Time = Time;
+		ctx.EvCtx.ChangedThisFrameFlags = changed;
+
+		if (RlfCompileSuccess && (changed & VariesByForTexture) != 0)
 		{
 			rlf::ErrorState ies = {};
 			rlf::HandleTextureParametersChanged(g_pd3dDevice, CurrentRenderDesc, 
-				DisplaySize, changed, &ies);
+				&ctx, &ies);
 			if (!ies.Success)
 			{
 				ReportError( std::string("Error resizing textures:\n") + ies.Info.Message + 
@@ -561,6 +574,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 		if (Reload)
 		{
+			FirstLoad = false;
 			Time = 0;
 			CleanupShader();
 			CreateShader();
@@ -583,13 +597,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		// Dispatch our shader
 		if (RlfCompileSuccess)
 		{
-			rlf::ExecuteContext ctx = {};
-			ctx.D3dCtx = g_pd3dDeviceContext;
-			ctx.MainRtv = RlfDisplayRtv;
-			ctx.MainRtUav = RlfDisplayUav;
-			ctx.DefaultDepthView = RlfDepthStencilView;
-			ctx.DisplaySize = DisplaySize;
-			ctx.Time = Time;
 			rlf::ErrorState es = {};
 			rlf::Execute(&ctx, CurrentRenderDesc, &es);
 			if (!es.Success)
@@ -615,6 +622,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		g_pSwapChain->Present(1, 0); // Present with vsync
 		//g_pSwapChain->Present(0, 0); // Present without vsync
 
+		LastTime = Time;
 		Time = max(0, Time + Speed * io.DeltaTime);
 
 		RlfValidationErrorMessage = "Validation error:\n";
