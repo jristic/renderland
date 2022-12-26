@@ -1058,6 +1058,26 @@ do {											\
 	}											\
 } while (0);									\
 
+void AstError(const ast::Node* n, const char* str, ...)
+{
+	char buf[512];
+	va_list ptr;
+	va_start(ptr,str);
+	vsprintf_s(buf,512,str,ptr);
+	va_end(ptr);
+
+	ErrorInfo ae;
+	ae.Location = n->Location;
+	ae.Message = buf;
+	throw ae;
+}
+
+#define AstAssert(node, expression, message, ...) 	\
+do {												\
+	if (!(expression)) {							\
+		AstError(node, message, ##__VA_ARGS__);		\
+	}												\
+} while (0);										\
 
 void EvaluateExpression(ast::EvaluationContext& ec, ast::Node* ast, ast::Result& res)
 {
@@ -1076,11 +1096,11 @@ void EvaluateExpression(ast::EvaluationContext& ec, ast::Node* ast, ast::Result&
 	VariableType expect, const char* name)
 {
 	EvaluateExpression(ec, ast, res);
-	ExecuteAssert( (expect.Fmt != VariableFormat::Float4x4 && 
+	AstAssert(ast,  (expect.Fmt != VariableFormat::Float4x4 && 
 		res.Type.Fmt != VariableFormat::Float4x4) || expect.Fmt == res.Type.Fmt,
 		"%s expected type (%s) is not compatible with actual type (%s)",
 		name, TypeFmtToString(expect.Fmt), TypeFmtToString(res.Type.Fmt));
-	ExecuteAssert(expect.Dim == res.Type.Dim,
+	AstAssert(ast, expect.Dim == res.Type.Dim,
 		"%s size (%u) doe not match actual size (%u)",
 		name, expect.Dim, res.Type.Dim);
 	Convert(res, expect.Fmt);
@@ -1406,6 +1426,7 @@ void Execute(
 }
 
 #undef ExeucteAssert
+#undef AstAssert
 
 
 } // namespace rlf
