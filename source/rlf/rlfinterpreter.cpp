@@ -1308,8 +1308,8 @@ void ExecuteDraw(
 			if (target.System == SystemValue::DefaultDepth)
 			{
 				dsView = ec->DefaultDepthView;
-				vp[rtCount].Width = (float)ec->EvCtx.DisplaySize.x;
-				vp[rtCount].Height = (float)ec->EvCtx.DisplaySize.y;
+				vp[0].Width = (float)ec->EvCtx.DisplaySize.x;
+				vp[0].Height = (float)ec->EvCtx.DisplaySize.y;
 			}
 			else
 				Unimplemented();
