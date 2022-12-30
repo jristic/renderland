@@ -1058,7 +1058,7 @@ do {											\
 	}											\
 } while (0);									\
 
-void AstError(const ast::Node* n, const char* str, ...)
+void ExecuteAstError(const ast::Node* n, const char* str, ...)
 {
 	char buf[512];
 	va_list ptr;
@@ -1072,10 +1072,10 @@ void AstError(const ast::Node* n, const char* str, ...)
 	throw ae;
 }
 
-#define AstAssert(node, expression, message, ...) 	\
+#define ExecuteAstAssert(node, expression, message, ...) 	\
 do {												\
 	if (!(expression)) {							\
-		AstError(node, message, ##__VA_ARGS__);		\
+		ExecuteAstError(node, message, ##__VA_ARGS__);		\
 	}												\
 } while (0);										\
 
@@ -1096,11 +1096,11 @@ void EvaluateExpression(ast::EvaluationContext& ec, ast::Node* ast, ast::Result&
 	VariableType expect, const char* name)
 {
 	EvaluateExpression(ec, ast, res);
-	AstAssert(ast,  (expect.Fmt != VariableFormat::Float4x4 && 
+	ExecuteAstAssert(ast,  (expect.Fmt != VariableFormat::Float4x4 && 
 		res.Type.Fmt != VariableFormat::Float4x4) || expect.Fmt == res.Type.Fmt,
 		"%s expected type (%s) is not compatible with actual type (%s)",
 		name, TypeFmtToString(expect.Fmt), TypeFmtToString(res.Type.Fmt));
-	AstAssert(ast, expect.Dim == res.Type.Dim,
+	ExecuteAstAssert(ast, expect.Dim == res.Type.Dim,
 		"%s size (%u) doe not match actual size (%u)",
 		name, expect.Dim, res.Type.Dim);
 	Convert(res, expect.Fmt);
@@ -1206,10 +1206,10 @@ void ExecuteDispatch(
 			groups.y = (u32)((ec->EvCtx.DisplaySize.y - 1) / tgs.y) + 1;
 			groups.z = 1;
 		}
-		else if (dc->GroupsExpr)
+		else if (dc->Groups)
 		{
 			ast::Result res;
-			EvaluateExpression(ec->EvCtx, dc->GroupsExpr, res, Uint3Type, "Dispatch::Groups");
+			EvaluateExpression(ec->EvCtx, dc->Groups, res, Uint3Type, "Dispatch::Groups");
 			groups = res.Value.Uint3Val;
 		}
 
@@ -1426,7 +1426,7 @@ void Execute(
 }
 
 #undef ExeucteAssert
-#undef AstAssert
+#undef ExecuteAstAssert
 
 
 } // namespace rlf

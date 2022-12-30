@@ -2367,7 +2367,7 @@ Dispatch* ConsumeDispatchDef(
 		case Keyword::Groups:
 		{
 			ConsumeToken(TokenType::Equals, t);
-			dc->GroupsExpr = ConsumeAst(t, ps);
+			dc->Groups = ConsumeAst(t, ps);
 			break;
 		}
 		case Keyword::IndirectArgs:

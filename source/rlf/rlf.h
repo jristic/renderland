@@ -275,7 +275,7 @@ namespace rlf
 	{
 		ComputeShader* Shader;
 		bool ThreadPerPixel;
-		ast::Node* GroupsExpr;
+		ast::Node* Groups;
 		Buffer* IndirectArgs;
 		u32 IndirectArgsOffset;
 		std::vector<Bind> Binds;
