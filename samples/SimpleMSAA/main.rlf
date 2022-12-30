@@ -1,6 +1,6 @@
 
 ObjImport {
-	ObjPath = "monkey.obj";
+	ObjPath = "../../common/monkey.obj";
 } monkeyObj
 
 Buffer {
