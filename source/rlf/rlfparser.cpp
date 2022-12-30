@@ -273,6 +273,7 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(Sampler) \
 	RLF_KEYWORD_ENTRY(RasterizerState) \
 	RLF_KEYWORD_ENTRY(DepthStencilState) \
+	RLF_KEYWORD_ENTRY(Viewports) \
 	RLF_KEYWORD_ENTRY(ObjImport) \
 	RLF_KEYWORD_ENTRY(Dispatch) \
 	RLF_KEYWORD_ENTRY(Draw) \
@@ -422,6 +423,9 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(Resolve) \
 	RLF_KEYWORD_ENTRY(Src) \
 	RLF_KEYWORD_ENTRY(Dst) \
+	RLF_KEYWORD_ENTRY(Viewport) \
+	RLF_KEYWORD_ENTRY(TopLeft) \
+	RLF_KEYWORD_ENTRY(DepthRange) \
 
 #define RLF_KEYWORD_ENTRY(name) name,
 enum class Keyword
@@ -481,6 +485,7 @@ struct ParseState
 	std::unordered_map<u32, TextureFormat> fmtMap;
 	std::unordered_map<const char*, RasterizerState*> rsMap;
 	std::unordered_map<const char*, DepthStencilState*> dssMap;
+	std::unordered_map<const char*, Viewport*> vpMap;
 	std::unordered_map<const char*, ObjImport*> objMap;
 	struct Var {
 		bool tuneable;
@@ -1804,6 +1809,44 @@ DepthStencilState* ConsumeDepthStencilStateRefOrDef(
 	}
 }
 
+Viewport* ConsumeViewportDef(
+	TokenIter& t,
+	ParseState& ps)
+{
+	RenderDescription* rd = ps.rd;
+
+	Viewport* vp = new Viewport();
+	rd->Viewports.push_back(vp);
+
+	static StructEntry def[] = {
+		StructEntryDef(Viewport, Ast, TopLeft),
+		StructEntryDef(Viewport, Ast, Size),
+		StructEntryDef(Viewport, Ast, DepthRange),
+	};
+	constexpr TokenType Delim = TokenType::Semicolon;
+	constexpr bool TrailingRequired = true;
+	ConsumeStruct<Delim, TrailingRequired>(
+		t, vp, def, "Viewport");
+	return vp;
+}
+
+Viewport* ConsumeViewportRefOrDef(
+	TokenIter& t,
+	ParseState& ps)
+{
+	const char* id = ConsumeIdentifier(t);
+	Keyword key = LookupKeyword(id);
+	if (key == Keyword::Viewport)
+	{
+		return ConsumeViewportDef(t,ps);
+	}
+	else
+	{
+		ParserAssert(ps.vpMap.count(id) != 0, "couldn't find viewport %s", id);
+		return ps.vpMap[id];
+	}
+}
+
 ComputeShader* ConsumeComputeShaderDef(
 	TokenIter& t,
 	ParseState& ps)
@@ -2563,6 +2606,25 @@ Draw* ConsumeDrawDef(
 			}
 			break;
 		}
+		case Keyword::Viewports:
+		{
+			draw->Viewports.clear();
+			ConsumeToken(TokenType::Equals, t);
+			ConsumeToken(TokenType::LBrace, t);
+			while (true)
+			{
+				if (TryConsumeToken(TokenType::RBrace, t))
+					break;
+				Viewport* vp = ConsumeViewportRefOrDef(t, ps);
+				draw->Viewports.push_back(vp);
+				if (!TryConsumeToken(TokenType::Comma, t))
+				{
+					ConsumeToken(TokenType::RBrace, t);
+					break;
+				}
+			}
+			break;
+		}
 		case Keyword::DepthStencil:
 		{
 			ConsumeToken(TokenType::Equals, t);
@@ -3006,6 +3068,15 @@ void ParseMain()
 			ps.dssMap[nameId] = rs;
 			break;
 		}
+		case Keyword::Viewport:
+		{
+			Viewport* vp = ConsumeViewportDef(t,ps);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.vpMap.count(nameId) == 0, "Viewport %s already defined",
+				nameId);
+			ps.vpMap[nameId] = vp;
+			break;
+		}
 		case Keyword::ObjImport:
 		{
 			ObjImport* obj = ConsumeObjImportDef(t,ps);
@@ -3205,6 +3276,8 @@ void ReleaseData(RenderDescription* data)
 		delete rs;
 	for (DepthStencilState* dss : data->DepthStencilStates)
 		delete dss;
+	for (Viewport* vp : data->Viewports)
+		delete vp;
 	for (ObjImport* obj : data->Objs)
 		delete obj;
 	for (Constant* c : data->Constants)

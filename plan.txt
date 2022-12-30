@@ -18,7 +18,6 @@
 	* Some way to choose which shader to run based on some condition. 
 
 **** Expand draw pipeline support.
-	* Viewport.
 	* Blend state.
 	* Indirect draws.
 	* Texture arrays, cubes, 3d textures.
@@ -29,6 +28,7 @@
 *** Cleanup:
 	* Parser errors which happen post-consume point to the token after the one actually in question
 	* Handle various errors in specifying views/resources (mainly providing the wrong kind).
+	* Check bounds of viewport expressions are valid, throw error or warning?
 	* Refactor system values.
 	* Texture flag cleanup -> SRV/UAV/RTV/DSV can be determined from usage. or keep it explicit?
 	* Make obj parsing handle not having normals or UVs. 

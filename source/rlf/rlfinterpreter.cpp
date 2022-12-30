@@ -1325,6 +1325,26 @@ void ExecuteDraw(
 		vp[0].MinDepth = 0.0f;
 		vp[0].MaxDepth = 1.0f;
 	}
+	for (int i = 0 ; i < draw->Viewports.size() ; ++i)
+	{
+		Viewport* v = draw->Viewports[i];
+		ast::Result res;
+		if (v->TopLeft) {
+			EvaluateExpression(ec->EvCtx, v->TopLeft, res, Float2Type, "Viewport::TopLeft");
+			vp[i].TopLeftX = res.Value.Float2Val.x;
+			vp[i].TopLeftY = res.Value.Float2Val.y;
+		}
+		if (v->Size) {
+			EvaluateExpression(ec->EvCtx, v->Size, res, Float2Type, "Viewport::Size");
+			vp[i].Width = res.Value.Float2Val.x;
+			vp[i].Height = res.Value.Float2Val.y;
+		}
+		if (v->DepthRange) {
+			EvaluateExpression(ec->EvCtx, v->DepthRange, res, Float2Type, "Viewport::DepthRange");
+			vp[i].MinDepth = res.Value.Float2Val.x;
+			vp[i].MaxDepth = res.Value.Float2Val.y;
+		}
+	}
 	ctx->OMSetRenderTargets(8, rtViews, dsView);
 	ctx->RSSetViewports(8, vp);
 	ctx->IASetPrimitiveTopology(RlfToD3d(draw->Topology));

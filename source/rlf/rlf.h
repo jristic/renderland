@@ -242,6 +242,12 @@ namespace rlf
 			ID3D11DepthStencilView* DSVObject;
 		};
 	};
+	struct Viewport
+	{
+		ast::Node* TopLeft;
+		ast::Node* Size;
+		ast::Node* DepthRange;
+	};
 	struct Bind
 	{
 		const char* BindTarget;
@@ -304,6 +310,7 @@ namespace rlf
 		u8 StencilRef;
 		std::vector<TextureTarget> RenderTargets;
 		std::vector<TextureTarget> DepthStencil;
+		std::vector<Viewport*> Viewports;
 		std::vector<Bind> VSBinds;
 		std::vector<Bind> PSBinds;
 		std::vector<SetConstant> VSConstants;
@@ -377,6 +384,7 @@ namespace rlf
 		std::vector<View*> Views;
 		std::vector<RasterizerState*> RasterizerStates;
 		std::vector<DepthStencilState*> DepthStencilStates;
+		std::vector<Viewport*> Viewports;
 		std::vector<ObjImport*> Objs;
 		std::vector<Constant*> Constants;
 		std::vector<Tuneable*> Tuneables;
