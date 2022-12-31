@@ -33,11 +33,11 @@ Texture {
 	Flags = { DSV };
 } DS
 
-		Viewport {
-			TopLeft = displaysize() * (1-Scaling)/2;
-			Size = displaysize() * Scaling;
-			DepthRange = {0,0.01};
-		} vp
+Viewport {
+	TopLeft = displaysize() * (1-Scaling)/2;
+	Size = displaysize() * Scaling;
+	DepthRange = {0,0.01};
+} vp
 
 Draw {
 	Topology = TriList;

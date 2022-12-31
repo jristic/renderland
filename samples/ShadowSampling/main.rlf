@@ -21,7 +21,7 @@ constant float4x4 LightProjectionView = LightProjection * LightView;
 constant float4x4 LightInvProj = inverse(LightProjection);
 
 ObjImport {
-	ObjPath = "../../common/monkey.obj";
+	ObjPath = "../common/monkey.obj";
 } monkeyObj
 
 Buffer {

@@ -85,7 +85,7 @@ void TokenizerError(const char* loc, const char* str, ...)
 #define TokenizerAssert(expression, loc, message, ...) 	\
 do {													\
 	if (!(expression)) {								\
-		TokenizerError(message, loc, ##__VA_ARGS__);	\
+		TokenizerError(loc, message, ##__VA_ARGS__);	\
 	}													\
 } while (0);											\
 

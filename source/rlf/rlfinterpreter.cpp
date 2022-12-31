@@ -828,11 +828,13 @@ void InitMain(
 			DirectX::LoadFromDDSMemory(ddsBuffer, ddsSize, DirectX::DDS_FLAGS_NONE, 
 				&meta, scratch);
 			ID3D11Resource* res;
+			free(ddsBuffer);
 			HRESULT hr = DirectX::CreateTextureEx(device, scratch.GetImages(),
 				scratch.GetImageCount(), meta, D3D11_USAGE_IMMUTABLE, 
 				D3D11_BIND_SHADER_RESOURCE, 0, 0, false, &res);
 			Assert(hr == S_OK, "Failed to create texture from DDS, hr=%x", hr);
 			hr = res->QueryInterface(IID_ID3D11Texture2D, (void**)&tex->TextureObject);
+			SafeRelease(res);
 			Assert(hr == S_OK, "Failed to query texture object, hr=%x", hr);
 		}
 		else
