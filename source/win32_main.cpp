@@ -223,8 +223,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 	CreateRenderTarget();
 
-	CreateShader();
-
 	StartupComplete = true;
 
 	// Setup Dear ImGui context
@@ -291,7 +289,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 				if (ImGui::MenuItem("Open", "Ctrl+O"))
 					ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey",
 						"Choose File", ".rlf", ".");
-	            ImGui::Separator();
+				ImGui::Separator();
 				if (ImGui::MenuItem("Quit", "Ctrl+Q"))
 					Quit = true;
 				ImGui::EndMenu();
@@ -301,7 +299,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 				ImGui::MenuItem("Event Viewer", "", &showEventsWindow);
 				ImGui::MenuItem("Playback", "", &showPlaybackWindow);
 				ImGui::MenuItem("Parameters", "", &showParametersWindow);
-	            ImGui::Separator();
+				ImGui::Separator();
 				if (ImGui::MenuItem("Reset layout"))
 					ResetLayout = true;
 				ImGui::EndMenu();
@@ -612,12 +610,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
 		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
-        // Update and Render additional Platform Windows
-        if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-        {
-            ImGui::UpdatePlatformWindows();
-            ImGui::RenderPlatformWindowsDefault();
-        }
+		// Update and Render additional Platform Windows
+		if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+		{
+			ImGui::UpdatePlatformWindows();
+			ImGui::RenderPlatformWindowsDefault();
+		}
 
 		g_pSwapChain->Present(1, 0); // Present with vsync
 		//g_pSwapChain->Present(0, 0); // Present without vsync
@@ -803,16 +801,16 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_DESTROY:
 		::PostQuitMessage(0);
 		return 0;
-    case WM_DPICHANGED:
-        if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DpiEnableScaleViewports)
-        {
-            const RECT* suggested_rect = (RECT*)lParam;
-            ::SetWindowPos(hWnd, NULL, suggested_rect->left, suggested_rect->top, 
-            	suggested_rect->right - suggested_rect->left, 
-            	suggested_rect->bottom - suggested_rect->top, 
-            	SWP_NOZORDER | SWP_NOACTIVATE);
-        }
-        break;
+	case WM_DPICHANGED:
+		if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DpiEnableScaleViewports)
+		{
+			const RECT* suggested_rect = (RECT*)lParam;
+			::SetWindowPos(hWnd, NULL, suggested_rect->left, suggested_rect->top, 
+				suggested_rect->right - suggested_rect->left, 
+				suggested_rect->bottom - suggested_rect->top, 
+				SWP_NOZORDER | SWP_NOACTIVATE);
+		}
+		break;
 	}
 	return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
