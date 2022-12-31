@@ -929,6 +929,8 @@ void InitD3D(
 void ReleaseD3D(
 	RenderDescription* rd)
 {
+	SafeRelease(DefaultRasterizerState);
+
 	for (ComputeShader* cs : rd->CShaders)
 	{
 		SafeRelease(cs->ShaderObject);

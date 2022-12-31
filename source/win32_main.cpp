@@ -12,6 +12,10 @@
 #include <unordered_set>
 #include <set>
 
+#if defined(_DEBUG)
+#include <dxgidebug.h>
+#endif
+
 // External headers
 #include "imgui/imgui.h"
 #define IMGUI_DEFINE_MATH_OPERATORS
@@ -202,9 +206,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	Assert(hr == S_OK, "failed to create device %x", hr);
 
 	BOOL success = g_pd3dDevice->QueryInterface(__uuidof(ID3D11Debug), 
-		(void**)&g_d3dInfoQueue);
+		(void**)&g_d3dDebug);
 	Assert(SUCCEEDED(success), "failed to get debug device");
-	success = g_d3dInfoQueue->QueryInterface(__uuidof(ID3D11InfoQueue),
+	success = g_d3dDebug->QueryInterface(__uuidof(ID3D11InfoQueue),
 		(void**)&g_d3dInfoQueue);
 	Assert(SUCCEEDED(success), "failed to get info queue");
 	// D3D11_MESSAGE_ID hide[] = {
@@ -639,11 +643,36 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	CleanupShader();
 	CleanupRenderTarget();
 
+	SafeRelease(RlfDisplayTex);
+	SafeRelease(RlfDisplayRtv);
+	SafeRelease(RlfDisplaySrv);
+	SafeRelease(RlfDisplayUav);
+	SafeRelease(RlfDepthStencilTex);
+	SafeRelease(RlfDepthStencilView);
+
 	SafeRelease(g_pSwapChain);
 	SafeRelease(g_pd3dDeviceContext);
 	SafeRelease(g_d3dInfoQueue);
 	SafeRelease(g_d3dDebug);
 	SafeRelease(g_pd3dDevice);
+
+#if defined(_DEBUG)
+	// Check for leaked D3D/DXGI objects
+	typedef HRESULT (WINAPI * LPDXGIGETDEBUGINTERFACE)(REFIID, void ** );
+	HMODULE dxgiDllHandle = LoadLibraryEx( "dxgidebug.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32 );
+	if ( dxgiDllHandle )
+	{
+		LPDXGIGETDEBUGINTERFACE dxgiGetDebugInterface = reinterpret_cast<LPDXGIGETDEBUGINTERFACE>(
+			reinterpret_cast<void*>( GetProcAddress(dxgiDllHandle, "DXGIGetDebugInterface") ));
+
+		IDXGIDebug* dxgiDebug;
+		if ( SUCCEEDED( dxgiGetDebugInterface( IID_PPV_ARGS( &dxgiDebug ) ) ) )
+		{
+			dxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL);
+			dxgiDebug->Release();
+		}
+	}
+ #endif
 
 	::DestroyWindow(hwnd);
 	::UnregisterClass(wc.lpszClassName, wc.hInstance);
