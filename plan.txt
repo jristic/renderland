@@ -4,13 +4,9 @@
 
 * Use linear memory allocator for RenderDescription allocations. 
 * Defines that are usable within the RLF and shader. 
-* Allow #include of other RLF files
 * Better way to size structured buffers.
 	* right now you have to figure out manually how big a struct would be and enter that as the ElementSize field.
 	* Perhaps I can parse the types in the shader and compute their sizes, then have something in RLF like "sizeof(shader, type)".
-* Templating of blocks of RLF data
-	* For instance if you wanted to draw a model multiple times, you have all the boilerplate for a draw, but you allow the position / obj-file / textures to be substituted. 
-	* Kind of like a text prefab.
 * Integrate RenderDoc capture?
 * Investigate automatically reloading any time a file is updated.
 * Dynamic flow control? 
@@ -18,7 +14,6 @@
 	* Some way to choose which shader to run based on some condition. 
 
 **** Expand draw pipeline support.
-	* Blend state.
 	* Indirect draws.
 	* Texture arrays, cubes, 3d textures.
 	* Append and consume buffers.
@@ -29,14 +24,30 @@
 	* Parser errors which happen post-consume point to the token after the one actually in question
 	* Handle various errors in specifying views/resources (mainly providing the wrong kind).
 	* Check bounds of viewport expressions are valid, throw error or warning?
-	* Refactor system values.
 	* Texture flag cleanup -> SRV/UAV/RTV/DSV can be determined from usage. or keep it explicit?
 	* Make obj parsing handle not having normals or UVs. 
+
+*** Input/output refactor
+	* Remove system values and instead let RLF declare its inputs and outputs
+	* Then we can have an rlf invoke a sub-rlf to allow logic reuse. 
+		* Probably implement as a separate RenderDescription for the sub-rlf?
+		* Will need to remove use of statics in parse and interpreter. 
+
+*** Obj import expansion
+	* How do we get to a place where drawing test scenes (ie. sponza) is doable?
+	* Some way to get the textures of a material on an object?
+	* Support multi-object models?
+	* Or generate a sub-rlf that does all the busywork of making draws out of potentially many objects and materials?
 
 *** UI:
 	* Event-viewer style list of the passes in a frame. 
 	* Debug viz tools for seeing the contents of textures/buffers/rendertargets/depthstencils at any given point in the frame. 
 	* Sample browser for faster way to open various samples for testing
+	* Display pane needs expansion
+		* Ability to show multiple outputs, when the rlf input/output system has been refactored.
+		* Prevent it from being undocked from the center?
+		* Options for how to display the texture, like renderdoc (alpha, ranges, etc). 
+			* Changing this should fix the issue where imgui blends Image() with the window background if alpha is not 1. 
 
 Samples:
 	* Shadow-sampling methods comparison. 

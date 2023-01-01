@@ -219,6 +219,46 @@ D3D11_DEPTH_STENCILOP_DESC RlfToD3d(StencilOpDesc sod)
 	return desc;
 }
 
+D3D11_BLEND RlfToD3d(Blend b)
+{
+	Assert(b != Blend::Invalid, "Invalid");
+	static D3D11_BLEND bs[] = {
+		(D3D11_BLEND)0, //invalid
+		D3D11_BLEND_ZERO,
+		D3D11_BLEND_ONE,
+		D3D11_BLEND_SRC_COLOR,
+		D3D11_BLEND_INV_SRC_COLOR,
+		D3D11_BLEND_SRC_ALPHA,
+		D3D11_BLEND_INV_SRC_ALPHA,
+		D3D11_BLEND_DEST_ALPHA,
+		D3D11_BLEND_INV_DEST_ALPHA,
+		D3D11_BLEND_DEST_COLOR,
+		D3D11_BLEND_INV_DEST_COLOR,
+		D3D11_BLEND_SRC_ALPHA_SAT,
+		D3D11_BLEND_BLEND_FACTOR,
+		D3D11_BLEND_INV_BLEND_FACTOR,
+		D3D11_BLEND_SRC1_COLOR,
+		D3D11_BLEND_INV_SRC1_COLOR,
+		D3D11_BLEND_SRC1_ALPHA,
+		D3D11_BLEND_INV_SRC1_ALPHA,
+	};
+	return bs[(u32)b];
+}
+
+D3D11_BLEND_OP RlfToD3d(BlendOp op)
+{
+	Assert(op != BlendOp::Invalid, "Invalid");
+	static D3D11_BLEND_OP ops[] = {
+		(D3D11_BLEND_OP)0, //invalid
+		D3D11_BLEND_OP_ADD,
+		D3D11_BLEND_OP_SUBTRACT,
+		D3D11_BLEND_OP_REV_SUBTRACT,
+		D3D11_BLEND_OP_MIN,
+		D3D11_BLEND_OP_MAX,
+	};
+	return ops[(u32)op];
+}
+
 ID3DBlob* CommonCompileShader(const char* path, const char* profile, 
 	const char * entry, ErrorState* errorState)
 {
@@ -781,6 +821,29 @@ void InitMain(
 			PrepareConstants(reflector, draw->PSCBs, draw->PSConstants,
 				draw->PShader->ShaderPath);
 		}
+
+		size_t blendCount = draw->BlendStates.size();
+		if (blendCount > 0)
+		{
+			InitAssert(blendCount <= 8, "Too blend states on draw, max is 8.");
+			D3D11_BLEND_DESC desc = {};
+			desc.AlphaToCoverageEnable = false;
+			desc.IndependentBlendEnable = blendCount > 1;
+			for (int i = 0 ; i < blendCount ; ++i)
+			{
+				BlendState* blend = draw->BlendStates[i];
+				desc.RenderTarget[i].BlendEnable = blend->Enable;
+				desc.RenderTarget[i].SrcBlend = RlfToD3d(blend->Src);
+				desc.RenderTarget[i].DestBlend = RlfToD3d(blend->Dest);
+				desc.RenderTarget[i].BlendOp = RlfToD3d(blend->Op);
+				desc.RenderTarget[i].SrcBlendAlpha = RlfToD3d(blend->SrcAlpha);
+				desc.RenderTarget[i].DestBlendAlpha = RlfToD3d(blend->DestAlpha);
+				desc.RenderTarget[i].BlendOpAlpha = RlfToD3d(blend->OpAlpha);
+				desc.RenderTarget[i].RenderTargetWriteMask = blend->RenderTargetWriteMask;
+			}
+			HRESULT hr = device->CreateBlendState(&desc, &draw->BlendObject);
+			CheckHresult(hr, "BlendState");
+		}
 	}
 
 	for (Buffer* buf : rd->Buffers)
@@ -984,6 +1047,11 @@ void ReleaseD3D(
 			SafeRelease(cb.BufferObject);
 			free(cb.BackingMemory);
 		}
+	}
+
+	for (Draw* d : rd->Draws)
+	{
+		SafeRelease(d->BlendObject);
 	}
 }
 
@@ -1355,6 +1423,7 @@ void ExecuteDraw(
 	ctx->RSSetState(draw->RState ? draw->RState->RSObject : DefaultRasterizerState);
 	ctx->OMSetDepthStencilState(draw->DSState ? draw->DSState->DSSObject : nullptr,
 		draw->StencilRef);
+	ctx->OMSetBlendState(draw->BlendObject, nullptr, 0xffffffff);
 	u32 offset = 0;
 	Buffer* vb = draw->VertexBuffer;
 	Buffer* ib = draw->IndexBuffer;

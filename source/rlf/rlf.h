@@ -122,6 +122,36 @@ namespace rlf
 		Incr,
 		Decr,
 	};
+	enum class Blend
+	{
+		Invalid,
+		Zero,
+		One,
+		SrcColor,
+		InvSrcColor,
+		SrcAlpha,
+		InvSrcAlpha,
+		DestAlpha,
+		InvDestAlpha,
+		DestColor,
+		InvDestColor,
+		SrcAlphaSat,
+		BlendFactor,
+		InvBlendFactor,
+		Src1Color,
+		InvSrc1Color,
+		Src1Alpha,
+		InvSrc1Alpha,
+	};
+	enum class BlendOp
+	{
+		Invalid,
+		Add,
+		Subtract,
+		RevSubtract,
+		Min,
+		Max,
+	};
 	struct RasterizerState 
 	{
 		bool Fill;
@@ -154,6 +184,17 @@ namespace rlf
 		StencilOpDesc FrontFace;
 		StencilOpDesc BackFace;
 		ID3D11DepthStencilState* DSSObject;
+	};
+	struct BlendState
+	{
+		bool Enable;
+		Blend Src;
+		Blend Dest;
+		BlendOp Op;
+		Blend SrcAlpha;
+		Blend DestAlpha;
+		BlendOp OpAlpha;
+		u8 RenderTargetWriteMask;
 	};
 	struct ComputeShader
 	{
@@ -311,12 +352,14 @@ namespace rlf
 		std::vector<TextureTarget> RenderTargets;
 		std::vector<TextureTarget> DepthStencil;
 		std::vector<Viewport*> Viewports;
+		std::vector<BlendState*> BlendStates;
 		std::vector<Bind> VSBinds;
 		std::vector<Bind> PSBinds;
 		std::vector<SetConstant> VSConstants;
 		std::vector<SetConstant> PSConstants;
 		std::vector<ConstantBuffer> VSCBs;
 		std::vector<ConstantBuffer> PSCBs;
+		ID3D11BlendState* BlendObject;
 	};
 	struct ClearColor
 	{
@@ -385,6 +428,7 @@ namespace rlf
 		std::vector<RasterizerState*> RasterizerStates;
 		std::vector<DepthStencilState*> DepthStencilStates;
 		std::vector<Viewport*> Viewports;
+		std::vector<BlendState*> BlendStates;
 		std::vector<ObjImport*> Objs;
 		std::vector<Constant*> Constants;
 		std::vector<Tuneable*> Tuneables;

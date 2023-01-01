@@ -273,7 +273,8 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(Sampler) \
 	RLF_KEYWORD_ENTRY(RasterizerState) \
 	RLF_KEYWORD_ENTRY(DepthStencilState) \
-	RLF_KEYWORD_ENTRY(Viewports) \
+	RLF_KEYWORD_ENTRY(Viewport) \
+	RLF_KEYWORD_ENTRY(BlendState) \
 	RLF_KEYWORD_ENTRY(ObjImport) \
 	RLF_KEYWORD_ENTRY(Dispatch) \
 	RLF_KEYWORD_ENTRY(Draw) \
@@ -323,6 +324,8 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(Topology) \
 	RLF_KEYWORD_ENTRY(RState) \
 	RLF_KEYWORD_ENTRY(DSState) \
+	RLF_KEYWORD_ENTRY(Viewports) \
+	RLF_KEYWORD_ENTRY(BlendStates) \
 	RLF_KEYWORD_ENTRY(VShader) \
 	RLF_KEYWORD_ENTRY(PShader) \
 	RLF_KEYWORD_ENTRY(VertexBuffer) \
@@ -423,9 +426,33 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(Resolve) \
 	RLF_KEYWORD_ENTRY(Src) \
 	RLF_KEYWORD_ENTRY(Dst) \
-	RLF_KEYWORD_ENTRY(Viewport) \
 	RLF_KEYWORD_ENTRY(TopLeft) \
 	RLF_KEYWORD_ENTRY(DepthRange) \
+	RLF_KEYWORD_ENTRY(Enable) \
+	RLF_KEYWORD_ENTRY(Dest) \
+	RLF_KEYWORD_ENTRY(Op) \
+	RLF_KEYWORD_ENTRY(SrcAlpha) \
+	RLF_KEYWORD_ENTRY(DestAlpha) \
+	RLF_KEYWORD_ENTRY(OpAlpha) \
+	RLF_KEYWORD_ENTRY(RenderTargetWriteMask) \
+	RLF_KEYWORD_ENTRY(One) \
+	RLF_KEYWORD_ENTRY(SrcColor) \
+	RLF_KEYWORD_ENTRY(InvSrcColor) \
+	RLF_KEYWORD_ENTRY(InvSrcAlpha) \
+	RLF_KEYWORD_ENTRY(InvDestAlpha) \
+	RLF_KEYWORD_ENTRY(DestColor) \
+	RLF_KEYWORD_ENTRY(InvDestColor) \
+	RLF_KEYWORD_ENTRY(SrcAlphaSat) \
+	RLF_KEYWORD_ENTRY(BlendFactor) \
+	RLF_KEYWORD_ENTRY(InvBlendFactor) \
+	RLF_KEYWORD_ENTRY(Src1Color) \
+	RLF_KEYWORD_ENTRY(InvSrc1Color) \
+	RLF_KEYWORD_ENTRY(Src1Alpha) \
+	RLF_KEYWORD_ENTRY(InvSrc1Alpha) \
+	RLF_KEYWORD_ENTRY(Add) \
+	RLF_KEYWORD_ENTRY(Subtract) \
+	RLF_KEYWORD_ENTRY(RevSubtract) \
+	RLF_KEYWORD_ENTRY(Max) \
 
 #define RLF_KEYWORD_ENTRY(name) name,
 enum class Keyword
@@ -486,6 +513,7 @@ struct ParseState
 	std::unordered_map<const char*, RasterizerState*> rsMap;
 	std::unordered_map<const char*, DepthStencilState*> dssMap;
 	std::unordered_map<const char*, Viewport*> vpMap;
+	std::unordered_map<const char*, BlendState*> bsMap;
 	std::unordered_map<const char*, ObjImport*> objMap;
 	struct Var {
 		bool tuneable;
@@ -791,6 +819,43 @@ StencilOp ConsumeStencilOp(TokenIter& t)
 	};
 	return ConsumeEnum(t, def, "StencilOp");
 }
+
+Blend ConsumeBlend(TokenIter& t)
+{
+	static EnumEntry<Blend> def[] = {
+		Keyword::Zero,				Blend::Zero,
+		Keyword::One,				Blend::One,
+		Keyword::SrcColor,			Blend::SrcColor,
+		Keyword::InvSrcColor,		Blend::InvSrcColor,
+		Keyword::SrcAlpha,			Blend::SrcAlpha,
+		Keyword::InvSrcAlpha,		Blend::InvSrcAlpha,
+		Keyword::DestAlpha,			Blend::DestAlpha,
+		Keyword::InvDestAlpha,		Blend::InvDestAlpha,
+		Keyword::DestColor,			Blend::DestColor,
+		Keyword::InvDestColor,		Blend::InvDestColor,
+		Keyword::SrcAlphaSat,		Blend::SrcAlphaSat,
+		Keyword::BlendFactor,		Blend::BlendFactor,
+		Keyword::InvBlendFactor,	Blend::InvBlendFactor,
+		Keyword::Src1Color,			Blend::Src1Color,
+		Keyword::InvSrc1Color,		Blend::InvSrc1Color,
+		Keyword::Src1Alpha,			Blend::Src1Alpha,
+		Keyword::InvSrc1Alpha,		Blend::InvSrc1Alpha,
+	};
+	return ConsumeEnum(t, def, "Blend");
+}
+
+BlendOp ConsumeBlendOp(TokenIter& t)
+{
+	static EnumEntry<BlendOp> def[] = {
+		Keyword::Add,			BlendOp::Add,
+		Keyword::Subtract,		BlendOp::Subtract,
+		Keyword::RevSubtract,	BlendOp::RevSubtract,
+		Keyword::Min,			BlendOp::Min,
+		Keyword::Max,			BlendOp::Max,
+	};
+	return ConsumeEnum(t, def, "BlendOp");
+}
+
 
 // -----------------------------------------------------------------------------
 // ------------------------------ FLAGS ----------------------------------------
@@ -1535,6 +1600,8 @@ enum class ConsumeType
 	Texture,
 	TextureFlag,
 	TextureFormat,
+	Blend,
+	BlendOp
 };
 struct StructEntry
 {
@@ -1641,6 +1708,12 @@ void ConsumeField(TokenIter& t, T* s, ConsumeType type, size_t offset)
 		*(TextureFormat*)p = GPS->fmtMap[hash];
 		break;
 	}
+	case ConsumeType::Blend:
+		*(Blend*)p = ConsumeBlend(t);
+		break;
+	case ConsumeType::BlendOp:
+		*(BlendOp*)p = ConsumeBlendOp(t);
+		break;
 	default:
 		Unimplemented();
 	}
@@ -1844,6 +1917,58 @@ Viewport* ConsumeViewportRefOrDef(
 	{
 		ParserAssert(ps.vpMap.count(id) != 0, "couldn't find viewport %s", id);
 		return ps.vpMap[id];
+	}
+}
+
+BlendState* ConsumeBlendStateDef(
+	TokenIter& t,
+	ParseState& ps)
+{
+	RenderDescription* rd = ps.rd;
+
+	BlendState* bs = new BlendState();
+	rd->BlendStates.push_back(bs);
+
+	// non-zero defaults
+	bs->Src = Blend::One;
+	bs->Dest = Blend::Zero;
+	bs->Op = BlendOp::Add;
+	bs->SrcAlpha = Blend::One;
+	bs->DestAlpha = Blend::Zero;
+	bs->OpAlpha = BlendOp::Add;
+	bs->RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+	static StructEntry def[] = {
+		StructEntryDef(BlendState, Bool, Enable),
+		StructEntryDef(BlendState, Blend, Src),
+		StructEntryDef(BlendState, Blend, Dest),
+		StructEntryDef(BlendState, BlendOp, Op),
+		StructEntryDef(BlendState, Blend, SrcAlpha),
+		StructEntryDef(BlendState, Blend, DestAlpha),
+		StructEntryDef(BlendState, BlendOp, OpAlpha),
+		StructEntryDef(BlendState, Uchar, RenderTargetWriteMask),
+	};
+	constexpr TokenType Delim = TokenType::Semicolon;
+	constexpr bool TrailingRequired = true;
+	ConsumeStruct<Delim, TrailingRequired>(
+		t, bs, def, "BlendState");
+	return bs;
+}
+
+BlendState* ConsumeBlendStateRefOrDef(
+	TokenIter& t,
+	ParseState& ps)
+{
+	const char* id = ConsumeIdentifier(t);
+	Keyword key = LookupKeyword(id);
+	if (key == Keyword::BlendState)
+	{
+		return ConsumeBlendStateDef(t,ps);
+	}
+	else
+	{
+		ParserAssert(ps.bsMap.count(id) != 0, "couldn't find blend state %s", id);
+		return ps.bsMap[id];
 	}
 }
 
@@ -2625,6 +2750,25 @@ Draw* ConsumeDrawDef(
 			}
 			break;
 		}
+		case Keyword::BlendStates:
+		{
+			draw->BlendStates.clear();
+			ConsumeToken(TokenType::Equals, t);
+			ConsumeToken(TokenType::LBrace, t);
+			while (true)
+			{
+				if (TryConsumeToken(TokenType::RBrace, t))
+					break;
+				BlendState* bs = ConsumeBlendStateRefOrDef(t, ps);
+				draw->BlendStates.push_back(bs);
+				if (!TryConsumeToken(TokenType::Comma, t))
+				{
+					ConsumeToken(TokenType::RBrace, t);
+					break;
+				}
+			}
+			break;
+		}
 		case Keyword::DepthStencil:
 		{
 			ConsumeToken(TokenType::Equals, t);
@@ -3054,7 +3198,7 @@ void ParseMain()
 		{
 			RasterizerState* rs = ConsumeRasterizerStateDef(t,ps);
 			const char* nameId = ConsumeIdentifier(t);
-			ParserAssert(ps.rsMap.count(nameId) == 0, "Rasterizer state %s already defined",
+			ParserAssert(ps.rsMap.count(nameId) == 0, "RasterizerState %s already defined",
 				nameId);
 			ps.rsMap[nameId] = rs;
 			break;
@@ -3063,7 +3207,7 @@ void ParseMain()
 		{
 			DepthStencilState* rs = ConsumeDepthStencilStateDef(t,ps);
 			const char* nameId = ConsumeIdentifier(t);
-			ParserAssert(ps.dssMap.count(nameId) == 0, "Rasterizer state %s already defined",
+			ParserAssert(ps.dssMap.count(nameId) == 0, "DepthStencilState %s already defined",
 				nameId);
 			ps.dssMap[nameId] = rs;
 			break;
@@ -3075,6 +3219,15 @@ void ParseMain()
 			ParserAssert(ps.vpMap.count(nameId) == 0, "Viewport %s already defined",
 				nameId);
 			ps.vpMap[nameId] = vp;
+			break;
+		}
+		case Keyword::BlendState:
+		{
+			BlendState* bs = ConsumeBlendStateDef(t,ps);
+			const char* nameId = ConsumeIdentifier(t);
+			ParserAssert(ps.bsMap.count(nameId) == 0, "BlendState %s already defined",
+				nameId);
+			ps.bsMap[nameId] = bs;
 			break;
 		}
 		case Keyword::ObjImport:
@@ -3278,6 +3431,8 @@ void ReleaseData(RenderDescription* data)
 		delete dss;
 	for (Viewport* vp : data->Viewports)
 		delete vp;
+	for (BlendState* bs : data->BlendStates)
+		delete bs;
 	for (ObjImport* obj : data->Objs)
 		delete obj;
 	for (Constant* c : data->Constants)
