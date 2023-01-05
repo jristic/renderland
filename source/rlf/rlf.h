@@ -346,6 +346,9 @@ namespace rlf
 		PixelShader* PShader;
 		Buffer* VertexBuffer;
 		Buffer* IndexBuffer;
+		Buffer* InstancedIndirectArgs;
+		Buffer* IndexedInstancedIndirectArgs;
+		u32 IndirectArgsOffset;
 		u32 VertexCount;
 		u32 InstanceCount;
 		u8 StencilRef;

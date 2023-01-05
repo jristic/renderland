@@ -1,0 +1,32 @@
+
+Buffer {
+	ElementSize = 4;
+	ElementCount = 4;
+	Flags = {IndirectArgs,Raw};
+} iargs
+
+
+Passes {
+	Dispatch {
+		Shader = ComputeShader {
+			ShaderPath = "shaders.hlsl";
+			EntryPoint = "CSProducer";
+		};
+		Groups = { 1, 1, 1 };
+		Bind OutArgs = UAV { Resource=iargs; Format=R32_TYPELESS; };
+		setconstant Time = time();
+	},
+	Draw {
+		VShader = VertexShader {
+			ShaderPath = "shaders.hlsl";
+			EntryPoint = "VSMain";
+		};
+		PShader = PixelShader {
+			ShaderPath = "shaders.hlsl";
+			EntryPoint = "PSMain";
+		};
+		instancedindirectargs = iargs;
+		RenderTarget = @BackBuffer;
+		setconstantvs Time = time();
+	}
+}

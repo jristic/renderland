@@ -1434,7 +1434,13 @@ void ExecuteDraw(
 		ctx->IASetIndexBuffer(ib->BufferObject, ib->ElementSize == 2 ? 
 			DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT, 0);
 
-	if (ib && draw->InstanceCount > 0)
+	if (draw->InstancedIndirectArgs)
+		ctx->DrawInstancedIndirect(draw->InstancedIndirectArgs->BufferObject,
+			draw->IndirectArgsOffset);
+	else if (draw->IndexedInstancedIndirectArgs)
+		ctx->DrawIndexedInstancedIndirect(draw->InstancedIndirectArgs->BufferObject,
+			draw->IndirectArgsOffset);
+	else if (ib && draw->InstanceCount > 0)
 		ctx->DrawIndexedInstanced(ib->ElementCount, draw->InstanceCount, 0, 0, 0);
 	else if (ib)
 		ctx->DrawIndexed(ib->ElementCount, 0, 0);

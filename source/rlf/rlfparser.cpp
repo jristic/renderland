@@ -330,6 +330,8 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(PShader) \
 	RLF_KEYWORD_ENTRY(VertexBuffer) \
 	RLF_KEYWORD_ENTRY(IndexBuffer) \
+	RLF_KEYWORD_ENTRY(InstancedIndirectArgs) \
+	RLF_KEYWORD_ENTRY(IndexedInstancedIndirectArgs) \
 	RLF_KEYWORD_ENTRY(VertexCount) \
 	RLF_KEYWORD_ENTRY(InstanceCount) \
 	RLF_KEYWORD_ENTRY(StencilRef) \
@@ -2652,6 +2654,34 @@ Draw* ConsumeDrawDef(
 			ParserAssert(res.type == ParseState::ResType::Buffer, 
 				"Resource (%s) must be a buffer", id);
 			draw->IndexBuffer = reinterpret_cast<Buffer*>(res.m);
+			break;
+		}
+		case Keyword::InstancedIndirectArgs:
+		{
+			ConsumeToken(TokenType::Equals, t);
+			const char* id = ConsumeIdentifier(t);
+			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %s", id);
+			ParseState::Resource& res = ps.resMap[id];
+			ParserAssert(res.type == ParseState::ResType::Buffer, 
+				"Resource (%s) must be a buffer", id);
+			draw->InstancedIndirectArgs = reinterpret_cast<Buffer*>(res.m);
+			break;
+		}
+		case Keyword::IndexedInstancedIndirectArgs:
+		{
+			ConsumeToken(TokenType::Equals, t);
+			const char* id = ConsumeIdentifier(t);
+			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %s", id);
+			ParseState::Resource& res = ps.resMap[id];
+			ParserAssert(res.type == ParseState::ResType::Buffer, 
+				"Resource (%s) must be a buffer", id);
+			draw->IndexedInstancedIndirectArgs = reinterpret_cast<Buffer*>(res.m);
+			break;
+		}
+		case Keyword::IndirectArgsOffset:
+		{
+			ConsumeToken(TokenType::Equals, t);
+			draw->IndirectArgsOffset = ConsumeUintLiteral(t);
 			break;
 		}
 		case Keyword::VertexCount:

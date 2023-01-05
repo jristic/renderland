@@ -14,7 +14,6 @@
 	* Some way to choose which shader to run based on some condition. 
 
 **** Expand draw pipeline support.
-	* Indirect draws.
 	* Texture arrays, cubes, 3d textures.
 	* Append and consume buffers.
 	* Multiple vertex buffer and instanced buffer support. 
@@ -43,7 +42,7 @@
 	* Event-viewer style list of the passes in a frame. 
 	* Debug viz tools for seeing the contents of textures/buffers/rendertargets/depthstencils at any given point in the frame. 
 	* Sample browser for faster way to open various samples for testing
-	* Display pane needs expansion
+	* Display pane
 		* Ability to show multiple outputs, when the rlf input/output system has been refactored.
 		* Prevent it from being undocked from the center?
 		* Options for how to display the texture, like renderdoc (alpha, ranges, etc). 
