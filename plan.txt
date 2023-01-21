@@ -13,11 +13,14 @@
 	* Some way to only run a pass on the first frame, for instance. 
 	* Some way to choose which shader to run based on some condition. 
 
-**** Expand draw pipeline support.
+**** Expand D3D feature support.
 	* Texture arrays, cubes, 3d textures.
 	* Append and consume buffers.
 	* Multiple vertex buffer and instanced buffer support. 
-	* More fields should support dynamic expressions, like dispatch group counts. 
+
+*** Buffer resizing
+	* Dynamic expressions for ElementSize and ElementCount
+	* Resize buffers when parameters change, like with textures
 
 *** Cleanup:
 	* Parser errors which happen post-consume point to the token after the one actually in question
