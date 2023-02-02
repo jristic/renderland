@@ -231,9 +231,14 @@ namespace rlf
 	struct Buffer
 	{
 		u32 ElementSize;
+		ast::Node* ElementSizeExpr;
 		u32 ElementCount;
+		ast::Node* ElementCountExpr;
+		bool InitToZero;
 		void* InitData;
+		u32 InitDataSize;
 		BufferFlag Flags;
+		std::set<View*> Views;
 		ID3D11Buffer* BufferObject;
 	};
 	struct Texture

@@ -5,12 +5,14 @@ cbuffer ConstantBuffer : register(b0)
 {
 	float2 TextureSize;
 	float Time;
-	float Padding;
+	uint BallCount;
 }
 
 [numthreads(32,1,1)]
 void CSMain(uint3 DTid : SV_DispatchThreadID)
 {
+	if (DTid.x >= BallCount)
+		return;
 	float4 pt = Points[DTid.x];
 	if (all(pt == 0))
 	{

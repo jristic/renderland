@@ -1,7 +1,9 @@
 
+tuneable uint BallCount [1,64] = 32;
+
 Buffer {
 	ElementSize = 16;
-	ElementCount = 32;
+	ElementCount = BallCount;
 	Flags = { Structured };
 	InitToZero = true;
 } Points
@@ -13,9 +15,12 @@ ComputeShader {
 
 Dispatch {
 	Shader = producer;
-	Groups = { 1, 1, 1 };
+	// TODO: Need a max function in AST to prevent underflow if BallCount were 0.
+	// TODO: A divide with rounding up would be even more helpful.
+	Groups = { ((BallCount - 1) / 32) + 1, 1, 1 };
 	Bind Points = Points;
 	SetConstant TextureSize = DisplaySize();
+	SetConstant BallCount = BallCount;
 } producerDispatch
 
 ComputeShader {
@@ -29,6 +34,7 @@ Dispatch {
 	Bind OutTexture = @BackBuffer;
 	Bind Points=Points;
 	SetConstant TextureSize = DisplaySize();
+	SetConstant BallCount = BallCount;
 } consumerDispatch
 
 Passes {

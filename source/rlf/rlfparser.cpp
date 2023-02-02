@@ -1026,6 +1026,7 @@ View* ConsumeViewDef(TokenIter& t, ParseState& ps, ViewType vt)
 			{
 				v->ResourceType = ResourceType::Buffer;
 				v->Buffer = (Buffer*)res.m;
+				v->Buffer->Views.insert(v);
 			}
 			else if (res.type == ParseState::ResType::Texture)
 			{
@@ -1099,6 +1100,7 @@ View* ConsumeViewRefOrDef(TokenIter& t, ParseState& ps, const char* id)
 			v->Type = ViewType::Auto;
 			v->ResourceType = ResourceType::Buffer;
 			v->Buffer = (Buffer*)res.m;
+			v->Buffer->Views.insert(v);
 			v->Format = TextureFormat::Invalid;
 		}
 		else if (res.type == ParseState::ResType::Texture)
@@ -2256,7 +2258,6 @@ Buffer* ConsumeBufferDef(
 	std::vector<u16> initDataU16;
 	std::vector<u32> initDataU32;
 	std::vector<float> initDataFloat;
-	bool initToZero = false;
 
 	ObjImport* obj = nullptr;
 	bool objVerts = false;
@@ -2269,13 +2270,13 @@ Buffer* ConsumeBufferDef(
 		case Keyword::ElementSize:
 		{
 			ConsumeToken(TokenType::Equals, t);
-			buf->ElementSize = ConsumeUintLiteral(t);
+			buf->ElementSizeExpr = ConsumeAst(t, ps);
 			break;
 		}
 		case Keyword::ElementCount:
 		{
 			ConsumeToken(TokenType::Equals, t);
-			buf->ElementCount = ConsumeUintLiteral(t);
+			buf->ElementCountExpr = ConsumeAst(t, ps);
 			break;
 		}
 		case Keyword::Flags:
@@ -2287,7 +2288,7 @@ Buffer* ConsumeBufferDef(
 		case Keyword::InitToZero:
 		{
 			ConsumeToken(TokenType::Equals, t);
-			initToZero = ConsumeBool(t);
+			buf->InitToZero = ConsumeBool(t);
 			break;
 		}
 		case Keyword::InitData:
@@ -2404,37 +2405,34 @@ Buffer* ConsumeBufferDef(
 	}
 	else
 	{
-		u32 bufSize = buf->ElementSize * buf->ElementCount;
-		ParserAssert(bufSize > 0, "Buffer size not given");
-		if (initToZero || initDataU16.size() > 0 || initDataU32.size() > 0 || initDataFloat.size() > 0)
+		ParserAssert(buf->ElementSizeExpr && buf->ElementCountExpr, 
+			"ElementSize and ElementCount must be defined for buffer");
+		ParserAssert(!buf->ElementSizeExpr->VariesByTime() && 
+			!buf->ElementCountExpr->VariesByTime(), "Buffer size/count may not depend on time.");
+
+		size_t bufSize = max(
+			max(
+				initDataU16.size() * sizeof(u16), 
+				initDataU32.size() * sizeof(u32)
+			),
+			initDataFloat.size() * sizeof(float)
+		);
+		if (bufSize > 0)
 		{
+			ParserAssert(buf->ElementSizeExpr->Constant() && buf->ElementCountExpr->Constant(),
+				"Buffer having InitData is not compatible with non-constant buffer size/count");
 			float* data = (float*)malloc(bufSize);
 			AddMemToDescriptionData(data, rd);
 			buf->InitData = data;
+			buf->InitDataSize = (u32)bufSize;
 		}
 
-		if (initToZero)
-		{
-			ZeroMemory(buf->InitData, bufSize);
-		}
-		else if (initDataFloat.size() > 0)
-		{
-			ParserAssert(bufSize == initDataFloat.size() * sizeof(float), 
-				"Buffer/init-data size mismatch.");
+		if (initDataFloat.size() > 0)
 			memcpy(buf->InitData, initDataFloat.data(), bufSize);
-		}
 		else if (initDataU16.size() > 0)
-		{
-			ParserAssert(bufSize == initDataU16.size() * sizeof(u16), 
-				"Buffer/init-data size mismatch.");
 			memcpy(buf->InitData, initDataU16.data(), bufSize);
-		}
 		else if (initDataU32.size() > 0)
-		{
-			ParserAssert(bufSize == initDataU32.size() * sizeof(u32), 
-				"Buffer/init-data size mismatch.");
 			memcpy(buf->InitData, initDataU32.data(), bufSize);
-		}
 	}
 
 	return buf;

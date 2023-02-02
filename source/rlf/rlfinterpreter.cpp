@@ -409,6 +409,35 @@ void CreateTexture(ID3D11Device* device, Texture* tex)
 	CheckHresult(hr, "Texture");
 }
 
+void CreateBuffer(ID3D11Device* device, Buffer* buf)
+{
+	u32 bufSize = buf->ElementSize * buf->ElementCount;
+	void* initData = malloc(bufSize);
+	if (buf->InitToZero)
+		ZeroMemory(initData, bufSize);
+	else if (buf->InitDataSize > 0)
+	{
+		Assert(buf->InitData, "No data but size is set");
+		memcpy(initData, buf->InitData, buf->InitDataSize);
+	}
+
+	D3D11_SUBRESOURCE_DATA subRes = {};
+	subRes.pSysMem = buf->InitData;
+
+	D3D11_BUFFER_DESC desc;
+	desc.ByteWidth = bufSize;
+	desc.Usage = D3D11_USAGE_DEFAULT;
+	desc.BindFlags = RlfToD3d_Bind(buf->Flags);
+	desc.CPUAccessFlags = 0;
+	desc.StructureByteStride = buf->ElementSize;
+	desc.MiscFlags = RlfToD3d_Misc(buf->Flags); 
+
+	HRESULT hr = device->CreateBuffer(&desc, subRes.pSysMem ? &subRes : nullptr,
+		&buf->BufferObject);
+	free(initData);
+	CheckHresult(hr, "Buffer");
+}
+
 void CreateView(ID3D11Device* device, View* v)
 {
 	ID3D11Resource* res = nullptr;
@@ -846,29 +875,25 @@ void InitMain(
 		}
 	}
 
-	for (Buffer* buf : rd->Buffers)
-	{
-		u32 bufSize = buf->ElementSize * buf->ElementCount;
-
-		D3D11_SUBRESOURCE_DATA initData = {};
-		initData.pSysMem = buf->InitData;
-
-		D3D11_BUFFER_DESC desc;
-		desc.ByteWidth = bufSize;
-		desc.Usage = D3D11_USAGE_DEFAULT;
-		desc.BindFlags = RlfToD3d_Bind(buf->Flags);
-		desc.CPUAccessFlags = 0;
-		desc.StructureByteStride = buf->ElementSize;
-		desc.MiscFlags = RlfToD3d_Misc(buf->Flags); 
-
-		HRESULT hr = device->CreateBuffer(&desc, initData.pSysMem ? &initData : nullptr,
-			&buf->BufferObject);
-		CheckHresult(hr, "Buffer");
-	}
-
 	ast::EvaluationContext evCtx;
 	evCtx.DisplaySize = displaySize;
 	evCtx.Time = 0;
+
+	for (Buffer* buf : rd->Buffers)
+	{
+		// Obj initialized buffers don't have expressions.
+		if (buf->ElementSizeExpr || buf->ElementCountExpr)
+		{
+			ast::Result res;
+			EvaluateExpression(evCtx, buf->ElementSizeExpr, res, UintType, "Buffer::ElementSize");
+			buf->ElementSize = res.Value.UintVal;
+			EvaluateExpression(evCtx, buf->ElementCountExpr, res, UintType, "Buffer::ElementCount");
+			buf->ElementCount = res.Value.UintVal;
+		}
+
+		CreateBuffer(device, buf);
+	}
+
 	for (Texture* tex : rd->Textures)
 	{
 		if (tex->DDSPath)
@@ -1096,6 +1121,44 @@ void HandleTextureParametersChanged(
 				}
 			}
 		}
+
+		for (Buffer* buf : rd->Buffers)
+		{
+			// Obj initialized buffers don't have expressions.
+			if (!buf->ElementSizeExpr && !buf->ElementCountExpr)
+				continue;
+
+			if ((buf->ElementSizeExpr->Dep.VariesByFlags & ec->EvCtx.ChangedThisFrameFlags) == 0 &&
+				(buf->ElementCountExpr->Dep.VariesByFlags & ec->EvCtx.ChangedThisFrameFlags) == 0)
+				continue;
+			
+			ast::Result res;
+			EvaluateExpression(ec->EvCtx, buf->ElementSizeExpr, res, UintType, "Buffer::ElementSize");
+			u32 newSize = res.Value.UintVal;
+			EvaluateExpression(ec->EvCtx, buf->ElementCountExpr, res, UintType, "Buffer::ElementCount");
+			u32 newCount = res.Value.UintVal;
+
+			if (buf->ElementSize != newSize || buf ->ElementCount != newCount)
+			{
+				buf->ElementSize = newSize;
+				buf->ElementCount = newCount;
+
+				SafeRelease(buf->BufferObject);
+				
+				CreateBuffer(device, buf);
+
+				// Find any views that use this buffer and recreate them. 
+				for (View* view : buf->Views)
+				{
+					if (view->ResourceType == ResourceType::Buffer && 
+						view->Buffer == buf)
+					{
+						ReleaseView(view);
+						CreateView(device, view);
+					}
+				}
+			}
+		}
 	}
 	catch (ErrorInfo ie)
 	{
@@ -1173,7 +1236,7 @@ void EvaluateExpression(ast::EvaluationContext& ec, ast::Node* ast, ast::Result&
 		"%s expected type (%s) is not compatible with actual type (%s)",
 		name, TypeFmtToString(expect.Fmt), TypeFmtToString(res.Type.Fmt));
 	ExecuteAstAssert(ast, expect.Dim == res.Type.Dim,
-		"%s size (%u) doe not match actual size (%u)",
+		"%s size (%u) does not match actual size (%u)",
 		name, expect.Dim, res.Type.Dim);
 	Convert(res, expect.Fmt);
 }

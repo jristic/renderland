@@ -6,7 +6,7 @@ cbuffer ConstantBuffer : register(b0)
 {
 	float2 TextureSize;
 	float Time;
-	float Padding;
+	uint BallCount;
 }
 
 [numthreads(8,8,1)]
@@ -17,7 +17,7 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 
 	float hit = 0;
 
-	for (uint i = 0 ; i < 32 ; ++i)
+	for (uint i = 0 ; i < BallCount ; ++i)
 	{
 		float4 pt = Points[i];
 		if (distance(DTid.xy, pt.xy) < 10)
