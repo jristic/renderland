@@ -196,28 +196,29 @@ namespace rlf
 		BlendOp OpAlpha;
 		u8 RenderTargetWriteMask;
 	};
-	struct ComputeShader
+	struct CommonShader 
 	{
 		const char* ShaderPath;
 		const char* EntryPoint;
-		ID3D11ComputeShader* ShaderObject;
 		ID3D11ShaderReflection* Reflector;
+		std::vector<ast::SizeOf*> SizeRequests;
+	};
+	struct ComputeShader
+	{
+		CommonShader Common;
+		ID3D11ComputeShader* ShaderObject;
 		uint3 ThreadGroupSize;
 	};
 	struct VertexShader
 	{
-		const char* ShaderPath;
-		const char* EntryPoint;
+		CommonShader Common;
 		ID3D11VertexShader* ShaderObject;
-		ID3D11ShaderReflection* Reflector;
 		ID3D11InputLayout* InputLayout; 
 	};
 	struct PixelShader
 	{
-		const char* ShaderPath;
-		const char* EntryPoint;
+		CommonShader Common;
 		ID3D11PixelShader* ShaderObject;
-		ID3D11ShaderReflection* Reflector;
 	};
 	struct ObjImport 
 	{

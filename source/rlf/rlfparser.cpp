@@ -455,6 +455,7 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(Subtract) \
 	RLF_KEYWORD_ENTRY(RevSubtract) \
 	RLF_KEYWORD_ENTRY(Max) \
+	RLF_KEYWORD_ENTRY(SizeOf) \
 
 #define RLF_KEYWORD_ENTRY(name) name,
 enum class Keyword
@@ -1174,7 +1175,22 @@ AstType* AllocateAst(RenderDescription* rd)
 	AstType* ast = new AstType();
 	rd->Asts.push_back(ast);
 	return ast;
-} 
+}
+
+CommonShader* LookupShader(const char* name, ParseState& ps)
+{
+	auto s1 = ps.csMap.find(name);
+	if (s1 != ps.csMap.end())
+		return &s1->second->Common;
+	auto s2 = ps.vsMap.find(name);
+	if (s2 != ps.vsMap.end())
+		return &s2->second->Common;
+	auto s3 = ps.psMap.find(name);
+	if (s3 != ps.psMap.end())
+		return &s3->second->Common;
+	ParserError("No shader named %s found.", name);
+	return nullptr;
+}
 
 ast::Node* ConsumeAstRecurse(TokenIter& t, ParseState& ps)
 {
@@ -1194,20 +1210,36 @@ ast::Node* ConsumeAstRecurse(TokenIter& t, ParseState& ps)
 			const char* id = ConsumeIdentifier(t);
 			if (TryConsumeToken(TokenType::LParen, t))
 			{
-				ast::Function* func = AllocateAst<ast::Function>(ps.rd);
-				func->Name = std::string(id);
-				if (!TryConsumeToken(TokenType::RParen, t))
+				if (LookupKeyword(id) == Keyword::SizeOf)
 				{
-					while (true)
-					{
-						ast::Node* arg = ConsumeAstRecurse(t, ps);
-						func->Args.push_back(arg);
-						if (!TryConsumeToken(TokenType::Comma, t))
-							break;
-					}
+					const char* shaderName = ConsumeIdentifier(t);
+					CommonShader* shader = LookupShader(shaderName, ps);
+					ConsumeToken(TokenType::Comma, t);
+					const char* structName = ConsumeString(t);
+					ast::SizeOf* sizeOf = AllocateAst<ast::SizeOf>(ps.rd);
+					sizeOf->StructName = structName;
+					sizeOf->Size = 0;
+					shader->SizeRequests.push_back(sizeOf);
 					ConsumeToken(TokenType::RParen, t);
+					ast = sizeOf;
 				}
-				ast = func;
+				else
+				{
+					ast::Function* func = AllocateAst<ast::Function>(ps.rd);
+					func->Name = std::string(id);
+					if (!TryConsumeToken(TokenType::RParen, t))
+					{
+						while (true)
+						{
+							ast::Node* arg = ConsumeAstRecurse(t, ps);
+							func->Args.push_back(arg);
+							if (!TryConsumeToken(TokenType::Comma, t))
+								break;
+						}
+						ConsumeToken(TokenType::RParen, t);
+					}
+					ast = func;
+				}
 			}
 			else
 			{
@@ -1986,8 +2018,8 @@ ComputeShader* ConsumeComputeShaderDef(
 	rd->CShaders.push_back(cs);
 
 	static StructEntry def[] = {
-		StructEntryDef(ComputeShader, String, ShaderPath),
-		StructEntryDef(ComputeShader, String, EntryPoint),
+		StructEntryDefEx(ComputeShader, String, ShaderPath, Common.ShaderPath),
+		StructEntryDefEx(ComputeShader, String, EntryPoint, Common.EntryPoint),
 	};
 	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
@@ -2023,8 +2055,8 @@ VertexShader* ConsumeVertexShaderDef(
 	rd->VShaders.push_back(vs);
 
 	static StructEntry def[] = {
-		StructEntryDef(VertexShader, String, ShaderPath),
-		StructEntryDef(VertexShader, String, EntryPoint),
+		StructEntryDefEx(VertexShader, String, ShaderPath, Common.ShaderPath),
+		StructEntryDefEx(VertexShader, String, EntryPoint, Common.EntryPoint),
 	};
 	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
@@ -2060,8 +2092,8 @@ PixelShader* ConsumePixelShaderDef(
 	rd->PShaders.push_back(ps);
 
 	static StructEntry def[] = {
-		StructEntryDef(PixelShader, String, ShaderPath),
-		StructEntryDef(PixelShader, String, EntryPoint),
+		StructEntryDefEx(PixelShader, String, ShaderPath, Common.ShaderPath),
+		StructEntryDefEx(PixelShader, String, EntryPoint, Common.EntryPoint),
 	};
 	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;

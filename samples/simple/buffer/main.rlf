@@ -1,17 +1,17 @@
 
 tuneable uint BallCount [1,64] = 32;
 
-Buffer {
-	ElementSize = 16;
-	ElementCount = BallCount;
-	Flags = { Structured };
-	InitToZero = true;
-} Points
-
 ComputeShader {
 	ShaderPath = "producer.hlsl";
 	EntryPoint = "CSMain";
 } producer
+
+Buffer {
+	ElementSize = sizeof(producer, "Point");
+	ElementCount = BallCount;
+	Flags = { Structured };
+	InitToZero = true;
+} Points
 
 Dispatch {
 	Shader = producer;

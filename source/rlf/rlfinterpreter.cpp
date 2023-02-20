@@ -259,9 +259,11 @@ D3D11_BLEND_OP RlfToD3d(BlendOp op)
 	return ops[(u32)op];
 }
 
-ID3DBlob* CommonCompileShader(const char* path, const char* profile, 
-	const char * entry, ErrorState* errorState)
+ID3DBlob* CommonCompileShader(CommonShader* common, const char* dirPath, const char* profile, 
+	ErrorState* errorState)
 {
+	std::string shaderPath = std::string(dirPath) + common->ShaderPath;
+	const char* path = shaderPath.c_str();
 	HANDLE shader = fileio::OpenFileOptional(path, GENERIC_READ);
 	InitAssert(shader != INVALID_HANDLE_VALUE, "Couldn't find shader file: %s", path);
 
@@ -277,10 +279,8 @@ ID3DBlob* CommonCompileShader(const char* path, const char* profile,
 	ID3DBlob* shaderBlob;
 	ID3DBlob* errorBlob;
 	HRESULT hr = D3DCompile(shaderBuffer, shaderSize, path, NULL,
-		D3D_COMPILE_STANDARD_FILE_INCLUDE, entry, profile, D3DCOMPILE_DEBUG, 
+		D3D_COMPILE_STANDARD_FILE_INCLUDE, common->EntryPoint, profile, D3DCOMPILE_DEBUG, 
 		0, &shaderBlob, &errorBlob);
-
-	free(shaderBuffer);
 
 	bool success = (hr == S_OK);
 
@@ -292,6 +292,7 @@ ID3DBlob* CommonCompileShader(const char* path, const char* profile,
 
 		Assert(shaderBlob == nullptr, "leak");
 		SafeRelease(errorBlob);
+		free(shaderBuffer);
 
 		InitErrorEx(("Failed to compile shader:\n " + textCopy).c_str());
 	}
@@ -304,14 +305,36 @@ ID3DBlob* CommonCompileShader(const char* path, const char* profile,
 		errorState->Info.Location = nullptr; // file&line already provided in text.
 		errorState->Info.Message += errorText;
 	}
-
 	SafeRelease(errorBlob);
+	
+	if (common->SizeRequests.size() > 0)
+	{
+		std::unordered_map<std::string, u32> structSizes;
+		ErrorState es;
+		shader::ParseBuffer(shaderBuffer, shaderSize, structSizes, &es);
+		if (!es.Success)
+		{
+			free(shaderBuffer);
+			InitError("Failed to parse shader:\n%s", es.Info.Message.c_str());
+		}
+		for (ast::SizeOf* request : common->SizeRequests)
+		{
+			auto search = structSizes.find(request->StructName);
+			InitAssert(search != structSizes.end(), 
+				"Failed to parse shader: %s\nNo struct named %s found for sizeof operation",
+				path, request->StructName.c_str());
+			request->Size = search->second;
+		}
+	}
+
+	free(shaderBuffer);
+
 	return shaderBlob;
 }
 
 void CreateInputLayout(ID3D11Device* device, VertexShader* shader, ID3DBlob* blob)
 {
-	ID3D11ShaderReflection* reflector = shader->Reflector;
+	ID3D11ShaderReflection* reflector = shader->Common.Reflector;
 
 	// Get shader info
 	D3D11_SHADER_DESC shaderDesc;
@@ -765,19 +788,18 @@ void InitMain(
 
 	for (ComputeShader* cs : rd->CShaders)
 	{
-		std::string shaderPath = dirPath + cs->ShaderPath;
-		ID3DBlob* shaderBlob = CommonCompileShader(shaderPath.c_str(), "cs_5_0", 
-			cs->EntryPoint, errorState);
+		ID3DBlob* shaderBlob = CommonCompileShader(&cs->Common, workingDirectory,
+			"cs_5_0", errorState);
 
 		HRESULT hr = device->CreateComputeShader(shaderBlob->GetBufferPointer(), 
 			shaderBlob->GetBufferSize(), NULL, &cs->ShaderObject);
 		Assert(hr == S_OK, "Failed to create shader, hr=%x", hr);
 
 		hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
-			IID_ID3D11ShaderReflection, (void**) &cs->Reflector);
+			IID_ID3D11ShaderReflection, (void**) &cs->Common.Reflector);
 		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
 
-		cs->Reflector->GetThreadGroupSize(&cs->ThreadGroupSize.x, &cs->ThreadGroupSize.y,
+		cs->Common.Reflector->GetThreadGroupSize(&cs->ThreadGroupSize.x, &cs->ThreadGroupSize.y,
 			&cs->ThreadGroupSize.z);
 
 		SafeRelease(shaderBlob);
@@ -785,16 +807,15 @@ void InitMain(
 
 	for (VertexShader* vs : rd->VShaders)
 	{
-		std::string shaderPath = dirPath + vs->ShaderPath;
-		ID3DBlob* shaderBlob = CommonCompileShader(shaderPath.c_str(), "vs_5_0", 
-			vs->EntryPoint, errorState);
+		ID3DBlob* shaderBlob = CommonCompileShader(&vs->Common, workingDirectory,
+			"vs_5_0", errorState);
 
 		HRESULT hr = device->CreateVertexShader(shaderBlob->GetBufferPointer(), 
 			shaderBlob->GetBufferSize(), NULL, &vs->ShaderObject);
 		Assert(hr == S_OK, "Failed to create shader, hr=%x", hr);
 
 		hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
-			IID_ID3D11ShaderReflection, (void**) &vs->Reflector);
+			IID_ID3D11ShaderReflection, (void**) &vs->Common.Reflector);
 		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
 
 		CreateInputLayout(device, vs, shaderBlob);
@@ -804,16 +825,15 @@ void InitMain(
 
 	for (PixelShader* ps : rd->PShaders)
 	{
-		std::string shaderPath = dirPath + ps->ShaderPath;
-		ID3DBlob* shaderBlob = CommonCompileShader(shaderPath.c_str(), "ps_5_0", 
-			ps->EntryPoint, errorState);
+		ID3DBlob* shaderBlob = CommonCompileShader(&ps->Common, workingDirectory,
+			"ps_5_0", errorState);
 
 		HRESULT hr = device->CreatePixelShader(shaderBlob->GetBufferPointer(), 
 			shaderBlob->GetBufferSize(), NULL, &ps->ShaderObject);
 		Assert(hr == S_OK, "Failed to create shader, hr=%x", hr);
 
 		hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
-			IID_ID3D11ShaderReflection, (void**) &ps->Reflector);
+			IID_ID3D11ShaderReflection, (void**) &ps->Common.Reflector);
 		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
 
 		SafeRelease(shaderBlob);
@@ -822,33 +842,33 @@ void InitMain(
 
 	for (Dispatch* dc : rd->Dispatches)
 	{
-		ID3D11ShaderReflection* reflector = dc->Shader->Reflector;
+		ID3D11ShaderReflection* reflector = dc->Shader->Common.Reflector;
 		for (Bind& bind : dc->Binds)
 		{
-			ResolveBind(bind, reflector, dc->Shader->ShaderPath);
+			ResolveBind(bind, reflector, dc->Shader->Common.ShaderPath);
 		}
-		PrepareConstants(reflector, dc->CBs, dc->Constants, dc->Shader->ShaderPath);
+		PrepareConstants(reflector, dc->CBs, dc->Constants, dc->Shader->Common.ShaderPath);
 	}
 
 	for (Draw* draw : rd->Draws)
 	{
 		InitAssert(draw->VShader, "Null vertex shader on draw not permitted.");
-		ID3D11ShaderReflection* reflector = draw->VShader->Reflector;
+		ID3D11ShaderReflection* reflector = draw->VShader->Common.Reflector;
 		for (Bind& bind : draw->VSBinds)
 		{
-			ResolveBind(bind, reflector, draw->VShader->ShaderPath);
+			ResolveBind(bind, reflector, draw->VShader->Common.ShaderPath);
 		}
 		PrepareConstants(reflector, draw->VSCBs, draw->VSConstants,
-			draw->VShader->ShaderPath);
+			draw->VShader->Common.ShaderPath);
 		if (draw->PShader)
 		{
-			reflector = draw->PShader->Reflector;
+			reflector = draw->PShader->Common.Reflector;
 			for (Bind& bind : draw->PSBinds)
 			{
-				ResolveBind(bind, reflector, draw->PShader->ShaderPath);
+				ResolveBind(bind, reflector, draw->PShader->Common.ShaderPath);
 			}
 			PrepareConstants(reflector, draw->PSCBs, draw->PSConstants,
-				draw->PShader->ShaderPath);
+				draw->PShader->Common.ShaderPath);
 		}
 
 		size_t blendCount = draw->BlendStates.size();
@@ -1022,18 +1042,18 @@ void ReleaseD3D(
 	for (ComputeShader* cs : rd->CShaders)
 	{
 		SafeRelease(cs->ShaderObject);
-		SafeRelease(cs->Reflector);
+		SafeRelease(cs->Common.Reflector);
 	}
 	for (VertexShader* vs : rd->VShaders)
 	{
 		SafeRelease(vs->ShaderObject);
-		SafeRelease(vs->Reflector);
+		SafeRelease(vs->Common.Reflector);
 		SafeRelease(vs->InputLayout);
 	}
 	for (PixelShader* ps : rd->PShaders)
 	{
 		SafeRelease(ps->ShaderObject);
-		SafeRelease(ps->Reflector);
+		SafeRelease(ps->Common.Reflector);
 	}
 
 	for (Buffer* buf : rd->Buffers)

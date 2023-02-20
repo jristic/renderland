@@ -127,6 +127,14 @@ struct Function : Node
 	std::vector<Node*> Args;
 };
 
+struct SizeOf : Node
+{
+	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
+	virtual void GetDependency(DependencyInfo& dep) const override;
+	std::string StructName;
+	u32 Size;
+};
+
 
 }
 }

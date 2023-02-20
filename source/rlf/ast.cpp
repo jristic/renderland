@@ -895,6 +895,17 @@ void Function::GetDependency(DependencyInfo& dep) const
 }
 
 
+void SizeOf::Evaluate(const EvaluationContext&, Result& res) const
+{
+	res.Type = 	UintType; 
+	res.Value.UintVal = Size;
+}
+void SizeOf::GetDependency(DependencyInfo&) const
+{
+	// Add no dependencies
+}
+
+
 #undef AstAssert
 
 

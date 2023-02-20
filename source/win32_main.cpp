@@ -37,6 +37,7 @@
 #include "rlf/rlf.h"
 #include "rlf/rlfparser.h"
 #include "rlf/rlfinterpreter.h"
+#include "rlf/shaderparser.h"
 
 #define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
 
@@ -865,3 +866,4 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 #include "rlf/rlfparser.cpp"
 #include "rlf/rlfinterpreter.cpp"
 #include "rlf/ast.cpp"
+#include "rlf/shaderparser.cpp"

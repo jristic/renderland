@@ -4,9 +4,6 @@
 
 * Use linear memory allocator for RenderDescription allocations. 
 * Defines that are usable within the RLF and shader. 
-* Better way to size structured buffers.
-	* right now you have to figure out manually how big a struct would be and enter that as the ElementSize field.
-	* Perhaps I can parse the types in the shader and compute their sizes, then have something in RLF like "sizeof(shader, type)".
 * Integrate RenderDoc capture?
 * Investigate automatically reloading any time a file is updated.
 * Dynamic flow control? 
@@ -17,10 +14,6 @@
 	* Texture arrays, cubes, 3d textures.
 	* Append and consume buffers.
 	* Multiple vertex buffer and instanced buffer support. 
-
-*** Buffer resizing
-	* Dynamic expressions for ElementSize and ElementCount
-	* Resize buffers when parameters change, like with textures
 
 *** Cleanup:
 	* Parser errors which happen post-consume point to the token after the one actually in question
@@ -34,6 +27,17 @@
 	* Then we can have an rlf invoke a sub-rlf to allow logic reuse. 
 		* Probably implement as a separate RenderDescription for the sub-rlf?
 		* Will need to remove use of statics in parse and interpreter. 
+
+*** Shader parser
+	* Deducing struct sizes
+		* Support arrays
+		* Support nested anonymous structs
+		* Support includes
+		* Support defines
+
+*** AST expressions to
+	* Add min, max, clamp, saturate
+	* Rounded up divide
 
 *** Obj import expansion
 	* How do we get to a place where drawing test scenes (ie. sponza) is doable?

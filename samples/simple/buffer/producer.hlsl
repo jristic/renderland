@@ -1,5 +1,11 @@
 
-RWStructuredBuffer<float4> Points : register(u0);
+struct Point {
+	float x;
+	float y,z;
+	float w;
+};
+
+RWStructuredBuffer<Point> Points : register(u0);
 
 cbuffer ConstantBuffer : register(b0)
 {
@@ -13,7 +19,8 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 {
 	if (DTid.x >= BallCount)
 		return;
-	float4 pt = Points[DTid.x];
+	Point pnt = Points[DTid.x];
+	float4 pt = float4(pnt.x, pnt.y, pnt.z, pnt.w);
 	if (all(pt == 0))
 	{
 		// setup random velocity
@@ -49,5 +56,9 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 	}
 
 	// output updated result
-	Points[DTid.x] = pt;
+	pnt.x = pt.x;
+	pnt.y = pt.y;
+	pnt.z = pt.z;
+	pnt.w = pt.w;
+	Points[DTid.x] = pnt;
 }
