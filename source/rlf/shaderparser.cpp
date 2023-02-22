@@ -270,6 +270,7 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	KEYWORD_ENTRY(Float2, 	"float2") \
 	KEYWORD_ENTRY(Float3, 	"float3") \
 	KEYWORD_ENTRY(Float4, 	"float4") \
+	KEYWORD_ENTRY(Float4x4,	"float4x4") \
 	KEYWORD_ENTRY(Int, 		"int") \
 	KEYWORD_ENTRY(Int2, 	"int2") \
 	KEYWORD_ENTRY(Int3, 	"int3") \
@@ -429,6 +430,20 @@ const char* ConsumeIdentifier(
 	return str;
 }
 
+u32 ConsumeUintLiteral(
+	TokenIter& t)
+{
+	if (TryConsumeToken(TokenType::Minus, t))
+		ParserError("Unsigned int expected, '-' invalid here");
+	TokenType tok = PeekNextToken(t);
+	ParserAssert(tok == TokenType::IntegerLiteral, "unexpected %s (wanted integer literal)",
+		TokenNames[(u32)tok]);
+
+	u32 val = t.next->IntegerLiteral;
+	++t.next;
+	return val;
+}
+
 u32 ConsumeType(TokenIter& t, ParseState& ps)
 {
 	const char* name = ConsumeIdentifier(t);
@@ -446,6 +461,9 @@ u32 ConsumeType(TokenIter& t, ParseState& ps)
 		break;
 	case Keyword::Float4:
 		return 16;
+		break;
+	case Keyword::Float4x4:
+		return 64;
 		break;
 	case Keyword::Int:
 		return 4;
@@ -508,15 +526,23 @@ void ParseMain(ParseState& ps)
 				if (TryConsumeToken(TokenType::RBrace, t))
 					break;
 				u32 typeSize = ConsumeType(t, ps);
-				u32 count = 1;
-				/*const char* field = */ ConsumeIdentifier(t);
-				while (TryConsumeToken(TokenType::Comma, t))
+				u32 count = 0;
+				while (true)
 				{
-					/* const char* otherField = */ ConsumeIdentifier(t);
-					++count;
+					/*const char* field = */ ConsumeIdentifier(t);
+					u32 arraySize = 1;
+					while (TryConsumeToken(TokenType::LBracket, t))
+					{
+						u32 dimension = ConsumeUintLiteral(t);
+						arraySize *= dimension;
+						ConsumeToken(TokenType::RBracket, t);
+					}
+					count += arraySize;
+					if (TryConsumeToken(TokenType::Colon, t))
+						/*const char* semantic = */ ConsumeIdentifier(t);
+					if (!TryConsumeToken(TokenType::Comma, t))
+						break;
 				}
-				if (TryConsumeToken(TokenType::Colon, t))
-					/*const char* semantic = */ ConsumeIdentifier(t);
 				ConsumeToken(TokenType::Semicolon, t);
 
 				structSize += count*typeSize;

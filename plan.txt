@@ -30,10 +30,12 @@
 
 *** Shader parser
 	* Deducing struct sizes
-		* Support arrays
 		* Support nested anonymous structs
 		* Support includes
 		* Support defines
+	* Error messages
+		* file/line/location of occurence
+	* Maybe I should make the tokenizer code common between the rlf and shader parsers?
 
 *** AST expressions to
 	* Add min, max, clamp, saturate
