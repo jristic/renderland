@@ -784,6 +784,98 @@ void EvaluateCos(const Node* n, const EvaluationContext& ec, std::vector<Node*> 
 	}
 }
 
+void EvaluateMin(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
+{
+	AstAssert(n, args.size() == 2, "Min takes 2 params");
+	Result arg1Res;
+	args[0]->Evaluate(ec, arg1Res);
+	AstAssert(n, arg1Res.Type != Float4x4Type, "Min does not accept matrices (arg1)");
+	Result arg2Res;
+	args[1]->Evaluate(ec, arg2Res);
+	AstAssert(n, arg1Res.Type != Float4x4Type, "Min does not accept matrices (arg2)");
+
+	VariableType outType = DetermineResultType(n, arg1Res.Type, arg2Res.Type);
+	Expand(arg1Res);
+	Expand(arg2Res);
+	Convert(arg1Res, outType.Fmt);
+	Convert(arg2Res, outType.Fmt);
+	res.Type = outType;
+
+	if (outType.Fmt == VariableFormat::Bool) {
+		res.Value.Bool4Val.x = arg1Res.Value.Bool4Val.x && arg2Res.Value.Bool4Val.x;
+		res.Value.Bool4Val.y = arg1Res.Value.Bool4Val.y && arg2Res.Value.Bool4Val.y;
+		res.Value.Bool4Val.z = arg1Res.Value.Bool4Val.z && arg2Res.Value.Bool4Val.z;
+		res.Value.Bool4Val.w = arg1Res.Value.Bool4Val.w && arg2Res.Value.Bool4Val.w;
+	}
+	else  if (outType.Fmt == VariableFormat::Int) {
+		res.Value.Int4Val.x = min(arg1Res.Value.Int4Val.x, arg2Res.Value.Int4Val.x);
+		res.Value.Int4Val.y = min(arg1Res.Value.Int4Val.y, arg2Res.Value.Int4Val.y);
+		res.Value.Int4Val.z = min(arg1Res.Value.Int4Val.z, arg2Res.Value.Int4Val.z);
+		res.Value.Int4Val.w = min(arg1Res.Value.Int4Val.w, arg2Res.Value.Int4Val.w);
+	}
+	else  if (outType.Fmt == VariableFormat::Uint) {
+		res.Value.Uint4Val.x = min(arg1Res.Value.Uint4Val.x, arg2Res.Value.Uint4Val.x);
+		res.Value.Uint4Val.y = min(arg1Res.Value.Uint4Val.y, arg2Res.Value.Uint4Val.y);
+		res.Value.Uint4Val.z = min(arg1Res.Value.Uint4Val.z, arg2Res.Value.Uint4Val.z);
+		res.Value.Uint4Val.w = min(arg1Res.Value.Uint4Val.w, arg2Res.Value.Uint4Val.w);
+	}
+	else  if (outType.Fmt == VariableFormat::Float) {
+		res.Value.Float4Val.x = min(arg1Res.Value.Float4Val.x, arg2Res.Value.Float4Val.x);
+		res.Value.Float4Val.y = min(arg1Res.Value.Float4Val.y, arg2Res.Value.Float4Val.y);
+		res.Value.Float4Val.z = min(arg1Res.Value.Float4Val.z, arg2Res.Value.Float4Val.z);
+		res.Value.Float4Val.w = min(arg1Res.Value.Float4Val.w, arg2Res.Value.Float4Val.w);
+	}
+	else
+		Unimplemented();
+}
+
+void EvaluateMax(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+	Result& res)
+{
+	AstAssert(n, args.size() == 2, "Max takes 2 params");
+	Result arg1Res;
+	args[0]->Evaluate(ec, arg1Res);
+	AstAssert(n, arg1Res.Type != Float4x4Type, "Max does not accept matrices (arg1)");
+	Result arg2Res;
+	args[1]->Evaluate(ec, arg2Res);
+	AstAssert(n, arg2Res.Type != Float4x4Type, "Max does not accept matrices (arg2)");
+
+	VariableType outType = DetermineResultType(n, arg1Res.Type, arg2Res.Type);
+	Expand(arg1Res);
+	Expand(arg2Res);
+	Convert(arg1Res, outType.Fmt);
+	Convert(arg2Res, outType.Fmt);
+	res.Type = outType;
+
+	if (outType.Fmt == VariableFormat::Bool) {
+		res.Value.Bool4Val.x = arg1Res.Value.Bool4Val.x || arg2Res.Value.Bool4Val.x;
+		res.Value.Bool4Val.y = arg1Res.Value.Bool4Val.y || arg2Res.Value.Bool4Val.y;
+		res.Value.Bool4Val.z = arg1Res.Value.Bool4Val.z || arg2Res.Value.Bool4Val.z;
+		res.Value.Bool4Val.w = arg1Res.Value.Bool4Val.w || arg2Res.Value.Bool4Val.w;
+	}
+	else  if (outType.Fmt == VariableFormat::Int) {
+		res.Value.Int4Val.x = max(arg1Res.Value.Int4Val.x, arg2Res.Value.Int4Val.x);
+		res.Value.Int4Val.y = max(arg1Res.Value.Int4Val.y, arg2Res.Value.Int4Val.y);
+		res.Value.Int4Val.z = max(arg1Res.Value.Int4Val.z, arg2Res.Value.Int4Val.z);
+		res.Value.Int4Val.w = max(arg1Res.Value.Int4Val.w, arg2Res.Value.Int4Val.w);
+	}
+	else  if (outType.Fmt == VariableFormat::Uint) {
+		res.Value.Uint4Val.x = max(arg1Res.Value.Uint4Val.x, arg2Res.Value.Uint4Val.x);
+		res.Value.Uint4Val.y = max(arg1Res.Value.Uint4Val.y, arg2Res.Value.Uint4Val.y);
+		res.Value.Uint4Val.z = max(arg1Res.Value.Uint4Val.z, arg2Res.Value.Uint4Val.z);
+		res.Value.Uint4Val.w = max(arg1Res.Value.Uint4Val.w, arg2Res.Value.Uint4Val.w);
+	}
+	else  if (outType.Fmt == VariableFormat::Float) {
+		res.Value.Float4Val.x = max(arg1Res.Value.Float4Val.x, arg2Res.Value.Float4Val.x);
+		res.Value.Float4Val.y = max(arg1Res.Value.Float4Val.y, arg2Res.Value.Float4Val.y);
+		res.Value.Float4Val.z = max(arg1Res.Value.Float4Val.z, arg2Res.Value.Float4Val.z);
+		res.Value.Float4Val.w = max(arg1Res.Value.Float4Val.w, arg2Res.Value.Float4Val.w);
+	}
+	else
+		Unimplemented();
+}
+
 void EvaluateInverse(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
 	Result& res)
 {
@@ -868,6 +960,8 @@ std::unordered_map<u32, FunctionInfo> FuncMap = {
 	{ LowerHash("DisplaySize"), { EvaluateDisplaySize, VariesBy_DisplaySize} },
 	{ LowerHash("Sin"), { EvaluateSin, VariesBy_None} },
 	{ LowerHash("Cos"), { EvaluateCos, VariesBy_None} },
+	{ LowerHash("Min"), { EvaluateMin, VariesBy_None} },
+	{ LowerHash("Max"), { EvaluateMax, VariesBy_None} },
 	{ LowerHash("Inverse"), { EvaluateInverse, VariesBy_None} },
 	{ LowerHash("LookAt"), { EvaluateLookAt, VariesBy_None} },
 	{ LowerHash("Projection"), { EvaluateProjection, VariesBy_None} },

@@ -38,7 +38,7 @@
 	* Maybe I should make the tokenizer code common between the rlf and shader parsers?
 
 *** AST expressions to
-	* Add min, max, clamp, saturate
+	* Add clamp, saturate
 	* Rounded up divide
 
 *** Obj import expansion

@@ -1,5 +1,5 @@
 
-tuneable uint BallCount [1,64] = 32;
+tuneable uint BallCount [0,64] = 32;
 
 ComputeShader {
 	ShaderPath = "producer.hlsl";
@@ -8,16 +8,15 @@ ComputeShader {
 
 Buffer {
 	ElementSize = sizeof(producer, "Point");
-	ElementCount = BallCount;
+	ElementCount = max(BallCount,1);
 	Flags = { Structured };
 	InitToZero = true;
 } Points
 
 Dispatch {
 	Shader = producer;
-	// TODO: Need a max function in AST to prevent underflow if BallCount were 0.
 	// TODO: A divide with rounding up would be even more helpful.
-	Groups = { ((BallCount - 1) / 32) + 1, 1, 1 };
+	Groups = { ((max(BallCount,1) - 1) / 32) + 1, 1, 1 };
 	Bind Points = Points;
 	SetConstant TextureSize = DisplaySize();
 	SetConstant BallCount = BallCount;

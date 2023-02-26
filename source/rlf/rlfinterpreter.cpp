@@ -5,6 +5,7 @@ namespace rlf
 void EvaluateExpression(ast::EvaluationContext& ec, ast::Node* ast, ast::Result& res);
 void EvaluateExpression(ast::EvaluationContext& ec, ast::Node* ast, ast::Result& res, 
 	VariableType expect, const char* name);
+void EvaluateConstants(ast::EvaluationContext& ec, std::vector<Constant*>& cnsts);
 
 
 // -----------------------------------------------------------------------------
@@ -899,6 +900,9 @@ void InitMain(
 	evCtx.DisplaySize = displaySize;
 	evCtx.Time = 0;
 
+	// Size expressions may depend on constants so we need to evaluate them first
+	EvaluateConstants(evCtx, rd->Constants);
+
 	for (Buffer* buf : rd->Buffers)
 	{
 		// Obj initialized buffers don't have expressions.
@@ -1109,6 +1113,9 @@ void HandleTextureParametersChanged(
 	errorState->Success = true;
 	errorState->Warning = false;
 	try {
+		// Size expressions may depend on constants so we need to evaluate them first
+		EvaluateConstants(ec->EvCtx, rd->Constants);
+
 		for (Texture* tex : rd->Textures)
 		{
 			// DDS textures are always sized based on the file. 
