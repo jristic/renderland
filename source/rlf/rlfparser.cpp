@@ -2453,7 +2453,7 @@ Buffer* ConsumeBufferDef(
 		{
 			ParserAssert(buf->ElementSizeExpr->Constant() && buf->ElementCountExpr->Constant(),
 				"Buffer having InitData is not compatible with non-constant buffer size/count");
-			float* data = (float*)malloc(bufSize);
+			void* data = malloc(bufSize);
 			AddMemToDescriptionData(data, rd);
 			buf->InitData = data;
 			buf->InitDataSize = (u32)bufSize;

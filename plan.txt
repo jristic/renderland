@@ -1,3 +1,9 @@
+*** Quality of life for sample building
+	* Show contents of shader constants in UI.
+	* SetGlobal for constant&resource to always bind a certain texture for a given name in shader.
+	* Binding same buffer for lightbuffer read&write threw a non-user assert.
+	* Make constant/resource not found a warning.
+
 * Hex uint literals. binary too?
 * Warning instead of error for missing constant.
 	* Warnings as error setting.
@@ -13,6 +19,7 @@
 **** Expand D3D feature support.
 	* Texture arrays, cubes, 3d textures.
 	* Append and consume buffers.
+	* Support UAVs in pixel and vertex shaders.
 	* Multiple vertex buffer and instanced buffer support. 
 
 *** Cleanup:

@@ -1403,7 +1403,8 @@ void ExecuteDraw(
 		{
 		case BindType::View:
 		{
-			Assert(bind.ViewBind->Type == ViewType::SRV, "Invalid");
+			ExecuteAssert(bind.ViewBind->Type == ViewType::SRV, 
+				"UAVs are not supported in vertex shaders.");
 			ctx->VSSetShaderResources(bind.BindIndex, 1, &bind.ViewBind->SRVObject);
 			break;
 		}
@@ -1421,7 +1422,8 @@ void ExecuteDraw(
 		{
 		case BindType::View:
 		{
-			Assert(bind.ViewBind->Type == ViewType::SRV, "Invalid");
+			ExecuteAssert(bind.ViewBind->Type == ViewType::SRV, 
+				"UAVs are not supported in pixel shaders.");
 			ctx->PSSetShaderResources(bind.BindIndex, 1, &bind.ViewBind->SRVObject);
 			break;
 		}
