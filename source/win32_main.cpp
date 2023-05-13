@@ -38,6 +38,7 @@
 #include "rlf/rlfparser.h"
 #include "rlf/rlfinterpreter.h"
 #include "rlf/shaderparser.h"
+#include "gui.h"
 
 #define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
 
@@ -180,50 +181,53 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	::ShowWindow(hwnd, Cfg.Maximized ? SW_MAXIMIZE : SW_SHOWDEFAULT);
 	::UpdateWindow(hwnd);
 
-	// Initialize Direct3D
-	DXGI_SWAP_CHAIN_DESC sd;
-	ZeroMemory(&sd, sizeof(sd));
-	sd.BufferCount = 2;
-	sd.BufferDesc.Width = 0;
-	sd.BufferDesc.Height = 0;
-	sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	sd.BufferDesc.RefreshRate.Numerator = 60;
-	sd.BufferDesc.RefreshRate.Denominator = 1;
-	sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_UNORDERED_ACCESS;
-	sd.OutputWindow = hwnd;
-	sd.SampleDesc.Count = 1;
-	sd.SampleDesc.Quality = 0;
-	sd.Windowed = TRUE;
-	sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-
-	UINT createDeviceFlags = 0;
-	createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
-	D3D_FEATURE_LEVEL featureLevel;
-	const D3D_FEATURE_LEVEL featureLevelArray[1] = { D3D_FEATURE_LEVEL_11_0 };
-	HRESULT hr = D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 
-		createDeviceFlags, featureLevelArray, 1, D3D11_SDK_VERSION, &sd, &g_pSwapChain, 
-		&g_pd3dDevice, &featureLevel, &g_pd3dDeviceContext);
-	Assert(hr == S_OK, "failed to create device %x", hr);
-
-	BOOL success = g_pd3dDevice->QueryInterface(__uuidof(ID3D11Debug), 
-		(void**)&g_d3dDebug);
-	Assert(SUCCEEDED(success), "failed to get debug device");
-	success = g_d3dDebug->QueryInterface(__uuidof(ID3D11InfoQueue),
-		(void**)&g_d3dInfoQueue);
-	Assert(SUCCEEDED(success), "failed to get info queue");
-	// D3D11_MESSAGE_ID hide[] = {
-	   //  D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS,
-	// };
-
-	// D3D11_INFO_QUEUE_FILTER filter = {};
-	// filter.DenyList.NumIDs = _countof(hide);
-	// filter.DenyList.pIDList = hide;
-	// g_d3dInfoQueue->AddStorageFilterEntries(&filter);
-	if (IsDebuggerPresent())
+	HRESULT hr;
 	{
-		g_d3dInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
-		g_d3dInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, true);
+		// Initialize Direct3D
+		DXGI_SWAP_CHAIN_DESC sd;
+		ZeroMemory(&sd, sizeof(sd));
+		sd.BufferCount = 2;
+		sd.BufferDesc.Width = 0;
+		sd.BufferDesc.Height = 0;
+		sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		sd.BufferDesc.RefreshRate.Numerator = 60;
+		sd.BufferDesc.RefreshRate.Denominator = 1;
+		sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+		sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_UNORDERED_ACCESS;
+		sd.OutputWindow = hwnd;
+		sd.SampleDesc.Count = 1;
+		sd.SampleDesc.Quality = 0;
+		sd.Windowed = TRUE;
+		sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+
+		UINT createDeviceFlags = 0;
+		createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+		D3D_FEATURE_LEVEL featureLevel;
+		const D3D_FEATURE_LEVEL featureLevelArray[1] = { D3D_FEATURE_LEVEL_11_0 };
+		hr = D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 
+			createDeviceFlags, featureLevelArray, 1, D3D11_SDK_VERSION, &sd, &g_pSwapChain, 
+			&g_pd3dDevice, &featureLevel, &g_pd3dDeviceContext);
+		Assert(hr == S_OK, "failed to create device %x", hr);
+
+		BOOL success = g_pd3dDevice->QueryInterface(__uuidof(ID3D11Debug), 
+			(void**)&g_d3dDebug);
+		Assert(SUCCEEDED(success), "failed to get debug device");
+		success = g_d3dDebug->QueryInterface(__uuidof(ID3D11InfoQueue),
+			(void**)&g_d3dInfoQueue);
+		Assert(SUCCEEDED(success), "failed to get info queue");
+		// D3D11_MESSAGE_ID hide[] = {
+		   //  D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS,
+		// };
+
+		// D3D11_INFO_QUEUE_FILTER filter = {};
+		// filter.DenyList.NumIDs = _countof(hide);
+		// filter.DenyList.pIDList = hide;
+		// g_d3dInfoQueue->AddStorageFilterEntries(&filter);
+		if (IsDebuggerPresent())
+		{
+			g_d3dInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
+			g_d3dInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, true);
+		}
 	}
 
 	CreateRenderTarget();
@@ -472,14 +476,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			{
 				if (RlfCompileSuccess)
 				{
-					std::vector<rlf::Pass> passes = CurrentRenderDesc->Passes;
-					for (int i = 0 ; i < passes.size() ; ++i)
-					{
-						rlf::Pass& p = passes[i];
-						static int selected_index = -1;
-						if (ImGui::Selectable(p.Name ? p.Name : "anon", selected_index == i))
-							selected_index = i;
-					}
+					gui::DisplayShaderPasses(CurrentRenderDesc);
 				}
 			}
 			ImGui::End();
@@ -867,3 +864,4 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 #include "rlf/rlfinterpreter.cpp"
 #include "rlf/ast.cpp"
 #include "rlf/shaderparser.cpp"
+#include "gui.cpp"

@@ -1,7 +1,5 @@
 *** Quality of life for sample building
-	* Show contents of shader constants in UI.
 	* SetGlobal for constant&resource to always bind a certain texture for a given name in shader.
-	* Binding same buffer for lightbuffer read&write threw a non-user assert.
 	* Make constant/resource not found a warning.
 
 * Hex uint literals. binary too?
@@ -56,6 +54,7 @@
 
 *** UI:
 	* Event-viewer style list of the passes in a frame. 
+		* Shader constants display should handle vector/matrix/array types.
 	* Debug viz tools for seeing the contents of textures/buffers/rendertargets/depthstencils at any given point in the frame. 
 	* Sample browser for faster way to open various samples for testing
 	* Display pane
