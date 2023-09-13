@@ -522,6 +522,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 						else if (tune->Type == rlf::FloatType)
 							ch = ImGui::DragFloat(tune->Name, &tune->Value.FloatVal, 0.01f,
 								tune->Min.FloatVal, tune->Max.FloatVal);
+						else if (tune->Type == rlf::Float2Type)
+							ch = ImGui::DragFloat2(tune->Name, (float*)&tune->Value.Float4Val.m, 
+								0.01f, tune->Min.FloatVal, tune->Max.FloatVal);
 						else if (tune->Type == rlf::Float3Type)
 							ch = ImGui::DragFloat3(tune->Name, (float*)&tune->Value.Float4Val.m, 
 								0.01f, tune->Min.FloatVal, tune->Max.FloatVal);
