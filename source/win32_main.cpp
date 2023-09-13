@@ -18,7 +18,6 @@
 
 // External headers
 #include "imgui/imgui.h"
-#define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui/imgui_internal.h"
 #include "DirectXTex/DirectXTex.h"
 #include "ImGuiFileDialog/ImGuiFileDialog.h"
@@ -844,21 +843,6 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	}
 	return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
-
-// External source
-#include "imgui/imgui.cpp"
-#include "imgui/imgui_draw.cpp"
-// #include "imgui/imgui_demo.cpp"
-#include "imgui/imgui_tables.cpp"
-#include "imgui/imgui_widgets.cpp"
-#pragma warning( push )
-#pragma warning( disable : 4100 )
-#include "ImGuiFileDialog/ImGuiFileDialog.cpp"
-#pragma warning( pop )
-
-// Imgui example backend
-#include "imgui_impl_win32.cpp"
-#include "imgui_impl_dx11.cpp"
 
 // Project source
 #include "config.cpp"

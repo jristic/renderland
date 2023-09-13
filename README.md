@@ -27,4 +27,5 @@ See the samples in `samples/`.
 ## Building
 1. If necessary, edit shell.bat to correctly point to vcvarsall.bat for your VS installation.
 2. You will need to run shell.bat in your environment to set up for compiling with VS tools.
-3. Run 'build'. This builds a debug configuration by default. Run 'build release' for an optimized build. 
+3. Run 'prebuild'. This builds a debug configuration by default. Run 'prebuild release' for an optimized build. This needs to match whether you build release or debug for the next step. The files included in this compilation unit are not generally changed so it can be skipped on future compiles if not changing external source files or global compilation parameters. 
+4. Run 'build'. This builds a debug configuration by default. Run 'build release' for an optimized build. 
