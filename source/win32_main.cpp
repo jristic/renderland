@@ -168,7 +168,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplWin32_Init(hwnd);
-	ImGui_ImplDX11_Init(Gfx.g_pd3dDevice, Gfx.g_pd3dDeviceContext);
+	ImGui_ImplDX11_Init(Gfx.Device, Gfx.DeviceContext);
 
 	// Our state
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
@@ -657,7 +657,7 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	switch (msg)
 	{
 	case WM_SIZE:
-		if (Gfx.g_pd3dDevice != NULL && wParam != SIZE_MINIMIZED)
+		if (Gfx.Device != NULL && wParam != SIZE_MINIMIZED)
 		{
 			gfx::HandleBackBufferResize(&Gfx, (UINT)LOWORD(lParam), (UINT)HIWORD(lParam));
 
@@ -702,9 +702,10 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 // Project source
 #include "config.cpp"
 #include "fileio.cpp"
-#include "d3d11/gfx.cpp"
 #include "rlf/rlfparser.cpp"
 #include "rlf/rlfinterpreter.cpp"
 #include "rlf/ast.cpp"
 #include "rlf/shaderparser.cpp"
 #include "gui.cpp"
+
+#include "d3d11/gfx.cpp"

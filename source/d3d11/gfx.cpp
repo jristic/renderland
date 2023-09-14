@@ -30,15 +30,15 @@ void Initialize(Context* ctx, HWND hwnd)
 	D3D_FEATURE_LEVEL featureLevel;
 	const D3D_FEATURE_LEVEL featureLevelArray[1] = { D3D_FEATURE_LEVEL_11_0 };
 	HRESULT hr = D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 
-		createDeviceFlags, featureLevelArray, 1, D3D11_SDK_VERSION, &sd, &ctx->g_pSwapChain, 
-		&ctx->g_pd3dDevice, &featureLevel, &ctx->g_pd3dDeviceContext);
+		createDeviceFlags, featureLevelArray, 1, D3D11_SDK_VERSION, &sd, &ctx->SwapChain, 
+		&ctx->Device, &featureLevel, &ctx->DeviceContext);
 	Assert(hr == S_OK, "failed to create device %x", hr);
 
-	BOOL success = ctx->g_pd3dDevice->QueryInterface(__uuidof(ID3D11Debug), 
-		(void**)&ctx->g_d3dDebug);
+	BOOL success = ctx->Device->QueryInterface(__uuidof(ID3D11Debug), 
+		(void**)&ctx->Debug);
 	Assert(SUCCEEDED(success), "failed to get debug device");
-	success = ctx->g_d3dDebug->QueryInterface(__uuidof(ID3D11InfoQueue),
-		(void**)&ctx->g_d3dInfoQueue);
+	success = ctx->Debug->QueryInterface(__uuidof(ID3D11InfoQueue),
+		(void**)&ctx->InfoQueue);
 	Assert(SUCCEEDED(success), "failed to get info queue");
 	// D3D11_MESSAGE_ID hide[] = {
 	   //  D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS,
@@ -47,33 +47,33 @@ void Initialize(Context* ctx, HWND hwnd)
 	// D3D11_INFO_QUEUE_FILTER filter = {};
 	// filter.DenyList.NumIDs = _countof(hide);
 	// filter.DenyList.pIDList = hide;
-	// g_d3dInfoQueue->AddStorageFilterEntries(&filter);
+	// InfoQueue->AddStorageFilterEntries(&filter);
 	if (IsDebuggerPresent())
 	{
-		ctx->g_d3dInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
-		ctx->g_d3dInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, true);
+		ctx->InfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
+		ctx->InfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, true);
 	}
 
 	ID3D11Texture2D* pBackBuffer;
-	ctx->g_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&pBackBuffer));
+	ctx->SwapChain->GetBuffer(0, IID_PPV_ARGS(&pBackBuffer));
 	// TODO: Should we not be using an SRGB conversion on the backbuffer? 
 	//	From my understanding we should, but it looks visually wrong to me. 
 	// D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {};
 	// rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 	// rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-	// g_pd3dDevice->CreateRenderTargetView(pBackBuffer, &rtvDesc, &ctx->g_mainRenderTargetView);
-	ctx->g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &ctx->g_mainRenderTargetView);
+	// Device->CreateRenderTargetView(pBackBuffer, &rtvDesc, &ctx->BackBufferRtv);
+	ctx->Device->CreateRenderTargetView(pBackBuffer, nullptr, &ctx->BackBufferRtv);
 	pBackBuffer->Release();
 }
 
 void Release(Context* ctx)
 {
-	SafeRelease(ctx->g_mainRenderTargetView);
-	SafeRelease(ctx->g_pSwapChain);
-	SafeRelease(ctx->g_pd3dDeviceContext);
-	SafeRelease(ctx->g_d3dInfoQueue);
-	SafeRelease(ctx->g_d3dDebug);
-	SafeRelease(ctx->g_pd3dDevice);
+	SafeRelease(ctx->BackBufferRtv);
+	SafeRelease(ctx->SwapChain);
+	SafeRelease(ctx->DeviceContext);
+	SafeRelease(ctx->InfoQueue);
+	SafeRelease(ctx->Debug);
+	SafeRelease(ctx->Device);
 
 #if defined(_DEBUG)
 	// Check for leaked D3D/DXGI objects
@@ -118,7 +118,7 @@ Texture CreateTexture2D(Context* ctx, u32 w, u32 h, DXGI_FORMAT fmt, BindFlag fl
 		desc.BindFlags |= D3D11_BIND_DEPTH_STENCIL;
 	desc.CPUAccessFlags = 0;
 	desc.MiscFlags = 0;
-	HRESULT hr = ctx->g_pd3dDevice->CreateTexture2D(&desc, nullptr, &D3dObject);
+	HRESULT hr = ctx->Device->CreateTexture2D(&desc, nullptr, &D3dObject);
 	Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
 
 	return Texture{ D3dObject };
@@ -127,7 +127,7 @@ Texture CreateTexture2D(Context* ctx, u32 w, u32 h, DXGI_FORMAT fmt, BindFlag fl
 ShaderResourceView CreateShaderResourceView(Context* ctx, Texture tex)
 {
 	ID3D11ShaderResourceView* D3dObject;
-	HRESULT hr = ctx->g_pd3dDevice->CreateShaderResourceView(tex.D3dObject, nullptr, &D3dObject);
+	HRESULT hr = ctx->Device->CreateShaderResourceView(tex.D3dObject, nullptr, &D3dObject);
 	Assert(hr == S_OK, "failed to create srv, hr=%x", hr);
 	return ShaderResourceView{ D3dObject };
 }
@@ -135,7 +135,7 @@ ShaderResourceView CreateShaderResourceView(Context* ctx, Texture tex)
 UnorderedAccessView CreateUnorderedAccessView(Context* ctx, Texture tex)
 {
 	ID3D11UnorderedAccessView* D3dObject;
-	HRESULT hr = ctx->g_pd3dDevice->CreateUnorderedAccessView(tex.D3dObject, nullptr, &D3dObject);
+	HRESULT hr = ctx->Device->CreateUnorderedAccessView(tex.D3dObject, nullptr, &D3dObject);
 	Assert(hr == S_OK, "failed to create uav, hr=%x", hr);
 	return UnorderedAccessView{ D3dObject };
 }
@@ -143,7 +143,7 @@ UnorderedAccessView CreateUnorderedAccessView(Context* ctx, Texture tex)
 RenderTargetView CreateRenderTargetView(Context* ctx, Texture tex)
 {
 	ID3D11RenderTargetView* D3dObject;
-	HRESULT hr = ctx->g_pd3dDevice->CreateRenderTargetView(tex.D3dObject, nullptr, &D3dObject);
+	HRESULT hr = ctx->Device->CreateRenderTargetView(tex.D3dObject, nullptr, &D3dObject);
 	Assert(hr == S_OK, "failed to create rtv, hr=%x", hr);
 	return RenderTargetView{ D3dObject };
 }
@@ -151,7 +151,7 @@ RenderTargetView CreateRenderTargetView(Context* ctx, Texture tex)
 DepthStencilView CreateDepthStencilView(Context* ctx, Texture tex)
 {
 	ID3D11DepthStencilView* D3dObject;
-	HRESULT hr = ctx->g_pd3dDevice->CreateDepthStencilView(tex.D3dObject, nullptr, &D3dObject);
+	HRESULT hr = ctx->Device->CreateDepthStencilView(tex.D3dObject, nullptr, &D3dObject);
 	Assert(hr == S_OK, "failed to create dsv, hr=%x", hr);
 	return DepthStencilView{ D3dObject };
 }
@@ -186,65 +186,65 @@ void Release(DepthStencilView& dsv)
 
 void ClearRenderTarget(Context* ctx, RenderTargetView rtv, const float clear[4])
 {
-	ctx->g_pd3dDeviceContext->ClearRenderTargetView(rtv.D3dObject, clear);
+	ctx->DeviceContext->ClearRenderTargetView(rtv.D3dObject, clear);
 }
 
 void ClearDepth(Context* ctx, DepthStencilView dsv, float depth)
 {
-	ctx->g_pd3dDeviceContext->ClearDepthStencilView(dsv.D3dObject, 
+	ctx->DeviceContext->ClearDepthStencilView(dsv.D3dObject, 
 		D3D11_CLEAR_DEPTH, depth, 0);
 }
 
 void ClearBackBufferRtv(Context* ctx)
 {
 	const float clear_0[4] = {0,0,0,0};
-	ctx->g_pd3dDeviceContext->ClearRenderTargetView(ctx->g_mainRenderTargetView, clear_0);
+	ctx->DeviceContext->ClearRenderTargetView(ctx->BackBufferRtv, clear_0);
 
 }
 
 void BindBackBufferRtv(Context* ctx)
 {
-	ctx->g_pd3dDeviceContext->OMSetRenderTargets(1, &ctx->g_mainRenderTargetView, nullptr);
+	ctx->DeviceContext->OMSetRenderTargets(1, &ctx->BackBufferRtv, nullptr);
 }
 
 void Present(Context* ctx, u8 vblanks)
 {
-	ctx->g_pSwapChain->Present(vblanks, 0); // Present with vsync
+	ctx->SwapChain->Present(vblanks, 0); // Present with vsync
 }
 
 void HandleBackBufferResize(Context* ctx, u32 w, u32 h)
 {
-	SafeRelease(ctx->g_mainRenderTargetView);
+	SafeRelease(ctx->BackBufferRtv);
 
-	ctx->g_pSwapChain->ResizeBuffers(0, w, h, DXGI_FORMAT_UNKNOWN, 0);
+	ctx->SwapChain->ResizeBuffers(0, w, h, DXGI_FORMAT_UNKNOWN, 0);
 
 	ID3D11Texture2D* pBackBuffer;
-	ctx->g_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&pBackBuffer));
+	ctx->SwapChain->GetBuffer(0, IID_PPV_ARGS(&pBackBuffer));
 	// TODO: Should we not be using an SRGB conversion on the backbuffer? 
 	//	From my understanding we should, but it looks visually wrong to me. 
 	// D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {};
 	// rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 	// rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-	// g_pd3dDevice->CreateRenderTargetView(pBackBuffer, &rtvDesc, &ctx->g_mainRenderTargetView);
-	ctx->g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &ctx->g_mainRenderTargetView);
+	// Device->CreateRenderTargetView(pBackBuffer, &rtvDesc, &ctx->BackBufferRtv);
+	ctx->Device->CreateRenderTargetView(pBackBuffer, nullptr, &ctx->BackBufferRtv);
 	pBackBuffer->Release();
 }
 
 bool CheckD3DValidation(gfx::Context* ctx, std::string& outMessage)
 {
-	UINT64 num = ctx->g_d3dInfoQueue->GetNumStoredMessages();
+	UINT64 num = ctx->InfoQueue->GetNumStoredMessages();
 	for (u32 i = 0 ; i < num ; ++i)
 	{
 		size_t messageLength;
-		HRESULT hr = ctx->g_d3dInfoQueue->GetMessage(i, nullptr, &messageLength);
+		HRESULT hr = ctx->InfoQueue->GetMessage(i, nullptr, &messageLength);
 		Assert(hr == S_FALSE, "Failed to get message, hr=%x", hr);
 		D3D11_MESSAGE* message = (D3D11_MESSAGE*)malloc(messageLength);
-		ctx->g_d3dInfoQueue->GetMessage(i, message, &messageLength);
+		ctx->InfoQueue->GetMessage(i, message, &messageLength);
 		Assert(hr == S_FALSE, "Failed to get message, hr=%x", hr);
 		outMessage += message->pDescription;
 		free(message);
 	}
-	ctx->g_d3dInfoQueue->ClearStoredMessages();
+	ctx->InfoQueue->ClearStoredMessages();
 
 	return num > 0;
 }

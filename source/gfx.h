@@ -29,54 +29,32 @@ struct ID3D11UnorderedAccessView;
 struct ID3D11RenderTargetView;
 struct ID3D11DepthStencilView;
 
+// forward declares for rlf types
+// TODO: extract type definitions from this header to a gfx_types.h so rlf.h can
+//	be included before gfx.h
+namespace rlf {
+	struct RasterizerState;
+	struct DepthStencilState;
+	struct ComputeShader;
+	struct VertexShader;
+	struct PixelShader;
+	struct Buffer;
+	struct Texture;
+	struct Sampler;
+	struct View;
+	struct ConstantBuffer;
+	struct Draw;
+}
+
 namespace gfx {
 
-	struct Context;
-	struct Texture;
-	struct RenderTargetView;
-	struct ShaderResourceView;
-	struct UnorderedAccessView;
-	struct DepthStencilView;
-
-	enum BindFlag
-	{
-		BindFlag_SRV = 1,
-		BindFlag_UAV = 2,
-		BindFlag_RTV = 4,
-		BindFlag_DSV = 8,
-	};
-
-	void Initialize(Context* ctx, HWND hwnd);
-	void Release(Context* ctx);
-
-	Texture CreateTexture2D(Context* ctx, u32 w, u32 h, DXGI_FORMAT fmt, BindFlag flags);
-	ShaderResourceView CreateShaderResourceView(Context* ctx, Texture tex);
-	UnorderedAccessView CreateUnorderedAccessView(Context* ctx, Texture tex);
-	RenderTargetView CreateRenderTargetView(Context* ctx, Texture tex);
-	DepthStencilView CreateDepthStencilView(Context* ctx, Texture tex);
-	void Release(Texture& tex);
-	void Release(RenderTargetView& tex);
-	void Release(ShaderResourceView& tex);
-	void Release(UnorderedAccessView& tex);
-	void Release(DepthStencilView& tex);
-
-	void ClearRenderTarget(Context* ctx, RenderTargetView rtv, const float clear[4]);
-	void ClearDepth(Context* ctx, DepthStencilView dsv, float depth);
-
-	void ClearBackBufferRtv(Context* ctx);
-	void BindBackBufferRtv(Context* ctx);
-	void Present(Context* ctx, u8 vblanks);
-
-	void HandleBackBufferResize(Context* ctx, u32 w, u32 h);
-	bool CheckD3DValidation(Context* ctx, std::string& outMessage);
-
 	struct Context {
-		ID3D11Device*				g_pd3dDevice;
-		ID3D11Debug*				g_d3dDebug;
-		ID3D11InfoQueue*			g_d3dInfoQueue;
-		ID3D11DeviceContext*		g_pd3dDeviceContext;
-		IDXGISwapChain*				g_pSwapChain;
-		ID3D11RenderTargetView*		g_mainRenderTargetView;
+		ID3D11Device*				Device;
+		ID3D11Debug*				Debug;
+		ID3D11InfoQueue*			InfoQueue;
+		ID3D11DeviceContext*		DeviceContext;
+		IDXGISwapChain*				SwapChain;
+		ID3D11RenderTargetView*		BackBufferRtv;
 	};
 
 	struct RasterizerState {
@@ -124,5 +102,37 @@ namespace gfx {
 	struct DepthStencilView {
 		ID3D11DepthStencilView* D3dObject;
 	};
+
+	enum BindFlag
+	{
+		BindFlag_SRV = 1,
+		BindFlag_UAV = 2,
+		BindFlag_RTV = 4,
+		BindFlag_DSV = 8,
+	};
+
+	void Initialize(Context* ctx, HWND hwnd);
+	void Release(Context* ctx);
+
+	Texture CreateTexture2D(Context* ctx, u32 w, u32 h, DXGI_FORMAT fmt, BindFlag flags);
+	ShaderResourceView CreateShaderResourceView(Context* ctx, Texture tex);
+	UnorderedAccessView CreateUnorderedAccessView(Context* ctx, Texture tex);
+	RenderTargetView CreateRenderTargetView(Context* ctx, Texture tex);
+	DepthStencilView CreateDepthStencilView(Context* ctx, Texture tex);
+	void Release(Texture& tex);
+	void Release(RenderTargetView& tex);
+	void Release(ShaderResourceView& tex);
+	void Release(UnorderedAccessView& tex);
+	void Release(DepthStencilView& tex);
+
+	void ClearRenderTarget(Context* ctx, RenderTargetView rtv, const float clear[4]);
+	void ClearDepth(Context* ctx, DepthStencilView dsv, float depth);
+
+	void ClearBackBufferRtv(Context* ctx);
+	void BindBackBufferRtv(Context* ctx);
+	void Present(Context* ctx, u8 vblanks);
+
+	void HandleBackBufferResize(Context* ctx, u32 w, u32 h);
+	bool CheckD3DValidation(Context* ctx, std::string& outMessage);
 
 }

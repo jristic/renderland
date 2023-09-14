@@ -1114,7 +1114,7 @@ void HandleTextureParametersChanged(
 	ExecuteContext* ec,
 	ErrorState* errorState)
 {
-	ID3D11Device* device = ec->GfxCtx->g_pd3dDevice;
+	ID3D11Device* device = ec->GfxCtx->Device;
 	errorState->Success = true;
 	errorState->Warning = false;
 	try {
@@ -1286,7 +1286,7 @@ void EvaluateConstants(ast::EvaluationContext& ec, std::vector<Constant*>& cnsts
 void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets, 
 	std::vector<ConstantBuffer>& buffers)
 {
-	ID3D11DeviceContext* ctx = ec->GfxCtx->g_pd3dDeviceContext;
+	ID3D11DeviceContext* ctx = ec->GfxCtx->DeviceContext;
 	for (const SetConstant& set : sets)
 	{
 		ast::Result res;
@@ -1317,7 +1317,7 @@ void ExecuteDispatch(
 	Dispatch* dc,
 	ExecuteContext* ec)
 {
-	ID3D11DeviceContext* ctx = ec->GfxCtx->g_pd3dDeviceContext;
+	ID3D11DeviceContext* ctx = ec->GfxCtx->DeviceContext;
 	UINT initialCount = (UINT)-1;
 	ctx->CSSetShader(dc->Shader->GfxState.D3dObject, nullptr, 0);
 	ExecuteSetConstants(ec, dc->Constants, dc->CBs);
@@ -1389,7 +1389,7 @@ void ExecuteDraw(
 	Draw* draw,
 	ExecuteContext* ec)
 {
-	ID3D11DeviceContext* ctx = ec->GfxCtx->g_pd3dDeviceContext;
+	ID3D11DeviceContext* ctx = ec->GfxCtx->DeviceContext;
 	ctx->VSSetShader(draw->VShader->GfxState.D3dObject, nullptr, 0);
 	ctx->IASetInputLayout(draw->VShader->LayoutGfxState.D3dObject);
 	ctx->PSSetShader(draw->PShader ? draw->PShader->GfxState.D3dObject : nullptr, nullptr, 0);
@@ -1552,7 +1552,7 @@ void _Execute(
 	ExecuteContext* ec,
 	RenderDescription* rd)
 {
-	ID3D11DeviceContext* ctx = ec->GfxCtx->g_pd3dDeviceContext;
+	ID3D11DeviceContext* ctx = ec->GfxCtx->DeviceContext;
 
 	EvaluateConstants(ec->EvCtx, rd->Constants);
 
