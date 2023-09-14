@@ -57,51 +57,21 @@ namespace gfx {
 		ID3D11RenderTargetView*		BackBufferRtv;
 	};
 
-	struct RasterizerState {
-		ID3D11RasterizerState* D3dObject;
-	};
-	struct DepthStencilState {
-		ID3D11DepthStencilState* D3dObject;
-	};
-	struct BlendState {
-		ID3D11BlendState* D3dObject;
-	};
-	struct ShaderReflection {
-		ID3D11ShaderReflection* D3dObject;
-	};
-	struct ComputeShader {
-		ID3D11ComputeShader* D3dObject;
-	};
-	struct VertexShader {
-		ID3D11VertexShader* D3dObject;
-	};
-	struct InputLayout {
-		ID3D11InputLayout* D3dObject;
-	};
-	struct PixelShader {
-		ID3D11PixelShader* D3dObject;
-	};
-	struct Buffer {
-		ID3D11Buffer* D3dObject;
-	};
-	struct Texture {
-		ID3D11Texture2D* D3dObject;
-	};
-	struct SamplerState {
-		ID3D11SamplerState* D3dObject;
-	};
-	struct ShaderResourceView {
-		ID3D11ShaderResourceView* D3dObject;
-	};
-	struct UnorderedAccessView {
-		ID3D11UnorderedAccessView* D3dObject;
-	};
-	struct RenderTargetView {
-		ID3D11RenderTargetView* D3dObject;
-	};
-	struct DepthStencilView {
-		ID3D11DepthStencilView* D3dObject;
-	};
+	typedef ID3D11RasterizerState* RasterizerState;
+	typedef ID3D11DepthStencilState* DepthStencilState;
+	typedef ID3D11BlendState* BlendState;
+	typedef ID3D11ShaderReflection* ShaderReflection;
+	typedef ID3D11ComputeShader* ComputeShader;
+	typedef ID3D11VertexShader* VertexShader;
+	typedef ID3D11InputLayout* InputLayout;
+	typedef ID3D11PixelShader* PixelShader;
+	typedef ID3D11Buffer* Buffer;
+	typedef ID3D11Texture2D* Texture;
+	typedef ID3D11SamplerState* SamplerState;
+	typedef ID3D11ShaderResourceView* ShaderResourceView;
+	typedef ID3D11UnorderedAccessView* UnorderedAccessView;
+	typedef ID3D11RenderTargetView* RenderTargetView;
+	typedef ID3D11DepthStencilView* DepthStencilView;
 
 	enum BindFlag
 	{

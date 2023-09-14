@@ -121,29 +121,29 @@ Texture CreateTexture2D(Context* ctx, u32 w, u32 h, DXGI_FORMAT fmt, BindFlag fl
 	HRESULT hr = ctx->Device->CreateTexture2D(&desc, nullptr, &D3dObject);
 	Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
 
-	return Texture{ D3dObject };
+	return D3dObject;
 }
 
 ShaderResourceView CreateShaderResourceView(Context* ctx, Texture tex)
 {
 	ID3D11ShaderResourceView* D3dObject;
-	HRESULT hr = ctx->Device->CreateShaderResourceView(tex.D3dObject, nullptr, &D3dObject);
+	HRESULT hr = ctx->Device->CreateShaderResourceView(tex, nullptr, &D3dObject);
 	Assert(hr == S_OK, "failed to create srv, hr=%x", hr);
-	return ShaderResourceView{ D3dObject };
+	return D3dObject;
 }
 
 UnorderedAccessView CreateUnorderedAccessView(Context* ctx, Texture tex)
 {
 	ID3D11UnorderedAccessView* D3dObject;
-	HRESULT hr = ctx->Device->CreateUnorderedAccessView(tex.D3dObject, nullptr, &D3dObject);
+	HRESULT hr = ctx->Device->CreateUnorderedAccessView(tex, nullptr, &D3dObject);
 	Assert(hr == S_OK, "failed to create uav, hr=%x", hr);
-	return UnorderedAccessView{ D3dObject };
+	return D3dObject;
 }
 
 RenderTargetView CreateRenderTargetView(Context* ctx, Texture tex)
 {
 	ID3D11RenderTargetView* D3dObject;
-	HRESULT hr = ctx->Device->CreateRenderTargetView(tex.D3dObject, nullptr, &D3dObject);
+	HRESULT hr = ctx->Device->CreateRenderTargetView(tex, nullptr, &D3dObject);
 	Assert(hr == S_OK, "failed to create rtv, hr=%x", hr);
 	return RenderTargetView{ D3dObject };
 }
@@ -151,47 +151,47 @@ RenderTargetView CreateRenderTargetView(Context* ctx, Texture tex)
 DepthStencilView CreateDepthStencilView(Context* ctx, Texture tex)
 {
 	ID3D11DepthStencilView* D3dObject;
-	HRESULT hr = ctx->Device->CreateDepthStencilView(tex.D3dObject, nullptr, &D3dObject);
+	HRESULT hr = ctx->Device->CreateDepthStencilView(tex, nullptr, &D3dObject);
 	Assert(hr == S_OK, "failed to create dsv, hr=%x", hr);
-	return DepthStencilView{ D3dObject };
+	return D3dObject;
 }
 
 
 
 void Release(Texture& tex)
 {
-	SafeRelease(tex.D3dObject);
+	SafeRelease(tex);
 }
 
 void Release(RenderTargetView& rtv)
 {
-	SafeRelease(rtv.D3dObject);
+	SafeRelease(rtv);
 }
 
 void Release(ShaderResourceView& srv)
 {
-	SafeRelease(srv.D3dObject);
+	SafeRelease(srv);
 }
 
 void Release(UnorderedAccessView& uav)
 {
-	SafeRelease(uav.D3dObject);
+	SafeRelease(uav);
 }
 
 void Release(DepthStencilView& dsv)
 {
-	SafeRelease(dsv.D3dObject);
+	SafeRelease(dsv);
 }
 
 
 void ClearRenderTarget(Context* ctx, RenderTargetView rtv, const float clear[4])
 {
-	ctx->DeviceContext->ClearRenderTargetView(rtv.D3dObject, clear);
+	ctx->DeviceContext->ClearRenderTargetView(rtv, clear);
 }
 
 void ClearDepth(Context* ctx, DepthStencilView dsv, float depth)
 {
-	ctx->DeviceContext->ClearDepthStencilView(dsv.D3dObject, 
+	ctx->DeviceContext->ClearDepthStencilView(dsv, 
 		D3D11_CLEAR_DEPTH, depth, 0);
 }
 

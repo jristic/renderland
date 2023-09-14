@@ -505,7 +505,7 @@ u32 ConsumeType(TokenIter& t, ParseState& ps)
 		break;
 	}
 	auto search = ps.structSizes->find(name);
-	InitAssert(search != ps.structSizes->end(), "Size for type %s is unknown",
+	ParserAssert(search != ps.structSizes->end(), "Size for type %s is unknown",
 		name);
 	return search->second;
 }

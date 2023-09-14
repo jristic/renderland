@@ -296,7 +296,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			DisplaySize.x = (u32)max(1, vMax.x - vMin.x);
 			DisplaySize.y = (u32)max(1, vMax.y - vMin.y);
 
-			if (RlfDisplayTex.D3dObject == nullptr || PrevDisplaySize != DisplaySize)
+			if (RlfDisplayTex == nullptr || PrevDisplaySize != DisplaySize)
 			{
 				gfx::Release(RlfDisplayUav);
 				gfx::Release(RlfDisplaySrv);
@@ -317,7 +317,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 				RlfDepthStencilView = gfx::CreateDepthStencilView(&Gfx, RlfDepthStencilTex);
 			}
 			
-			ImGui::Image(RlfDisplaySrv.D3dObject, ImVec2(vMax.x-vMin.x, vMax.y-vMin.y));
+			ImGui::Image(RlfDisplaySrv, ImVec2(vMax.x-vMin.x, vMax.y-vMin.y));
 		}
 		ImGui::End();
 
@@ -688,7 +688,19 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
-// TODO: remove d3d11 headers and verify compile
+
+
+
+// Project source
+#include "config.cpp"
+#include "fileio.cpp"
+#include "rlf/rlfparser.cpp"
+#include "rlf/ast.cpp"
+#include "rlf/shaderparser.cpp"
+
+
+// Headers for render backend last so we can verify only the below source files
+//	use it. 
 #include <d3d11.h>
 #include <d3d11shader.h>
 #include <d3dcompiler.h>
@@ -697,15 +709,6 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 #include <dxgidebug.h>
 #endif
 
-
-
-// Project source
-#include "config.cpp"
-#include "fileio.cpp"
-#include "rlf/rlfparser.cpp"
 #include "rlf/rlfinterpreter.cpp"
-#include "rlf/ast.cpp"
-#include "rlf/shaderparser.cpp"
-#include "gui.cpp"
-
 #include "d3d11/gfx.cpp"
+#include "gui.cpp"
