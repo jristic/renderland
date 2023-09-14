@@ -2,6 +2,10 @@
 namespace rlf
 {
 
+// TODO: remove
+#define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
+
+
 void EvaluateExpression(ast::EvaluationContext& ec, ast::Node* ast, ast::Result& res);
 void EvaluateExpression(ast::EvaluationContext& ec, ast::Node* ast, ast::Result& res, 
 	VariableType expect, const char* name);
@@ -335,7 +339,7 @@ ID3DBlob* CommonCompileShader(CommonShader* common, const char* dirPath, const c
 
 void CreateInputLayout(ID3D11Device* device, VertexShader* shader, ID3DBlob* blob)
 {
-	ID3D11ShaderReflection* reflector = shader->Common.Reflector;
+	ID3D11ShaderReflection* reflector = shader->Common.Reflector.D3dObject;
 
 	// Get shader info
 	D3D11_SHADER_DESC shaderDesc;
@@ -407,14 +411,14 @@ void CreateInputLayout(ID3D11Device* device, VertexShader* shader, ID3DBlob* blo
 		// Try to create Input Layout
 		HRESULT hr = device->CreateInputLayout(
 			&inputLayoutDesc[0], (u32)inputLayoutDesc.size(), blob->GetBufferPointer(), 
-			blob->GetBufferSize(), &shader->InputLayout);
+			blob->GetBufferSize(), &shader->LayoutGfxState.D3dObject);
 		Assert(hr == S_OK, "failed to create input layout, hr=%x", hr);
 	}
 }
 
 void CreateTexture(ID3D11Device* device, Texture* tex)
 {
-	Assert(tex->TextureObject == nullptr, "Leaking object");
+	Assert(tex->GfxState.D3dObject == nullptr, "Leaking object");
 
 	D3D11_TEXTURE2D_DESC desc;
 	desc.Width = tex->Size.x;
@@ -429,7 +433,7 @@ void CreateTexture(ID3D11Device* device, Texture* tex)
 	desc.CPUAccessFlags = 0;
 	desc.MiscFlags = 0;
 
-	HRESULT hr = device->CreateTexture2D(&desc, nullptr, &tex->TextureObject);
+	HRESULT hr = device->CreateTexture2D(&desc, nullptr, &tex->GfxState.D3dObject);
 	CheckHresult(hr, "Texture");
 }
 
@@ -457,7 +461,7 @@ void CreateBuffer(ID3D11Device* device, Buffer* buf)
 	desc.MiscFlags = RlfToD3d_Misc(buf->Flags); 
 
 	HRESULT hr = device->CreateBuffer(&desc, subRes.pSysMem ? &subRes : nullptr,
-		&buf->BufferObject);
+		&buf->GfxState.D3dObject);
 	free(initData);
 	CheckHresult(hr, "Buffer");
 }
@@ -466,9 +470,9 @@ void CreateView(ID3D11Device* device, View* v)
 {
 	ID3D11Resource* res = nullptr;
 	if (v->ResourceType == ResourceType::Buffer)
-		res = v->Buffer->BufferObject;
+		res = v->Buffer->GfxState.D3dObject;
 	else if (v->ResourceType == ResourceType::Texture)
-		res = v->Texture->TextureObject;
+		res = v->Texture->GfxState.D3dObject;
 	else
 		Unimplemented();
 	DXGI_FORMAT fmt = D3DTextureFormat[(u32)v->Format];
@@ -503,7 +507,7 @@ void CreateView(ID3D11Device* device, View* v)
 		}
 		else 
 			Unimplemented();
-		HRESULT hr = device->CreateShaderResourceView(res, &vd, &v->SRVObject);
+		HRESULT hr = device->CreateShaderResourceView(res, &vd, &v->SRVGfxState.D3dObject);
 		CheckHresult(hr, "SRV");
 	}
 	else if (v->Type == ViewType::UAV)
@@ -526,7 +530,7 @@ void CreateView(ID3D11Device* device, View* v)
 		}
 		else 
 			Unimplemented();
-		HRESULT hr = device->CreateUnorderedAccessView(res, &vd, &v->UAVObject);
+		HRESULT hr = device->CreateUnorderedAccessView(res, &vd, &v->UAVGfxState.D3dObject);
 		CheckHresult(hr, "UAV");
 	}
 	else if (v->Type == ViewType::RTV)
@@ -537,7 +541,7 @@ void CreateView(ID3D11Device* device, View* v)
 		vd.ViewDimension = v->Texture->SampleCount > 1 ? 
 			D3D11_RTV_DIMENSION_TEXTURE2DMS : D3D11_RTV_DIMENSION_TEXTURE2D;
 		vd.Texture2D.MipSlice = 0;
-		HRESULT hr = device->CreateRenderTargetView(res, &vd, &v->RTVObject);
+		HRESULT hr = device->CreateRenderTargetView(res, &vd, &v->RTVGfxState.D3dObject);
 		CheckHresult(hr, "RTV");
 	}
 	else if (v->Type == ViewType::DSV)
@@ -549,7 +553,7 @@ void CreateView(ID3D11Device* device, View* v)
 			D3D11_DSV_DIMENSION_TEXTURE2DMS : D3D11_DSV_DIMENSION_TEXTURE2D;
 		vd.Texture2D.MipSlice = 0;
 		vd.Flags = 0;
-		HRESULT hr = device->CreateDepthStencilView(res, &vd, &v->DSVObject);
+		HRESULT hr = device->CreateDepthStencilView(res, &vd, &v->DSVGfxState.D3dObject);
 		CheckHresult(hr, "DSV");
 	}
 	else
@@ -561,16 +565,16 @@ void ReleaseView(View* v)
 	switch (v->Type)
 	{
 	case ViewType::SRV:
-		SafeRelease(v->SRVObject);
+		SafeRelease(v->SRVGfxState.D3dObject);
 		break;
 	case ViewType::UAV:
-		SafeRelease(v->UAVObject);
+		SafeRelease(v->UAVGfxState.D3dObject);
 		break;
 	case ViewType::RTV:
-		SafeRelease(v->RTVObject);
+		SafeRelease(v->RTVGfxState.D3dObject);
 		break;
 	case ViewType::DSV:
-		SafeRelease(v->DSVObject);
+		SafeRelease(v->DSVGfxState.D3dObject);
 		break;
 	case ViewType::Auto:
 		// NOTE: intentional do-nothing, if Auto hasn't been replaced then an object
@@ -630,8 +634,9 @@ void ResolveBind(Bind& bind, ID3D11ShaderReflection* reflector, const char* path
 }
 
 void PrepareConstants(
-	ID3D11ShaderReflection* reflector, std::vector<ConstantBuffer>& buffers, 
-	std::vector<SetConstant>& sets, const char* path)
+	ID3D11Device* device, ID3D11ShaderReflection* reflector, 
+	std::vector<ConstantBuffer>& buffers, std::vector<SetConstant>& sets, 
+	const char* path)
 {
 	(void)path;
 	D3D11_SHADER_DESC sd;
@@ -671,7 +676,7 @@ void PrepareConstants(
 		desc.MiscFlags = 0;
 		D3D11_SUBRESOURCE_DATA srd = {};
 		srd.pSysMem = cb.BackingMemory;
-		HRESULT hr = g_pd3dDevice->CreateBuffer(&desc, &srd, &cb.BufferObject);
+		HRESULT hr = device->CreateBuffer(&desc, &srd, &cb.GfxState.D3dObject);
 		Assert(hr == S_OK, "Failed to create CB hr=%x", hr);
 
 		for (u32 k = 0 ; k < sd.BoundResources ; ++k)
@@ -793,15 +798,15 @@ void InitMain(
 			"cs_5_0", errorState);
 
 		HRESULT hr = device->CreateComputeShader(shaderBlob->GetBufferPointer(), 
-			shaderBlob->GetBufferSize(), NULL, &cs->ShaderObject);
+			shaderBlob->GetBufferSize(), NULL, &cs->GfxState.D3dObject);
 		Assert(hr == S_OK, "Failed to create shader, hr=%x", hr);
 
 		hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
-			IID_ID3D11ShaderReflection, (void**) &cs->Common.Reflector);
+			IID_ID3D11ShaderReflection, (void**) &cs->Common.Reflector.D3dObject);
 		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
 
-		cs->Common.Reflector->GetThreadGroupSize(&cs->ThreadGroupSize.x, &cs->ThreadGroupSize.y,
-			&cs->ThreadGroupSize.z);
+		cs->Common.Reflector.D3dObject->GetThreadGroupSize(&cs->ThreadGroupSize.x, 
+			&cs->ThreadGroupSize.y,	&cs->ThreadGroupSize.z);
 
 		SafeRelease(shaderBlob);
 	}
@@ -812,11 +817,11 @@ void InitMain(
 			"vs_5_0", errorState);
 
 		HRESULT hr = device->CreateVertexShader(shaderBlob->GetBufferPointer(), 
-			shaderBlob->GetBufferSize(), NULL, &vs->ShaderObject);
+			shaderBlob->GetBufferSize(), NULL, &vs->GfxState.D3dObject);
 		Assert(hr == S_OK, "Failed to create shader, hr=%x", hr);
 
 		hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
-			IID_ID3D11ShaderReflection, (void**) &vs->Common.Reflector);
+			IID_ID3D11ShaderReflection, (void**) &vs->Common.Reflector.D3dObject);
 		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
 
 		CreateInputLayout(device, vs, shaderBlob);
@@ -830,11 +835,11 @@ void InitMain(
 			"ps_5_0", errorState);
 
 		HRESULT hr = device->CreatePixelShader(shaderBlob->GetBufferPointer(), 
-			shaderBlob->GetBufferSize(), NULL, &ps->ShaderObject);
+			shaderBlob->GetBufferSize(), NULL, &ps->GfxState.D3dObject);
 		Assert(hr == S_OK, "Failed to create shader, hr=%x", hr);
 
 		hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
-			IID_ID3D11ShaderReflection, (void**) &ps->Common.Reflector);
+			IID_ID3D11ShaderReflection, (void**) &ps->Common.Reflector.D3dObject);
 		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
 
 		SafeRelease(shaderBlob);
@@ -843,32 +848,33 @@ void InitMain(
 
 	for (Dispatch* dc : rd->Dispatches)
 	{
-		ID3D11ShaderReflection* reflector = dc->Shader->Common.Reflector;
+		ID3D11ShaderReflection* reflector = dc->Shader->Common.Reflector.D3dObject;
 		for (Bind& bind : dc->Binds)
 		{
 			ResolveBind(bind, reflector, dc->Shader->Common.ShaderPath);
 		}
-		PrepareConstants(reflector, dc->CBs, dc->Constants, dc->Shader->Common.ShaderPath);
+		PrepareConstants(device, reflector, dc->CBs, dc->Constants,
+			dc->Shader->Common.ShaderPath);
 	}
 
 	for (Draw* draw : rd->Draws)
 	{
 		InitAssert(draw->VShader, "Null vertex shader on draw not permitted.");
-		ID3D11ShaderReflection* reflector = draw->VShader->Common.Reflector;
+		ID3D11ShaderReflection* reflector = draw->VShader->Common.Reflector.D3dObject;
 		for (Bind& bind : draw->VSBinds)
 		{
 			ResolveBind(bind, reflector, draw->VShader->Common.ShaderPath);
 		}
-		PrepareConstants(reflector, draw->VSCBs, draw->VSConstants,
+		PrepareConstants(device, reflector, draw->VSCBs, draw->VSConstants,
 			draw->VShader->Common.ShaderPath);
 		if (draw->PShader)
 		{
-			reflector = draw->PShader->Common.Reflector;
+			reflector = draw->PShader->Common.Reflector.D3dObject;
 			for (Bind& bind : draw->PSBinds)
 			{
 				ResolveBind(bind, reflector, draw->PShader->Common.ShaderPath);
 			}
-			PrepareConstants(reflector, draw->PSCBs, draw->PSConstants,
+			PrepareConstants(device, reflector, draw->PSCBs, draw->PSConstants,
 				draw->PShader->Common.ShaderPath);
 		}
 
@@ -891,7 +897,7 @@ void InitMain(
 				desc.RenderTarget[i].BlendOpAlpha = RlfToD3d(blend->OpAlpha);
 				desc.RenderTarget[i].RenderTargetWriteMask = blend->RenderTargetWriteMask;
 			}
-			HRESULT hr = device->CreateBlendState(&desc, &draw->BlendObject);
+			HRESULT hr = device->CreateBlendState(&desc, &draw->BlendGfxState.D3dObject);
 			CheckHresult(hr, "BlendState");
 		}
 	}
@@ -945,7 +951,7 @@ void InitMain(
 				scratch.GetImageCount(), meta, D3D11_USAGE_IMMUTABLE, 
 				D3D11_BIND_SHADER_RESOURCE, 0, 0, false, &res);
 			Assert(hr == S_OK, "Failed to create texture from DDS, hr=%x", hr);
-			hr = res->QueryInterface(IID_ID3D11Texture2D, (void**)&tex->TextureObject);
+			hr = res->QueryInterface(IID_ID3D11Texture2D, (void**)&tex->GfxState.D3dObject);
 			SafeRelease(res);
 			Assert(hr == S_OK, "Failed to query texture object, hr=%x", hr);
 		}
@@ -981,7 +987,7 @@ void InitMain(
 		desc.MinLOD = s->MinLOD;
 		desc.MaxLOD = s->MaxLOD;
 
-		HRESULT hr = device->CreateSamplerState(&desc, &s->SamplerObject);
+		HRESULT hr = device->CreateSamplerState(&desc, &s->GfxState.D3dObject);
 		Assert(hr == S_OK, "failed to create sampler, hr=%x", hr);
 	}
 
@@ -998,7 +1004,7 @@ void InitMain(
 		desc.ScissorEnable = rs->ScissorEnable;
 		desc.MultisampleEnable = rs->MultisampleEnable;
 		desc.AntialiasedLineEnable = rs->AntialiasedLineEnable;
-		device->CreateRasterizerState(&desc, &rs->RSObject);
+		device->CreateRasterizerState(&desc, &rs->GfxState.D3dObject);
 	}
 
 	for (DepthStencilState* dss : rd->DepthStencilStates)
@@ -1013,23 +1019,22 @@ void InitMain(
 		desc.StencilWriteMask = dss->StencilWriteMask;
 		desc.FrontFace = RlfToD3d(dss->FrontFace);
 		desc.BackFace = RlfToD3d(dss->BackFace);
-		device->CreateDepthStencilState(&desc, &dss->DSSObject);
+		device->CreateDepthStencilState(&desc, &dss->GfxState.D3dObject);
 	}
 }
 
 void InitD3D(
-	ID3D11Device* device,
-	ID3D11InfoQueue* infoQueue,
+	gfx::Context* ctx,
 	RenderDescription* rd,
 	uint2 displaySize,
 	const char* workingDirectory,
 	ErrorState* errorState)
 {
-	gInfoQueue = infoQueue;
+	gInfoQueue = ctx->g_d3dInfoQueue;
 	errorState->Success = true;
 	errorState->Warning = false;
 	try {
-		InitMain(device, rd, displaySize, workingDirectory, errorState);
+		InitMain(ctx->g_pd3dDevice, rd, displaySize, workingDirectory, errorState);
 	}
 	catch (ErrorInfo ie)
 	{
@@ -1045,29 +1050,29 @@ void ReleaseD3D(
 
 	for (ComputeShader* cs : rd->CShaders)
 	{
-		SafeRelease(cs->ShaderObject);
-		SafeRelease(cs->Common.Reflector);
+		SafeRelease(cs->GfxState.D3dObject);
+		SafeRelease(cs->Common.Reflector.D3dObject);
 	}
 	for (VertexShader* vs : rd->VShaders)
 	{
-		SafeRelease(vs->ShaderObject);
-		SafeRelease(vs->Common.Reflector);
-		SafeRelease(vs->InputLayout);
+		SafeRelease(vs->GfxState.D3dObject);
+		SafeRelease(vs->Common.Reflector.D3dObject);
+		SafeRelease(vs->LayoutGfxState.D3dObject);
 	}
 	for (PixelShader* ps : rd->PShaders)
 	{
-		SafeRelease(ps->ShaderObject);
-		SafeRelease(ps->Common.Reflector);
+		SafeRelease(ps->GfxState.D3dObject);
+		SafeRelease(ps->Common.Reflector.D3dObject);
 	}
 
 	for (Buffer* buf : rd->Buffers)
 	{
-		SafeRelease(buf->BufferObject);
+		SafeRelease(buf->GfxState.D3dObject);
 	}
 
 	for (Texture* tex : rd->Textures)
 	{
-		SafeRelease(tex->TextureObject);
+		SafeRelease(tex->GfxState.D3dObject);
 	}
 
 	for (View* v : rd->Views)
@@ -1077,39 +1082,39 @@ void ReleaseD3D(
 
 	for (Sampler* s : rd->Samplers)
 	{
-		SafeRelease(s->SamplerObject);
+		SafeRelease(s->GfxState.D3dObject);
 	}
 
 	for (RasterizerState* rs : rd->RasterizerStates)
 	{
-		SafeRelease(rs->RSObject);
+		SafeRelease(rs->GfxState.D3dObject);
 	}
 	for (DepthStencilState* dss : rd->DepthStencilStates)
 	{
-		SafeRelease(dss->DSSObject);
+		SafeRelease(dss->GfxState.D3dObject);
 	}
 
 	for (Dispatch* dc : rd->Dispatches)
 	{
 		for (ConstantBuffer& cb : dc->CBs)
 		{
-			SafeRelease(cb.BufferObject);
+			SafeRelease(cb.GfxState.D3dObject);
 			free(cb.BackingMemory);
 		}
 	}
 
 	for (Draw* d : rd->Draws)
 	{
-		SafeRelease(d->BlendObject);
+		SafeRelease(d->BlendGfxState.D3dObject);
 	}
 }
 
 void HandleTextureParametersChanged(
-	ID3D11Device* device,
 	RenderDescription* rd,
 	ExecuteContext* ec,
 	ErrorState* errorState)
 {
+	ID3D11Device* device = ec->GfxCtx->g_pd3dDevice;
 	errorState->Success = true;
 	errorState->Warning = false;
 	try {
@@ -1132,7 +1137,7 @@ void HandleTextureParametersChanged(
 			{
 				tex->Size = newSize;
 
-				SafeRelease(tex->TextureObject);
+				SafeRelease(tex->GfxState.D3dObject);
 				
 				CreateTexture(device, tex);
 
@@ -1170,7 +1175,7 @@ void HandleTextureParametersChanged(
 				buf->ElementSize = newSize;
 				buf->ElementCount = newCount;
 
-				SafeRelease(buf->BufferObject);
+				SafeRelease(buf->GfxState.D3dObject);
 				
 				CreateBuffer(device, buf);
 
@@ -1281,7 +1286,7 @@ void EvaluateConstants(ast::EvaluationContext& ec, std::vector<Constant*>& cnsts
 void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets, 
 	std::vector<ConstantBuffer>& buffers)
 {
-	ID3D11DeviceContext* ctx = ec->D3dCtx;
+	ID3D11DeviceContext* ctx = ec->GfxCtx->g_pd3dDeviceContext;
 	for (const SetConstant& set : sets)
 	{
 		ast::Result res;
@@ -1300,11 +1305,11 @@ void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets,
 	for (const ConstantBuffer& buf : buffers)
 	{
 		D3D11_MAPPED_SUBRESOURCE mapped_resource;
-		HRESULT hr = ctx->Map(buf.BufferObject, 0, D3D11_MAP_WRITE_DISCARD, 
+		HRESULT hr = ctx->Map(buf.GfxState.D3dObject, 0, D3D11_MAP_WRITE_DISCARD, 
 			0, &mapped_resource);
 		Assert(hr == S_OK, "failed to map CB hr=%x", hr);
 		memcpy(mapped_resource.pData, buf.BackingMemory, buf.Size);
-		ctx->Unmap(buf.BufferObject, 0);
+		ctx->Unmap(buf.GfxState.D3dObject, 0);
 	}
 }
 
@@ -1312,13 +1317,13 @@ void ExecuteDispatch(
 	Dispatch* dc,
 	ExecuteContext* ec)
 {
-	ID3D11DeviceContext* ctx = ec->D3dCtx;
+	ID3D11DeviceContext* ctx = ec->GfxCtx->g_pd3dDeviceContext;
 	UINT initialCount = (UINT)-1;
-	ctx->CSSetShader(dc->Shader->ShaderObject, nullptr, 0);
+	ctx->CSSetShader(dc->Shader->GfxState.D3dObject, nullptr, 0);
 	ExecuteSetConstants(ec, dc->Constants, dc->CBs);
 	for (const ConstantBuffer& buf : dc->CBs)
 	{
-		ctx->CSSetConstantBuffers(buf.Slot, 1, &buf.BufferObject);
+		ctx->CSSetConstantBuffers(buf.Slot, 1, &buf.GfxState.D3dObject);
 	}
 	for (Bind& bind : dc->Binds)
 	{
@@ -1327,7 +1332,7 @@ void ExecuteDispatch(
 		case BindType::SystemValue:
 			Assert(bind.IsOutput, "Invalid");
 			if (bind.SystemBind == SystemValue::BackBuffer)
-				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &ec->MainRtUav, 
+				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &ec->MainRtUav.D3dObject, 
 					&initialCount);
 			else
 				Assert(false, "unhandled");
@@ -1336,17 +1341,18 @@ void ExecuteDispatch(
 			if (bind.IsOutput)
 			{
 				Assert(bind.ViewBind->Type == ViewType::UAV, "Invalid");
-				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &bind.ViewBind->UAVObject, 
-					&initialCount);
+				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, 
+					&bind.ViewBind->UAVGfxState.D3dObject, &initialCount);
 			}
 			else
 			{
 				Assert(bind.ViewBind->Type == ViewType::SRV, "Invalid");
-				ctx->CSSetShaderResources(bind.BindIndex, 1, &bind.ViewBind->SRVObject);
+				ctx->CSSetShaderResources(bind.BindIndex, 1, 
+					&bind.ViewBind->SRVGfxState.D3dObject);
 			}
 			break;
 		case BindType::Sampler:
-			ctx->CSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->SamplerObject);
+			ctx->CSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->GfxState.D3dObject);
 			break;
 		default:
 			Assert(false, "invalid type %d", bind.Type);
@@ -1354,7 +1360,7 @@ void ExecuteDispatch(
 	}
 	if (dc->IndirectArgs)
 	{
-		ctx->DispatchIndirect(dc->IndirectArgs->BufferObject, dc->IndirectArgsOffset);
+		ctx->DispatchIndirect(dc->IndirectArgs->GfxState.D3dObject, dc->IndirectArgsOffset);
 	}
 	else
 	{
@@ -1383,19 +1389,19 @@ void ExecuteDraw(
 	Draw* draw,
 	ExecuteContext* ec)
 {
-	ID3D11DeviceContext* ctx = ec->D3dCtx;
-	ctx->VSSetShader(draw->VShader->ShaderObject, nullptr, 0);
-	ctx->IASetInputLayout(draw->VShader->InputLayout);
-	ctx->PSSetShader(draw->PShader ? draw->PShader->ShaderObject : nullptr, nullptr, 0);
+	ID3D11DeviceContext* ctx = ec->GfxCtx->g_pd3dDeviceContext;
+	ctx->VSSetShader(draw->VShader->GfxState.D3dObject, nullptr, 0);
+	ctx->IASetInputLayout(draw->VShader->LayoutGfxState.D3dObject);
+	ctx->PSSetShader(draw->PShader ? draw->PShader->GfxState.D3dObject : nullptr, nullptr, 0);
 	ExecuteSetConstants(ec, draw->VSConstants, draw->VSCBs);
 	ExecuteSetConstants(ec, draw->PSConstants, draw->PSCBs);
 	for (const ConstantBuffer& buf : draw->VSCBs)
 	{
-		ctx->VSSetConstantBuffers(buf.Slot, 1, &buf.BufferObject);
+		ctx->VSSetConstantBuffers(buf.Slot, 1, &buf.GfxState.D3dObject);
 	}
 	for (const ConstantBuffer& buf : draw->PSCBs)
 	{
-		ctx->PSSetConstantBuffers(buf.Slot, 1, &buf.BufferObject);
+		ctx->PSSetConstantBuffers(buf.Slot, 1, &buf.GfxState.D3dObject);
 	}
 	for (Bind& bind : draw->VSBinds)
 	{
@@ -1405,11 +1411,11 @@ void ExecuteDraw(
 		{
 			ExecuteAssert(bind.ViewBind->Type == ViewType::SRV, 
 				"UAVs are not supported in vertex shaders.");
-			ctx->VSSetShaderResources(bind.BindIndex, 1, &bind.ViewBind->SRVObject);
+			ctx->VSSetShaderResources(bind.BindIndex, 1, &bind.ViewBind->SRVGfxState.D3dObject);
 			break;
 		}
 		case BindType::Sampler:
-			ctx->VSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->SamplerObject);
+			ctx->VSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->GfxState.D3dObject);
 			break;
 		case BindType::SystemValue:
 		default:
@@ -1424,11 +1430,11 @@ void ExecuteDraw(
 		{
 			ExecuteAssert(bind.ViewBind->Type == ViewType::SRV, 
 				"UAVs are not supported in pixel shaders.");
-			ctx->PSSetShaderResources(bind.BindIndex, 1, &bind.ViewBind->SRVObject);
+			ctx->PSSetShaderResources(bind.BindIndex, 1, &bind.ViewBind->SRVGfxState.D3dObject);
 			break;
 		}
 		case BindType::Sampler:
-			ctx->PSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->SamplerObject);
+			ctx->PSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->GfxState.D3dObject);
 			break;
 		case BindType::SystemValue:
 		default:
@@ -1444,7 +1450,7 @@ void ExecuteDraw(
 		{
 			if (target.System == SystemValue::BackBuffer)
 			{
-				rtViews[rtCount] = ec->MainRtv;
+				rtViews[rtCount] = ec->MainRtv.D3dObject;
 				vp[rtCount].Width = (float)ec->EvCtx.DisplaySize.x;
 				vp[rtCount].Height = (float)ec->EvCtx.DisplaySize.y;
 			}
@@ -1455,7 +1461,7 @@ void ExecuteDraw(
 		{
 			Assert(target.View->Type == ViewType::RTV, "Invalid");
 			Assert(target.View->ResourceType == ResourceType::Texture, "Invalid");
-			rtViews[rtCount] = target.View->RTVObject;
+			rtViews[rtCount] = target.View->RTVGfxState.D3dObject;
 			vp[rtCount].Width = (float)target.View->Texture->Size.x;
 			vp[rtCount].Height = (float)target.View->Texture->Size.y;
 		}
@@ -1471,7 +1477,7 @@ void ExecuteDraw(
 		{
 			if (target.System == SystemValue::DefaultDepth)
 			{
-				dsView = ec->DefaultDepthView;
+				dsView = ec->DefaultDepthView.D3dObject;
 				vp[0].Width = (float)ec->EvCtx.DisplaySize.x;
 				vp[0].Height = (float)ec->EvCtx.DisplaySize.y;
 			}
@@ -1482,7 +1488,7 @@ void ExecuteDraw(
 		{
 			Assert(target.View->Type == ViewType::DSV, "Invalid");
 			Assert(target.View->ResourceType == ResourceType::Texture, "Invalid");
-			dsView = target.View->DSVObject;
+			dsView = target.View->DSVGfxState.D3dObject;
 			vp[0].Width = (float)target.View->Texture->Size.x;
 			vp[0].Height = (float)target.View->Texture->Size.y;
 		}
@@ -1512,25 +1518,25 @@ void ExecuteDraw(
 	ctx->OMSetRenderTargets(8, rtViews, dsView);
 	ctx->RSSetViewports(8, vp);
 	ctx->IASetPrimitiveTopology(RlfToD3d(draw->Topology));
-	ctx->RSSetState(draw->RState ? draw->RState->RSObject : DefaultRasterizerState);
-	ctx->OMSetDepthStencilState(draw->DSState ? draw->DSState->DSSObject : nullptr,
+	ctx->RSSetState(draw->RState ? draw->RState->GfxState.D3dObject : DefaultRasterizerState);
+	ctx->OMSetDepthStencilState(draw->DSState ? draw->DSState->GfxState.D3dObject : nullptr,
 		draw->StencilRef);
-	ctx->OMSetBlendState(draw->BlendObject, nullptr, 0xffffffff);
+	ctx->OMSetBlendState(draw->BlendGfxState.D3dObject, nullptr, 0xffffffff);
 	u32 offset = 0;
 	Buffer* vb = draw->VertexBuffer;
 	Buffer* ib = draw->IndexBuffer;
 	if (vb)
-		ctx->IASetVertexBuffers(0, 1, &vb->BufferObject, &vb->ElementSize, 
+		ctx->IASetVertexBuffers(0, 1, &vb->GfxState.D3dObject, &vb->ElementSize, 
 			&offset);
 	if (ib)
-		ctx->IASetIndexBuffer(ib->BufferObject, ib->ElementSize == 2 ? 
+		ctx->IASetIndexBuffer(ib->GfxState.D3dObject, ib->ElementSize == 2 ? 
 			DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT, 0);
 
 	if (draw->InstancedIndirectArgs)
-		ctx->DrawInstancedIndirect(draw->InstancedIndirectArgs->BufferObject,
+		ctx->DrawInstancedIndirect(draw->InstancedIndirectArgs->GfxState.D3dObject,
 			draw->IndirectArgsOffset);
 	else if (draw->IndexedInstancedIndirectArgs)
-		ctx->DrawIndexedInstancedIndirect(draw->InstancedIndirectArgs->BufferObject,
+		ctx->DrawIndexedInstancedIndirect(draw->InstancedIndirectArgs->GfxState.D3dObject,
 			draw->IndirectArgsOffset);
 	else if (ib && draw->InstanceCount > 0)
 		ctx->DrawIndexedInstanced(ib->ElementCount, draw->InstanceCount, 0, 0, 0);
@@ -1546,7 +1552,7 @@ void _Execute(
 	ExecuteContext* ec,
 	RenderDescription* rd)
 {
-	ID3D11DeviceContext* ctx = ec->D3dCtx;
+	ID3D11DeviceContext* ctx = ec->GfxCtx->g_pd3dDeviceContext;
 
 	EvaluateConstants(ec->EvCtx, rd->Constants);
 
@@ -1571,22 +1577,23 @@ void _Execute(
 			{
 				color.x, color.y, color.z, color.w
 			};
-			ctx->ClearRenderTargetView(pass.ClearColor->Target->RTVObject, clear_color);
+			ctx->ClearRenderTargetView(pass.ClearColor->Target->RTVGfxState.D3dObject, 
+				clear_color);
 		}
 		else if (pass.Type == PassType::ClearDepth)
 		{
-			ctx->ClearDepthStencilView(pass.ClearDepth->Target->DSVObject, D3D11_CLEAR_DEPTH,
-				pass.ClearDepth->Depth, 0);
+			ctx->ClearDepthStencilView(pass.ClearDepth->Target->DSVGfxState.D3dObject, 
+				D3D11_CLEAR_DEPTH, pass.ClearDepth->Depth, 0);
 		}
 		else if (pass.Type == PassType::ClearStencil)
 		{
-			ctx->ClearDepthStencilView(pass.ClearStencil->Target->DSVObject, D3D11_CLEAR_STENCIL,
-				0.f, pass.ClearStencil->Stencil);
+			ctx->ClearDepthStencilView(pass.ClearStencil->Target->DSVGfxState.D3dObject, 
+				D3D11_CLEAR_STENCIL, 0.f, pass.ClearStencil->Stencil);
 		}
 		else if (pass.Type == PassType::Resolve)
 		{
-			ctx->ResolveSubresource(pass.Resolve->Dst->TextureObject, 0, 
-				pass.Resolve->Src->TextureObject, 0, 
+			ctx->ResolveSubresource(pass.Resolve->Dst->GfxState.D3dObject, 0, 
+				pass.Resolve->Src->GfxState.D3dObject, 0, 
 				D3DTextureFormat[(u32)pass.Resolve->Dst->Format]);
 		}
 		else
@@ -1618,6 +1625,6 @@ void Execute(
 
 #undef ExeucteAssert
 #undef ExecuteAstAssert
-
+#undef SafeRelease
 
 } // namespace rlf

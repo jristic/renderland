@@ -1,20 +1,12 @@
 
 // System headers
 #include <windows.h>
-#include <d3d11.h>
-#include <d3d11shader.h>
-#include <d3dcompiler.h>
-#include <d3d11sdklayers.h>
-#include <dwmapi.h>
 #include <stdio.h>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <set>
-
-#if defined(_DEBUG)
-#include <dxgidebug.h>
-#endif
+#include <dxgiformat.h>
 
 // External headers
 #include "imgui/imgui.h"
@@ -33,6 +25,7 @@
 #include "assert.h"
 #include "config.h"
 #include "fileio.h"
+#include "gfx.h"
 #include "rlf/rlf.h"
 #include "rlf/rlfparser.h"
 #include "rlf/rlfinterpreter.h"
@@ -43,19 +36,14 @@
 
 const int LAYOUT_VERSION = 1;
 
-static ID3D11Device*            g_pd3dDevice = nullptr;
-static ID3D11Debug*             g_d3dDebug = nullptr;
-static ID3D11InfoQueue*			g_d3dInfoQueue = nullptr;
-static ID3D11DeviceContext*     g_pd3dDeviceContext = nullptr;
-static IDXGISwapChain*          g_pSwapChain = nullptr;
-static ID3D11RenderTargetView*  g_mainRenderTargetView = nullptr;
+gfx::Context Gfx;
+gfx::Texture				RlfDisplayTex;
+gfx::RenderTargetView		RlfDisplayRtv;
+gfx::ShaderResourceView		RlfDisplaySrv;
+gfx::UnorderedAccessView	RlfDisplayUav;
+gfx::Texture				RlfDepthStencilTex;
+gfx::DepthStencilView		RlfDepthStencilView;
 
-static ID3D11Texture2D* 		RlfDisplayTex = nullptr;
-static ID3D11RenderTargetView*  RlfDisplayRtv = nullptr;
-static ID3D11ShaderResourceView*  RlfDisplaySrv = nullptr;
-static ID3D11UnorderedAccessView*  RlfDisplayUav = nullptr;
-static ID3D11Texture2D* 		RlfDepthStencilTex = nullptr;
-static ID3D11DepthStencilView*  RlfDepthStencilView = nullptr;
 
 char* RlfFile = nullptr;
 u32 RlfFileSize = 0;
@@ -74,31 +62,10 @@ uint2 PrevDisplaySize;
 rlf::RenderDescription* CurrentRenderDesc;
 
 // Forward declarations of helper functions
-void CreateRenderTarget();
-void CleanupRenderTarget();
-void CreateShader();
-void CleanupShader();
+void LoadRlf();
+void UnloadRlf();
 void ReportError(const std::string& message);
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
-bool CheckD3DValidation(std::string& outMessage)
-{
-	UINT64 num = g_d3dInfoQueue->GetNumStoredMessages();
-	for (u32 i = 0 ; i < num ; ++i)
-	{
-		size_t messageLength;
-		HRESULT hr = g_d3dInfoQueue->GetMessage(i, nullptr, &messageLength);
-		Assert(hr == S_FALSE, "Failed to get message, hr=%x", hr);
-		D3D11_MESSAGE* message = (D3D11_MESSAGE*)malloc(messageLength);
-		g_d3dInfoQueue->GetMessage(i, message, &messageLength);
-		Assert(hr == S_FALSE, "Failed to get message, hr=%x", hr);
-		outMessage += message->pDescription;
-		free(message);
-	}
-	g_d3dInfoQueue->ClearStoredMessages();
-
-	return num > 0;
-}
 
 std::string RlfFileLocation(const char* filename, const char* location)
 {
@@ -180,56 +147,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	::ShowWindow(hwnd, Cfg.Maximized ? SW_MAXIMIZE : SW_SHOWDEFAULT);
 	::UpdateWindow(hwnd);
 
-	HRESULT hr;
-	{
-		// Initialize Direct3D
-		DXGI_SWAP_CHAIN_DESC sd;
-		ZeroMemory(&sd, sizeof(sd));
-		sd.BufferCount = 2;
-		sd.BufferDesc.Width = 0;
-		sd.BufferDesc.Height = 0;
-		sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-		sd.BufferDesc.RefreshRate.Numerator = 60;
-		sd.BufferDesc.RefreshRate.Denominator = 1;
-		sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-		sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_UNORDERED_ACCESS;
-		sd.OutputWindow = hwnd;
-		sd.SampleDesc.Count = 1;
-		sd.SampleDesc.Quality = 0;
-		sd.Windowed = TRUE;
-		sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+	Gfx = {};
 
-		UINT createDeviceFlags = 0;
-		createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
-		D3D_FEATURE_LEVEL featureLevel;
-		const D3D_FEATURE_LEVEL featureLevelArray[1] = { D3D_FEATURE_LEVEL_11_0 };
-		hr = D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 
-			createDeviceFlags, featureLevelArray, 1, D3D11_SDK_VERSION, &sd, &g_pSwapChain, 
-			&g_pd3dDevice, &featureLevel, &g_pd3dDeviceContext);
-		Assert(hr == S_OK, "failed to create device %x", hr);
-
-		BOOL success = g_pd3dDevice->QueryInterface(__uuidof(ID3D11Debug), 
-			(void**)&g_d3dDebug);
-		Assert(SUCCEEDED(success), "failed to get debug device");
-		success = g_d3dDebug->QueryInterface(__uuidof(ID3D11InfoQueue),
-			(void**)&g_d3dInfoQueue);
-		Assert(SUCCEEDED(success), "failed to get info queue");
-		// D3D11_MESSAGE_ID hide[] = {
-		   //  D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS,
-		// };
-
-		// D3D11_INFO_QUEUE_FILTER filter = {};
-		// filter.DenyList.NumIDs = _countof(hide);
-		// filter.DenyList.pIDList = hide;
-		// g_d3dInfoQueue->AddStorageFilterEntries(&filter);
-		if (IsDebuggerPresent())
-		{
-			g_d3dInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
-			g_d3dInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, true);
-		}
-	}
-
-	CreateRenderTarget();
+	gfx::Initialize(&Gfx, hwnd);
 
 	StartupComplete = true;
 
@@ -248,7 +168,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplWin32_Init(hwnd);
-	ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
+	ImGui_ImplDX11_Init(Gfx.g_pd3dDevice, Gfx.g_pd3dDeviceContext);
 
 	// Our state
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
@@ -376,56 +296,28 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			DisplaySize.x = (u32)max(1, vMax.x - vMin.x);
 			DisplaySize.y = (u32)max(1, vMax.y - vMin.y);
 
-			if (RlfDisplayTex == nullptr || PrevDisplaySize != DisplaySize)
+			if (RlfDisplayTex.D3dObject == nullptr || PrevDisplaySize != DisplaySize)
 			{
-				SafeRelease(RlfDisplayUav);
-				SafeRelease(RlfDisplaySrv);
-				SafeRelease(RlfDisplayRtv);
-				SafeRelease(RlfDisplayTex);
-				SafeRelease(RlfDepthStencilView);
-				SafeRelease(RlfDepthStencilTex);
+				gfx::Release(RlfDisplayUav);
+				gfx::Release(RlfDisplaySrv);
+				gfx::Release(RlfDisplayRtv);
+				gfx::Release(RlfDisplayTex);
+				gfx::Release(RlfDepthStencilView);
+				gfx::Release(RlfDepthStencilTex);
 
-				D3D11_TEXTURE2D_DESC desc = {};
-				desc.Width = DisplaySize.x;
-				desc.Height = DisplaySize.y;
-				desc.MipLevels = 1;
-				desc.ArraySize = 1;
-				desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-				desc.SampleDesc.Count = 1;
-				desc.SampleDesc.Quality = 0;
-				desc.Usage = D3D11_USAGE_DEFAULT;
-				desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_UNORDERED_ACCESS |
-					D3D11_BIND_SHADER_RESOURCE;
-				desc.CPUAccessFlags = 0;
-				desc.MiscFlags = 0;
-				hr = g_pd3dDevice->CreateTexture2D(&desc, nullptr, &RlfDisplayTex);
-				Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
+				RlfDisplayTex = gfx::CreateTexture2D(&Gfx, DisplaySize.x, DisplaySize.y,
+					DXGI_FORMAT_R8G8B8A8_UNORM, 
+					(gfx::BindFlag)(gfx::BindFlag_SRV | gfx::BindFlag_UAV | gfx::BindFlag_RTV));
+				RlfDisplaySrv = gfx::CreateShaderResourceView(&Gfx, RlfDisplayTex);
+				RlfDisplayUav = gfx::CreateUnorderedAccessView(&Gfx, RlfDisplayTex);
+				RlfDisplayRtv = gfx::CreateRenderTargetView(&Gfx, RlfDisplayTex);
 
-				g_pd3dDevice->CreateRenderTargetView(RlfDisplayTex, nullptr, &RlfDisplayRtv);
-				g_pd3dDevice->CreateUnorderedAccessView(RlfDisplayTex, nullptr, &RlfDisplayUav);
-				g_pd3dDevice->CreateShaderResourceView(RlfDisplayTex, nullptr, &RlfDisplaySrv);
-
-				desc = {};
-				desc.Width = DisplaySize.x;
-				desc.Height = DisplaySize.y;
-				desc.MipLevels = 1;
-				desc.ArraySize = 1;
-				desc.Format = DXGI_FORMAT_D32_FLOAT;
-				desc.SampleDesc.Count = 1;
-				desc.SampleDesc.Quality = 0;
-				desc.Usage = D3D11_USAGE_DEFAULT;
-				desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
-				desc.CPUAccessFlags = 0;
-				desc.MiscFlags = 0;
-
-				hr = g_pd3dDevice->CreateTexture2D(&desc, nullptr, &RlfDepthStencilTex);
-				Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
-				hr = g_pd3dDevice->CreateDepthStencilView(RlfDepthStencilTex, nullptr, 
-					&RlfDepthStencilView);
-				Assert(hr == S_OK, "failed to create depthstencil view, hr=%x", hr);
+				RlfDepthStencilTex = gfx::CreateTexture2D(&Gfx, DisplaySize.x, DisplaySize.y,
+					DXGI_FORMAT_D32_FLOAT, gfx::BindFlag_DSV);
+				RlfDepthStencilView = gfx::CreateDepthStencilView(&Gfx, RlfDepthStencilTex);
 			}
 			
-			ImGui::Image(RlfDisplaySrv, ImVec2(vMax.x-vMin.x, vMax.y-vMin.y));
+			ImGui::Image(RlfDisplaySrv.D3dObject, ImVec2(vMax.x-vMin.x, vMax.y-vMin.y));
 		}
 		ImGui::End();
 
@@ -554,7 +446,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		u32 VariesByForTexture = rlf::ast::VariesBy_Tuneable | rlf::ast::VariesBy_DisplaySize;
 
 		rlf::ExecuteContext ctx = {};
-		ctx.D3dCtx = g_pd3dDeviceContext;
+		ctx.GfxCtx = &Gfx;
 		ctx.MainRtv = RlfDisplayRtv;
 		ctx.MainRtUav = RlfDisplayUav;
 		ctx.DefaultDepthView = RlfDepthStencilView;
@@ -565,7 +457,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		if (RlfCompileSuccess && (changed & VariesByForTexture) != 0)
 		{
 			rlf::ErrorState ies = {};
-			rlf::HandleTextureParametersChanged(g_pd3dDevice, CurrentRenderDesc, 
+			rlf::HandleTextureParametersChanged(CurrentRenderDesc, 
 				&ctx, &ies);
 			if (!ies.Success)
 			{
@@ -578,8 +470,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		{
 			FirstLoad = false;
 			Time = 0;
-			CleanupShader();
-			CreateShader();
+			UnloadRlf();
+			LoadRlf();
 		}
 
 		// Rendering
@@ -591,10 +483,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			clear_color.z * clear_color.w, 
 			clear_color.w
 		};
-		g_pd3dDeviceContext->ClearRenderTargetView(RlfDisplayRtv, 
-			clear_color_with_alpha);
-		g_pd3dDeviceContext->ClearDepthStencilView(RlfDepthStencilView, 
-			D3D11_CLEAR_DEPTH, 1.f, 0);
+		gfx::ClearRenderTarget(&Gfx, RlfDisplayRtv, clear_color_with_alpha);
+		gfx::ClearDepth(&Gfx, RlfDepthStencilView, 1.f);
 
 		// Dispatch our shader
 		if (RlfCompileSuccess)
@@ -608,10 +498,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			}
 		}
 
-		const float clear_0[4] = {0,0,0,0};
-		g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, 
-			clear_0);
-		g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
+		gfx::ClearBackBufferRtv(&Gfx);
+		gfx::BindBackBufferRtv(&Gfx);
 		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
 		// Update and Render additional Platform Windows
@@ -621,14 +509,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			ImGui::RenderPlatformWindowsDefault();
 		}
 
-		g_pSwapChain->Present(1, 0); // Present with vsync
-		//g_pSwapChain->Present(0, 0); // Present without vsync
+		gfx::Present(&Gfx, 1);
+		//gfx::Present(&Gfx, 0); // Present without vsync
 
 		LastTime = Time;
 		Time = max(0, Time + Speed * io.DeltaTime);
 
 		RlfValidationErrorMessage = "Validation error:\n";
-		RlfValidationError = CheckD3DValidation(RlfValidationErrorMessage);
+		RlfValidationError = gfx::CheckD3DValidation(&Gfx, RlfValidationErrorMessage);
 
 		PrevDisplaySize = DisplaySize;
 	}
@@ -640,39 +528,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 	config::SaveConfig(ConfigPath.c_str(), &Cfg);
 
-	CleanupShader();
-	CleanupRenderTarget();
+	UnloadRlf();
 
-	SafeRelease(RlfDisplayTex);
-	SafeRelease(RlfDisplayRtv);
-	SafeRelease(RlfDisplaySrv);
-	SafeRelease(RlfDisplayUav);
-	SafeRelease(RlfDepthStencilTex);
-	SafeRelease(RlfDepthStencilView);
+	gfx::Release(RlfDisplayTex);
+	gfx::Release(RlfDisplayRtv);
+	gfx::Release(RlfDisplaySrv);
+	gfx::Release(RlfDisplayUav);
+	gfx::Release(RlfDepthStencilTex);
+	gfx::Release(RlfDepthStencilView);
 
-	SafeRelease(g_pSwapChain);
-	SafeRelease(g_pd3dDeviceContext);
-	SafeRelease(g_d3dInfoQueue);
-	SafeRelease(g_d3dDebug);
-	SafeRelease(g_pd3dDevice);
-
-#if defined(_DEBUG)
-	// Check for leaked D3D/DXGI objects
-	typedef HRESULT (WINAPI * LPDXGIGETDEBUGINTERFACE)(REFIID, void ** );
-	HMODULE dxgiDllHandle = LoadLibraryEx( "dxgidebug.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32 );
-	if ( dxgiDllHandle )
-	{
-		LPDXGIGETDEBUGINTERFACE dxgiGetDebugInterface = reinterpret_cast<LPDXGIGETDEBUGINTERFACE>(
-			reinterpret_cast<void*>( GetProcAddress(dxgiDllHandle, "DXGIGetDebugInterface") ));
-
-		IDXGIDebug* dxgiDebug;
-		if ( SUCCEEDED( dxgiGetDebugInterface( IID_PPV_ARGS( &dxgiDebug ) ) ) )
-		{
-			dxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL);
-			dxgiDebug->Release();
-		}
-	}
-#endif
+	gfx::Release(&Gfx);
 
 	::DestroyWindow(hwnd);
 	::UnregisterClass(wc.lpszClassName, wc.hInstance);
@@ -682,26 +547,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 // Helper functions
 
-void CreateRenderTarget()
-{
-	ID3D11Texture2D* pBackBuffer;
-	g_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&pBackBuffer));
-	// TODO: Should we not be being using an SRGB conversion on the backbuffer? 
-	//	From my understanding we should, but it looks visually wrong to me. 
-	// D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-	// rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-	// rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-	// g_pd3dDevice->CreateRenderTargetView(pBackBuffer, &rtvDesc, &g_mainRenderTargetView);
-	g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_mainRenderTargetView);
-	pBackBuffer->Release();
-}
 
-void CleanupRenderTarget()
-{
-	SafeRelease(g_mainRenderTargetView);
-}
-
-void CreateShader()
+void LoadRlf()
 {
 	RlfCompileSuccess = true;
 	RlfCompileWarning = false;
@@ -747,7 +594,7 @@ void CreateShader()
 	}
 
 	es = {};
-	rlf::InitD3D(g_pd3dDevice, g_d3dInfoQueue, CurrentRenderDesc, DisplaySize, 
+	rlf::InitD3D(&Gfx, CurrentRenderDesc, DisplaySize, 
 		dirPath.c_str(), &es);
 
 	if (es.Success == false)
@@ -761,7 +608,7 @@ void CreateShader()
 	RlfCompileWarningMessage = es.Info.Message;
 }
 
-void CleanupShader()
+void UnloadRlf()
 {
 	if (CurrentRenderDesc)
 	{
@@ -780,7 +627,7 @@ void ReportError(const std::string& message)
 {
 	RlfCompileSuccess = false;
 	RlfCompileErrorMessage = message;
-	CleanupShader();
+	UnloadRlf();
 }
 
 void UpdateWindowStats(HWND hWnd)
@@ -810,12 +657,9 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	switch (msg)
 	{
 	case WM_SIZE:
-		if (g_pd3dDevice != NULL && wParam != SIZE_MINIMIZED)
+		if (Gfx.g_pd3dDevice != NULL && wParam != SIZE_MINIMIZED)
 		{
-			CleanupRenderTarget();
-			g_pSwapChain->ResizeBuffers(0, (UINT)LOWORD(lParam), (UINT)HIWORD(lParam), 
-				DXGI_FORMAT_UNKNOWN, 0);
-			CreateRenderTarget();
+			gfx::HandleBackBufferResize(&Gfx, (UINT)LOWORD(lParam), (UINT)HIWORD(lParam));
 
 			UpdateWindowStats(hWnd);
 		}
@@ -844,9 +688,21 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
+// TODO: remove d3d11 headers and verify compile
+#include <d3d11.h>
+#include <d3d11shader.h>
+#include <d3dcompiler.h>
+#include <d3d11sdklayers.h>
+#if defined(_DEBUG)
+#include <dxgidebug.h>
+#endif
+
+
+
 // Project source
 #include "config.cpp"
 #include "fileio.cpp"
+#include "d3d11/gfx.cpp"
 #include "rlf/rlfparser.cpp"
 #include "rlf/rlfinterpreter.cpp"
 #include "rlf/ast.cpp"

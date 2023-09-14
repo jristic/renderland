@@ -73,11 +73,12 @@ void DisplayShaderPasses(rlf::RenderDescription* rd)
 		ImGui::Indent();
 		switch (p.Type) {
 		case rlf::PassType::Dispatch:
-			DisplayShaderConstants(p.Dispatch->CBs, p.Dispatch->Shader->Common.Reflector);
+			DisplayShaderConstants(p.Dispatch->CBs, p.Dispatch->Shader->Common.Reflector.D3dObject);
 			break;
 		case rlf::PassType::Draw:
-			DisplayShaderConstants(p.Draw->VSCBs, p.Draw->VShader->Common.Reflector);
-			DisplayShaderConstants(p.Draw->PSCBs, p.Draw->PShader->Common.Reflector);
+			DisplayShaderConstants(p.Draw->VSCBs, p.Draw->VShader->Common.Reflector.D3dObject);
+			if (p.Draw->PShader)
+				DisplayShaderConstants(p.Draw->PSCBs, p.Draw->PShader->Common.Reflector.D3dObject);
 			break;
 		case rlf::PassType::ClearColor:
 		case rlf::PassType::ClearDepth:

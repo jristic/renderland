@@ -1877,8 +1877,8 @@ DepthStencilState* ConsumeDepthStencilStateDef(
 	dss->DepthWrite = true;
 	dss->DepthFunc = ComparisonFunc::Less;
 	dss->StencilEnable = false;
-	dss->StencilReadMask = D3D11_DEFAULT_STENCIL_READ_MASK;
-	dss->StencilWriteMask = D3D11_DEFAULT_STENCIL_WRITE_MASK;
+	dss->StencilReadMask = 0xff;
+	dss->StencilWriteMask = 0xff;
 	dss->FrontFace.StencilFailOp = dss->BackFace.StencilFailOp = StencilOp::Keep;
 	dss->FrontFace.StencilDepthFailOp = dss->BackFace.StencilDepthFailOp = StencilOp::Keep;
 	dss->FrontFace.StencilPassOp = dss->BackFace.StencilPassOp = StencilOp::Keep;
@@ -1972,7 +1972,7 @@ BlendState* ConsumeBlendStateDef(
 	bs->SrcAlpha = Blend::One;
 	bs->DestAlpha = Blend::Zero;
 	bs->OpAlpha = BlendOp::Add;
-	bs->RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+	bs->RenderTargetWriteMask = 0xff;
 
 	static StructEntry def[] = {
 		StructEntryDef(BlendState, Bool, Enable),

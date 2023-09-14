@@ -2,8 +2,7 @@
 namespace rlf
 {
 	void InitD3D(
-		ID3D11Device* device,
-		ID3D11InfoQueue* infoQueue,
+		gfx::Context* ctx,
 		RenderDescription* rd,
 		uint2 displaySize,
 		const char* workingDirectory,
@@ -14,15 +13,14 @@ namespace rlf
 
 	struct ExecuteContext
 	{
-		ID3D11DeviceContext* D3dCtx;
-		ID3D11RenderTargetView* MainRtv;
-		ID3D11UnorderedAccessView* MainRtUav;
-		ID3D11DepthStencilView* DefaultDepthView;
+		gfx::Context* GfxCtx;
+		gfx::RenderTargetView MainRtv;
+		gfx::UnorderedAccessView MainRtUav;
+		gfx::DepthStencilView DefaultDepthView;
 		ast::EvaluationContext EvCtx;
 	};
 
 	void HandleTextureParametersChanged(
-		ID3D11Device* device,
 		RenderDescription* rd,
 		ExecuteContext* ec,
 		ErrorState* errorState);

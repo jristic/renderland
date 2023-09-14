@@ -164,7 +164,7 @@ namespace rlf
 		bool ScissorEnable;
 		bool MultisampleEnable;
 		bool AntialiasedLineEnable;
-		ID3D11RasterizerState* RSObject;
+		gfx::RasterizerState GfxState;
 	};
 	struct StencilOpDesc
 	{
@@ -183,7 +183,7 @@ namespace rlf
 		u8 StencilWriteMask;
 		StencilOpDesc FrontFace;
 		StencilOpDesc BackFace;
-		ID3D11DepthStencilState* DSSObject;
+		gfx::DepthStencilState GfxState;
 	};
 	struct BlendState
 	{
@@ -200,25 +200,25 @@ namespace rlf
 	{
 		const char* ShaderPath;
 		const char* EntryPoint;
-		ID3D11ShaderReflection* Reflector;
+		gfx::ShaderReflection Reflector;
 		std::vector<ast::SizeOf*> SizeRequests;
 	};
 	struct ComputeShader
 	{
 		CommonShader Common;
-		ID3D11ComputeShader* ShaderObject;
+		gfx::ComputeShader GfxState;
 		uint3 ThreadGroupSize;
 	};
 	struct VertexShader
 	{
 		CommonShader Common;
-		ID3D11VertexShader* ShaderObject;
-		ID3D11InputLayout* InputLayout; 
+		gfx::VertexShader GfxState;
+		gfx::InputLayout LayoutGfxState; 
 	};
 	struct PixelShader
 	{
 		CommonShader Common;
-		ID3D11PixelShader* ShaderObject;
+		gfx::PixelShader GfxState;
 	};
 	struct ObjImport 
 	{
@@ -240,7 +240,7 @@ namespace rlf
 		u32 InitDataSize;
 		BufferFlag Flags;
 		std::set<View*> Views;
-		ID3D11Buffer* BufferObject;
+		gfx::Buffer GfxState;
 	};
 	struct Texture
 	{
@@ -251,7 +251,7 @@ namespace rlf
 		TextureFlag Flags;
 		u32 SampleCount;
 		std::set<View*> Views;
-		ID3D11Texture2D* TextureObject;
+		gfx::Texture GfxState;
 	};
 	struct Sampler
 	{
@@ -262,7 +262,7 @@ namespace rlf
 		float4 BorderColor;
 		float MinLOD;
 		float MaxLOD;
-		ID3D11SamplerState* SamplerObject;
+		gfx::SamplerState GfxState;
 	};
 	enum class ViewType 
 	{
@@ -283,10 +283,10 @@ namespace rlf
 		TextureFormat Format;
 		u32 NumElements;
 		union {
-			ID3D11ShaderResourceView* SRVObject;
-			ID3D11UnorderedAccessView* UAVObject;
-			ID3D11RenderTargetView* RTVObject;
-			ID3D11DepthStencilView* DSVObject;
+			gfx::ShaderResourceView SRVGfxState;
+			gfx::UnorderedAccessView UAVGfxState;
+			gfx::RenderTargetView RTVGfxState;
+			gfx::DepthStencilView DSVGfxState;
 		};
 	};
 	struct Viewport
@@ -310,7 +310,7 @@ namespace rlf
 	struct ConstantBuffer
 	{
 		u8* BackingMemory;
-		ID3D11Buffer* BufferObject;
+		gfx::Buffer GfxState;
 		std::string Name;
 		u32 Slot;
 		u32 Size;
@@ -368,7 +368,7 @@ namespace rlf
 		std::vector<SetConstant> PSConstants;
 		std::vector<ConstantBuffer> VSCBs;
 		std::vector<ConstantBuffer> PSCBs;
-		ID3D11BlendState* BlendObject;
+		gfx::BlendState BlendGfxState;
 	};
 	struct ClearColor
 	{
