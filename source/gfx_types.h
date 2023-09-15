@@ -30,6 +30,16 @@
 	struct ID3D11RenderTargetView;
 	struct ID3D11DepthStencilView;
 #elif D3D12
+	struct ID3D12CommandAllocator;
+	struct ID3D12Device;
+	struct ID3D12DescriptorHeap;
+	struct ID3D12CommandQueue;
+	struct ID3D12GraphicsCommandList;
+	struct ID3D12Fence;
+	struct IDXGISwapChain3;
+	struct ID3D12Resource;
+	struct D3D12_CPU_DESCRIPTOR_HANDLE;
+	struct D3D12_GPU_DESCRIPTOR_HANDLE;
 #else
 	#error unimplemented
 #endif
@@ -45,6 +55,29 @@ namespace gfx {
 		IDXGISwapChain*				SwapChain;
 		ID3D11RenderTargetView*		BackBufferRtv;
 #elif D3D12
+		struct FrameContext
+		{
+			ID3D12CommandAllocator* CommandAllocator;
+			u64 FenceValue;
+		};
+
+		static u32 const				NUM_FRAMES_IN_FLIGHT = 3;
+		FrameContext					FrameContexts[NUM_FRAMES_IN_FLIGHT] = {};
+		u32								FrameIndex = 0;
+
+		static u32 const				NUM_BACK_BUFFERS = 3;
+		ID3D12Device*					Device = nullptr;
+		ID3D12DescriptorHeap*			RtvDescHeap = nullptr;
+		ID3D12DescriptorHeap*			SrvDescHeap = nullptr;
+		ID3D12CommandQueue*				CommandQueue = nullptr;
+		ID3D12GraphicsCommandList*		CommandList = nullptr;
+		ID3D12Fence*					Fence = nullptr;
+		HANDLE							FenceEvent = nullptr;
+		u64								FenceLastSignaledValue = 0;
+		IDXGISwapChain3*				SwapChain = nullptr;
+		HANDLE							SwapChainWaitableObject = nullptr;
+		ID3D12Resource*					MainRenderTargetResource[NUM_BACK_BUFFERS] = {};
+		D3D12_CPU_DESCRIPTOR_HANDLE		MainRenderTargetDescriptor[NUM_BACK_BUFFERS] = {};
 #else
 	#error unimplemented
 #endif
@@ -67,6 +100,22 @@ namespace gfx {
 	typedef ID3D11RenderTargetView* RenderTargetView;
 	typedef ID3D11DepthStencilView* DepthStencilView;
 #elif D3D12
+	typedef void* RasterizerState;
+	typedef void* DepthStencilState;
+	typedef void* BlendState;
+	typedef void* ShaderReflection;
+	typedef void* ComputeShader;
+	typedef void* VertexShader;
+	typedef void* InputLayout;
+	typedef void* PixelShader;
+	typedef void* Buffer;
+	typedef void* Texture;
+	typedef void* SamplerState;
+	typedef void* ShaderResourceView;
+	typedef void* UnorderedAccessView;
+	typedef void* RenderTargetView;
+	typedef void* DepthStencilView;
+
 #else
 	#error unimplemented
 #endif

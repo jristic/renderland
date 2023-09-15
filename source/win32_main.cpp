@@ -24,6 +24,28 @@
 	#error unimplemented
 #endif
 
+#if D3D11
+	#include <d3d11.h>
+	#include <d3d11shader.h>
+	#include <d3dcompiler.h>
+	#include <d3d11sdklayers.h>
+	#if defined(_DEBUG)
+	#include <dxgidebug.h>
+	#endif
+#elif D3D12
+	#include <d3d12.h>
+	#include <d3d12shader.h>
+	#include <d3dcompiler.h>
+	#include <d3d12sdklayers.h>
+	#include <dxgi1_4.h>
+	#ifdef DX12_ENABLE_DEBUG_LAYER
+		#define DX12_ENABLE_DEBUG_LAYER
+		#include <dxgidebug.h>
+	#endif
+#else
+#error unimplemented
+#endif
+
 // Project headers
 #include "types.h"
 #include "math.h"
@@ -73,6 +95,32 @@ void LoadRlf();
 void UnloadRlf();
 void ReportError(const std::string& message);
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+#if D3D11
+	void ImGui_Impl_Init(gfx::Context* ctx){ ImGui_ImplDX11_Init(ctx->Device, ctx->DeviceContext); }
+	void ImGui_Impl_NewFrame() { ImGui_ImplDX11_NewFrame(); }
+	void ImGui_Impl_RenderDrawData(gfx::Context* ctx, ImDrawData* idd) {
+		(void)ctx;
+		ImGui_ImplDX11_RenderDrawData(idd);
+	}
+	void ImGui_Impl_Shutdown() { ImGui_ImplDX11_Shutdown(); }
+#elif D3D12
+	void ImGui_Impl_Init(gfx::Context* ctx) {
+		ImGui_ImplDX12_Init(ctx->Device, ctx->NUM_FRAMES_IN_FLIGHT,
+			DXGI_FORMAT_R8G8B8A8_UNORM, ctx->SrvDescHeap,
+			ctx->SrvDescHeap->GetCPUDescriptorHandleForHeapStart(),
+			ctx->SrvDescHeap->GetGPUDescriptorHandleForHeapStart());;
+	}
+	void ImGui_Impl_NewFrame() { ImGui_ImplDX12_NewFrame(); }
+	void ImGui_Impl_RenderDrawData(gfx::Context* ctx, ImDrawData* idd)
+	{
+		ImGui_ImplDX12_RenderDrawData(idd, ctx->CommandList);
+	}
+	void ImGui_Impl_Shutdown() { ImGui_ImplDX12_Shutdown(); }
+#else
+	#error unimplemented
+#endif
+
 
 std::string RlfFileLocation(const char* filename, const char* location)
 {
@@ -175,12 +223,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplWin32_Init(hwnd);
-#if D3D11
-	ImGui_ImplDX11_Init(Gfx.Device, Gfx.DeviceContext);
-#elif D3D12
-	ImGui_ImplDX12_Init(Gfx.Device, Gfx.DeviceContext);
-#else
-#endif
+	ImGui_Impl_Init(&Gfx);
 
 	// Our state
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
@@ -207,7 +250,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		}
 
 		// Start the Dear ImGui frame
-		ImGui_ImplDX11_NewFrame();
+		ImGui_Impl_NewFrame();
 		ImGui_ImplWin32_NewFrame();
 		ImGui::NewFrame();
 
@@ -512,7 +555,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 		gfx::ClearBackBufferRtv(&Gfx);
 		gfx::BindBackBufferRtv(&Gfx);
-		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+		ImGui_Impl_RenderDrawData(&Gfx, ImGui::GetDrawData());
 
 		// Update and Render additional Platform Windows
 		if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
@@ -534,7 +577,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	}
 
 	// Cleanup
-	ImGui_ImplDX11_Shutdown();
+	ImGui_Impl_Shutdown();
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
 
@@ -711,33 +754,12 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 #include "rlf/shaderparser.cpp"
 
 
-// Headers for render backend last so we can verify only the below source files
-//	use it. 
 #if D3D11
-	#include <d3d11.h>
-	#include <d3d11shader.h>
-	#include <d3dcompiler.h>
-	#include <d3d11sdklayers.h>
-	#if defined(_DEBUG)
-	#include <dxgidebug.h>
-	#endif
+	#include "d3d11/d3d11_gfx.cpp"
+	#include "rlf/d3d11/d3d11_rlfinterpreter.cpp"
 #elif D3D12
-	#include <d3d12.h>
-	#include <dxgi1_4.h>
-	#ifdef DX12_ENABLE_DEBUG_LAYER
-		#define DX12_ENABLE_DEBUG_LAYER
-		#include <dxgidebug.h>
-	#endif
-#else
-#error unimplemented
-#endif
-
-#if D3D11
-	#include "d3d11/gfx.cpp"
-	#include "rlf/d3d11/d3d11interpreter.cpp"
-#elif D3D12
-	#include "d3d12/gfx.cpp"
-	#include "rlf/d3d12/d3d12interpreter.cpp"
+	#include "d3d12/d3d12_gfx.cpp"
+	#include "rlf/d3d12/d3d12_rlfinterpreter.cpp"
 #else
 	#error unimplemented
 #endif

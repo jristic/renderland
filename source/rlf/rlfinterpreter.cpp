@@ -70,11 +70,10 @@ void InitD3D(
 	const char* workingDirectory,
 	ErrorState* errorState)
 {
-	gInfoQueue = ctx->InfoQueue;
 	errorState->Success = true;
 	errorState->Warning = false;
 	try {
-		InitMain(ctx->Device, rd, displaySize, workingDirectory, errorState);
+		InitMain(ctx, rd, displaySize, workingDirectory, errorState);
 	}
 	catch (ErrorInfo ie)
 	{

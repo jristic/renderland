@@ -2,8 +2,9 @@
 namespace gui {
 
 
-void DisplayShaderConstants(std::vector<rlf::ConstantBuffer>& CBs, ID3D11ShaderReflection* reflector)
+void DisplayShaderConstants(std::vector<rlf::ConstantBuffer>& CBs, gfx::ShaderReflection reflector)
 {
+#if D3D11
 	D3D11_SHADER_DESC sd;
 	reflector->GetDesc(&sd);
 	u32 cb_index = 0;
@@ -59,6 +60,11 @@ void DisplayShaderConstants(std::vector<rlf::ConstantBuffer>& CBs, ID3D11ShaderR
 			}
 		}
 	}
+#elif D3D12
+	// TODO
+#else
+	#error unimplemented
+#endif
 }
 
 void DisplayShaderPasses(rlf::RenderDescription* rd)

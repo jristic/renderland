@@ -2,6 +2,9 @@
 namespace rlf
 {
 
+/* ------TODO-----------
+
+
 // TODO: remove
 #define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
 
@@ -66,6 +69,7 @@ do {										\
 	}										\
 } while (0);								\
 
+/* ------TODO-----------
 static ID3D11RasterizerState*   DefaultRasterizerState = nullptr;
 
 D3D11_FILTER RlfToD3d(FilterMode fm)
@@ -767,14 +771,19 @@ void PrepareConstants(
 		}
 	}
 }
+*/
 
 void InitMain(
-	ID3D11Device* device,
+	gfx::Context* ctx,
 	RenderDescription* rd,
 	uint2 displaySize,
 	const char* workingDirectory,
 	ErrorState* errorState)
 {
+/* ------TODO-----------
+	ID3D11Device* device = ctx->Device;
+	gInfoQueue = ctx->InfoQueue;
+
 	if (DefaultRasterizerState == nullptr)
 	{
 		D3D11_RASTERIZER_DESC desc = {};
@@ -1015,11 +1024,14 @@ void InitMain(
 		desc.BackFace = RlfToD3d(dss->BackFace);
 		device->CreateDepthStencilState(&desc, &dss->GfxState);
 	}
+*/
 }
 
 void ReleaseD3D(
 	RenderDescription* rd)
 {
+/* ------TODO-----------
+
 	SafeRelease(DefaultRasterizerState);
 
 	for (ComputeShader* cs : rd->CShaders)
@@ -1081,6 +1093,7 @@ void ReleaseD3D(
 	{
 		SafeRelease(d->BlendGfxState);
 	}
+*/
 }
 
 void HandleTextureParametersChanged(
@@ -1088,6 +1101,8 @@ void HandleTextureParametersChanged(
 	ExecuteContext* ec,
 	ErrorState* errorState)
 {
+/* ------TODO-----------
+
 	ID3D11Device* device = ec->GfxCtx->Device;
 	errorState->Success = true;
 	errorState->Warning = false;
@@ -1171,6 +1186,7 @@ void HandleTextureParametersChanged(
 		errorState->Success = false;
 		errorState->Info = ie;
 	}
+*/
 }
 
 
@@ -1178,6 +1194,8 @@ void HandleTextureParametersChanged(
 // -----------------------------------------------------------------------------
 // ------------------------------ EXECUTION ------------------------------------
 // -----------------------------------------------------------------------------
+
+/* ------TODO-----------
 void ExecuteError(const char* str, ...)
 {
 	char buf[512];
@@ -1463,11 +1481,14 @@ void ExecuteDraw(
 	else
 		ctx->Draw(draw->VertexCount, 0);
 }
+*/
 
 void _Execute(
 	ExecuteContext* ec,
 	RenderDescription* rd)
 {
+/* ------TODO-----------
+
 	ID3D11DeviceContext* ctx = ec->GfxCtx->DeviceContext;
 
 	EvaluateConstants(ec->EvCtx, rd->Constants);
@@ -1520,7 +1541,7 @@ void _Execute(
 		// Clear state after execution so we don't pollute the rest of program drawing. 
 		ctx->ClearState();
 	}
-
+*/
 }
 
 #undef ExecuteAssert

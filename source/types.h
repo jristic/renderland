@@ -1,4 +1,8 @@
 
+typedef unsigned long long int u64;
+typedef signed long long int i64;
+static_assert(sizeof(u64) == 8, "Didn't get expected size.");
+static_assert(sizeof(i64) == 8, "Didn't get expected size.");
 typedef unsigned int u32;
 typedef signed int i32;
 static_assert(sizeof(u32) == 4, "Didn't get expected size.");
