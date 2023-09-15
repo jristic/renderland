@@ -3508,5 +3508,6 @@ void ReleaseData(RenderDescription* data)
 
 #undef ParserAssert
 #undef StructEntryDef
+#undef StructEntryDefEx
 
 } // namespace rlf

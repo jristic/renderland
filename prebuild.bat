@@ -1,5 +1,7 @@
 @echo off
 
+call project.bat
+
 set BuildFolder=prebuilt
 set ExternalPath=external
 
@@ -13,8 +15,9 @@ if /i "%1"=="release" (
 	set ConfigLinkerOptions=/opt:noref /debug /libpath:external/directxtex/debug
 )
 
-set CommonCompilerFlags=%ConfigCompilerOptions% /nologo /fp:fast /Gm- /GR- /EHsc /WX /W4 /FC /Z7 /D_CRT_SECURE_NO_WARNINGS /I%ExternalPath% /I%ExternalPath%/imgui
-set CommonLinkerFlags=%ConfigLinkerOptions% /incremental:no /subsystem:windows d3d11.lib d3dcompiler.lib dxguid.lib directxtex.lib ole32.lib
+set CommonCompilerDefines=/D_CRT_SECURE_NO_WARNINGS %ProjectPlatformDefines%
+
+set CommonCompilerFlags=%ConfigCompilerOptions% /nologo /fp:fast /Gm- /GR- /EHsc /WX /W4 /FC /Z7 %CommonCompilerDefines% /I%ExternalPath% /I%ExternalPath%/imgui
 
 if not exist %BuildFolder%\ mkdir %BuildFolder%
 

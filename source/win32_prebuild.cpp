@@ -14,4 +14,11 @@
 
 // Imgui example backend
 #include "imgui_impl_win32.cpp"
-#include "imgui_impl_dx11.cpp"
+
+#if D3D11
+	#include "imgui_impl_dx11.cpp"
+#elif D3D12
+	#include "imgui_impl_dx12.cpp"
+#else
+	#error unimplemented
+#endif

@@ -15,8 +15,10 @@ if /i "%1"=="release" (
 	set ConfigLinkerOptions=/opt:noref /debug /libpath:external/directxtex/debug
 )
 
-set CommonCompilerFlags=%ConfigCompilerOptions% /nologo /fp:fast /Gm- /GR- /EHsc /WX /W4 /FC /Z7 /D_CRT_SECURE_NO_WARNINGS /I%ExternalPath% /I%ExternalPath%/imgui /Fo%BuildFolder%\
-set CommonLinkerFlags=%ConfigLinkerOptions% /incremental:no /subsystem:windows d3d11.lib d3dcompiler.lib dxguid.lib directxtex.lib ole32.lib prebuilt\win32_prebuilt.obj
+set CommonCompilerDefines=/D_CRT_SECURE_NO_WARNINGS %ProjectPlatformDefines%
+
+set CommonCompilerFlags=%ConfigCompilerOptions% /nologo /fp:fast /Gm- /GR- /EHsc /WX /W4 /FC /Z7 %CommonCompilerDefines% /I%ExternalPath% /I%ExternalPath%/imgui /Fo%BuildFolder%\
+set CommonLinkerFlags=%ConfigLinkerOptions% /incremental:no /subsystem:windows %ProjectPlatformLinkLibs% d3dcompiler.lib dxguid.lib directxtex.lib ole32.lib prebuilt\win32_prebuilt.obj
 
 if not exist %BuildFolder%\ mkdir %BuildFolder%
 

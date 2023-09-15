@@ -16,7 +16,13 @@
 
 // Imgui example backend
 #include "imgui_impl_win32.h"
-#include "imgui_impl_dx11.h"
+#if D3D11
+	#include "imgui_impl_dx11.h"
+#elif D3D12
+	#include "imgui_impl_dx12.h"
+#else
+	#error unimplemented
+#endif
 
 // Project headers
 #include "types.h"
@@ -169,7 +175,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplWin32_Init(hwnd);
+#if D3D11
 	ImGui_ImplDX11_Init(Gfx.Device, Gfx.DeviceContext);
+#elif D3D12
+	ImGui_ImplDX12_Init(Gfx.Device, Gfx.DeviceContext);
+#else
+#endif
 
 	// Our state
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
@@ -702,15 +713,34 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 // Headers for render backend last so we can verify only the below source files
 //	use it. 
-#include <d3d11.h>
-#include <d3d11shader.h>
-#include <d3dcompiler.h>
-#include <d3d11sdklayers.h>
-#if defined(_DEBUG)
-#include <dxgidebug.h>
+#if D3D11
+	#include <d3d11.h>
+	#include <d3d11shader.h>
+	#include <d3dcompiler.h>
+	#include <d3d11sdklayers.h>
+	#if defined(_DEBUG)
+	#include <dxgidebug.h>
+	#endif
+#elif D3D12
+	#include <d3d12.h>
+	#include <dxgi1_4.h>
+	#ifdef DX12_ENABLE_DEBUG_LAYER
+		#define DX12_ENABLE_DEBUG_LAYER
+		#include <dxgidebug.h>
+	#endif
+#else
+#error unimplemented
 #endif
 
-#include "d3d11/gfx.cpp"
+#if D3D11
+	#include "d3d11/gfx.cpp"
+	#include "rlf/d3d11/d3d11interpreter.cpp"
+#elif D3D12
+	#include "d3d12/gfx.cpp"
+	#include "rlf/d3d12/d3d12interpreter.cpp"
+#else
+	#error unimplemented
+#endif
+
 #include "gui.cpp"
-#include "rlf/d3d11/d3d11interpreter.cpp"
 #include "rlf/rlfinterpreter.cpp"
