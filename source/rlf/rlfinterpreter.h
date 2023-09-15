@@ -20,6 +20,13 @@ namespace rlf
 		ast::EvaluationContext EvCtx;
 	};
 
+
+	void EvaluateExpression(ast::EvaluationContext& ec, ast::Node* ast, ast::Result& res);
+	void EvaluateExpression(ast::EvaluationContext& ec, ast::Node* ast, ast::Result& res, 
+		VariableType expect, const char* name);
+	void EvaluateConstants(ast::EvaluationContext& ec, std::vector<Constant*>& cnsts);
+
+
 	void HandleTextureParametersChanged(
 		RenderDescription* rd,
 		ExecuteContext* ec,

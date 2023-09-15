@@ -710,6 +710,7 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 #include <dxgidebug.h>
 #endif
 
-#include "rlf/rlfinterpreter.cpp"
 #include "d3d11/gfx.cpp"
 #include "gui.cpp"
+#include "rlf/d3d11/d3d11interpreter.cpp"
+#include "rlf/rlfinterpreter.cpp"
