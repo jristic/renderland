@@ -25,11 +25,12 @@
 #include "assert.h"
 #include "config.h"
 #include "fileio.h"
-#include "gfx.h"
+#include "gfx_types.h"
 #include "rlf/rlf.h"
 #include "rlf/rlfparser.h"
 #include "rlf/rlfinterpreter.h"
 #include "rlf/shaderparser.h"
+#include "gfx.h"
 #include "gui.h"
 
 #define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
