@@ -5,98 +5,169 @@ namespace gfx
 
 #define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
 
+void CheckHresult(HRESULT hr, const char* desc)
+{
+	Assert(hr == S_OK, "Failed to create %s, hr=%x", desc, hr);
+}
+
+
+void SetupBackBuffer(Context* ctx)
+{
+	for (UINT i = 0; i < Context::NUM_BACK_BUFFERS; i++)
+	{
+		ID3D12Resource* pBackBuffer = NULL;
+		ctx->SwapChain->GetBuffer(i, IID_PPV_ARGS(&pBackBuffer));
+		ctx->Device->CreateRenderTargetView(pBackBuffer, NULL, ctx->BackBufferDescriptor[i]);
+		ctx->BackBufferResource[i] = pBackBuffer;
+	}
+}
+
+void CleanupBackBuffer(Context* ctx)
+{
+	for (u32 i = 0; i < Context::NUM_BACK_BUFFERS; i++)
+		SafeRelease(ctx->BackBufferResource[i]);
+}
+
 
 void Initialize(Context* ctx, HWND hwnd)
 {
-/* ---------TODO---------
-	// Initialize Direct3D
-	DXGI_SWAP_CHAIN_DESC sd;
+	// Setup swap chain
+	DXGI_SWAP_CHAIN_DESC1 sd;
 	ZeroMemory(&sd, sizeof(sd));
-	sd.BufferCount = 2;
-	sd.BufferDesc.Width = 0;
-	sd.BufferDesc.Height = 0;
-	sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	sd.BufferDesc.RefreshRate.Numerator = 60;
-	sd.BufferDesc.RefreshRate.Denominator = 1;
-	sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_UNORDERED_ACCESS;
-	sd.OutputWindow = hwnd;
+	sd.BufferCount = Context::NUM_BACK_BUFFERS;
+	sd.Width = 0;
+	sd.Height = 0;
+	sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	sd.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+	sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	sd.SampleDesc.Count = 1;
 	sd.SampleDesc.Quality = 0;
-	sd.Windowed = TRUE;
 	sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+	sd.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+	sd.Scaling = DXGI_SCALING_STRETCH;
+	sd.Stereo = FALSE;
 
-	UINT createDeviceFlags = 0;
-	createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
-	D3D_FEATURE_LEVEL featureLevel;
-	const D3D_FEATURE_LEVEL featureLevelArray[1] = { D3D_FEATURE_LEVEL_11_0 };
-	HRESULT hr = D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 
-		createDeviceFlags, featureLevelArray, 1, D3D11_SDK_VERSION, &sd, &ctx->SwapChain, 
-		&ctx->Device, &featureLevel, &ctx->DeviceContext);
-	Assert(hr == S_OK, "failed to create device %x", hr);
+	HRESULT hr;
+	// Debug interface must be enabled before device creation
+	hr = D3D12GetDebugInterface(IID_PPV_ARGS(&ctx->Debug));
+	CheckHresult(hr, "debug interface");
+	ctx->Debug->EnableDebugLayer();
 
-	BOOL success = ctx->Device->QueryInterface(__uuidof(ID3D11Debug), 
-		(void**)&ctx->Debug);
-	Assert(SUCCEEDED(success), "failed to get debug device");
-	success = ctx->Debug->QueryInterface(__uuidof(ID3D11InfoQueue),
-		(void**)&ctx->InfoQueue);
-	Assert(SUCCEEDED(success), "failed to get info queue");
-	// D3D11_MESSAGE_ID hide[] = {
-	   //  D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS,
-	// };
+	D3D_FEATURE_LEVEL featureLevel = D3D_FEATURE_LEVEL_12_0;
+	hr = D3D12CreateDevice(nullptr, featureLevel, IID_PPV_ARGS(&ctx->Device));
+	CheckHresult(hr, "device");
 
-	// D3D11_INFO_QUEUE_FILTER filter = {};
-	// filter.DenyList.NumIDs = _countof(hide);
-	// filter.DenyList.pIDList = hide;
-	// InfoQueue->AddStorageFilterEntries(&filter);
+	hr = ctx->Device->QueryInterface(IID_PPV_ARGS(&ctx->InfoQueue));
+	CheckHresult(hr, "debug info queue");
 	if (IsDebuggerPresent())
 	{
-		ctx->InfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
-		ctx->InfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, true);
+		ctx->InfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
+		ctx->InfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true);
+		// ctx->InfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true);
 	}
 
-	ID3D11Texture2D* pBackBuffer;
-	ctx->SwapChain->GetBuffer(0, IID_PPV_ARGS(&pBackBuffer));
-	// TODO: Should we not be using an SRGB conversion on the backbuffer? 
-	//	From my understanding we should, but it looks visually wrong to me. 
-	// D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-	// rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-	// rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-	// Device->CreateRenderTargetView(pBackBuffer, &rtvDesc, &ctx->BackBufferRtv);
-	ctx->Device->CreateRenderTargetView(pBackBuffer, nullptr, &ctx->BackBufferRtv);
-	pBackBuffer->Release();
-*/
+	{
+		D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+		desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+		desc.NumDescriptors = Context::NUM_BACK_BUFFERS;
+		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+		desc.NodeMask = 1;
+		hr = ctx->Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&ctx->RtvDescHeap));
+		CheckHresult(hr, "descriptor heap");
+
+		SIZE_T rtvDescriptorSize = ctx->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = ctx->RtvDescHeap->GetCPUDescriptorHandleForHeapStart();
+		for (u32 i = 0; i < Context::NUM_BACK_BUFFERS; i++)
+		{
+			ctx->BackBufferDescriptor[i] = rtvHandle;
+			rtvHandle.ptr += rtvDescriptorSize;
+		}
+	}
+
+	{
+		D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+		desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+		desc.NumDescriptors = 1;
+		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+		hr = ctx->Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&ctx->SrvDescHeap));
+		CheckHresult(hr, "descriptor heap");
+	}
+
+	{
+		D3D12_COMMAND_QUEUE_DESC desc = {};
+		desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+		desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+		desc.NodeMask = 1;
+		hr = ctx->Device->CreateCommandQueue(&desc, IID_PPV_ARGS(&ctx->CommandQueue));
+		CheckHresult(hr, "command queue");
+	}
+
+	for (UINT i = 0; i < Context::NUM_FRAMES_IN_FLIGHT; i++)
+	{
+		hr = ctx->Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, 
+			IID_PPV_ARGS(&ctx->FrameContexts[i].CommandAllocator));
+		CheckHresult(hr, "command allocator");
+	}
+
+	hr = ctx->Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, 
+		ctx->FrameContexts[0].CommandAllocator, nullptr, 
+		IID_PPV_ARGS(&ctx->CommandList));
+	CheckHresult(hr, "command list");
+	ctx->CommandList->Close();
+
+	hr = ctx->Device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&ctx->Fence));
+	CheckHresult(hr, "fence");
+
+	ctx->FenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+	Assert(ctx->FenceEvent, "Failed to create fence event");
+
+	{
+		IDXGIFactory4* dxgiFactory = nullptr;
+		IDXGISwapChain1* swapChain1 = nullptr;
+		hr = CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, IID_PPV_ARGS(&dxgiFactory));
+		CheckHresult(hr, "dxgi factory");
+		hr = dxgiFactory->CreateSwapChainForHwnd(ctx->CommandQueue, hwnd, &sd, 
+			nullptr, nullptr, &swapChain1);
+		CheckHresult(hr, "swap chain");
+		hr = swapChain1->QueryInterface(IID_PPV_ARGS(&ctx->SwapChain));
+		CheckHresult(hr, "swap chain");
+		swapChain1->Release();
+		dxgiFactory->Release();
+		ctx->SwapChain->SetMaximumFrameLatency(Context::NUM_BACK_BUFFERS);
+		ctx->SwapChainWaitableObject = ctx->SwapChain->GetFrameLatencyWaitableObject();
+	}
+
+	SetupBackBuffer(ctx);
 }
 
 void Release(Context* ctx)
 {
-/* ---------TODO---------
+	CleanupBackBuffer(ctx);
 
-	SafeRelease(ctx->BackBufferRtv);
+	ctx->SwapChain->SetFullscreenState(false, NULL);
+	CloseHandle(ctx->SwapChainWaitableObject); ctx->SwapChainWaitableObject = nullptr;
 	SafeRelease(ctx->SwapChain);
-	SafeRelease(ctx->DeviceContext);
-	SafeRelease(ctx->InfoQueue);
-	SafeRelease(ctx->Debug);
+	for (u32 i = 0; i < Context::NUM_FRAMES_IN_FLIGHT; ++i)
+		SafeRelease(ctx->FrameContexts[i].CommandAllocator);
+	SafeRelease(ctx->CommandQueue);
+	SafeRelease(ctx->CommandList);
+	SafeRelease(ctx->RtvDescHeap);
+	SafeRelease(ctx->SrvDescHeap);
+	SafeRelease(ctx->Fence);
+	CloseHandle(ctx->FenceEvent); ctx->FenceEvent = nullptr;
+	// SafeRelease(ctx->InfoQueue);
 	SafeRelease(ctx->Device);
+	// SafeRelease(ctx->Debug);
 
-#if defined(_DEBUG)
+#ifdef _DEBUG
 	// Check for leaked D3D/DXGI objects
-	typedef HRESULT (WINAPI * LPDXGIGETDEBUGINTERFACE)(REFIID, void ** );
-	HMODULE dxgiDllHandle = LoadLibraryEx( "dxgidebug.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32 );
-	if ( dxgiDllHandle )
+	IDXGIDebug1* pDebug = NULL;
+	if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&pDebug))))
 	{
-		LPDXGIGETDEBUGINTERFACE dxgiGetDebugInterface = reinterpret_cast<LPDXGIGETDEBUGINTERFACE>(
-			reinterpret_cast<void*>( GetProcAddress(dxgiDllHandle, "DXGIGetDebugInterface") ));
-
-		IDXGIDebug* dxgiDebug;
-		if ( SUCCEEDED( dxgiGetDebugInterface( IID_PPV_ARGS( &dxgiDebug ) ) ) )
-		{
-			dxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL);
-			dxgiDebug->Release();
-		}
+		pDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_SUMMARY);
+		pDebug->Release();
 	}
 #endif
-*/
 }
 
 
@@ -130,6 +201,7 @@ Texture CreateTexture2D(Context* ctx, u32 w, u32 h, DXGI_FORMAT fmt, BindFlag fl
 
 	return D3dObject;
 */
+	return nullptr;
 }
 
 ShaderResourceView CreateShaderResourceView(Context* ctx, Texture tex)
@@ -141,6 +213,7 @@ ShaderResourceView CreateShaderResourceView(Context* ctx, Texture tex)
 	Assert(hr == S_OK, "failed to create srv, hr=%x", hr);
 	return D3dObject;
 */
+	return nullptr;
 }
 
 UnorderedAccessView CreateUnorderedAccessView(Context* ctx, Texture tex)
@@ -151,6 +224,7 @@ UnorderedAccessView CreateUnorderedAccessView(Context* ctx, Texture tex)
 	Assert(hr == S_OK, "failed to create uav, hr=%x", hr);
 	return D3dObject;
 */	
+	return nullptr;
 }
 
 RenderTargetView CreateRenderTargetView(Context* ctx, Texture tex)
@@ -161,6 +235,7 @@ RenderTargetView CreateRenderTargetView(Context* ctx, Texture tex)
 	Assert(hr == S_OK, "failed to create rtv, hr=%x", hr);
 	return RenderTargetView{ D3dObject };
 */
+	return nullptr;
 }
 
 DepthStencilView CreateDepthStencilView(Context* ctx, Texture tex)
@@ -171,6 +246,7 @@ DepthStencilView CreateDepthStencilView(Context* ctx, Texture tex)
 	Assert(hr == S_OK, "failed to create dsv, hr=%x", hr);
 	return D3dObject;
 */
+	return nullptr;
 }
 
 
@@ -182,32 +258,75 @@ void Release(Texture& tex)
 */
 }
 
+/* ---------TODO---------
 void Release(RenderTargetView& rtv)
 {
-/* ---------TODO---------
 	SafeRelease(rtv);
-*/
 }
 
 void Release(ShaderResourceView& srv)
 {
-/* ---------TODO---------
 	SafeRelease(srv);
-*/
 }
 
 void Release(UnorderedAccessView& uav)
 {
-/* ---------TODO---------
 	SafeRelease(uav);
-*/
 }
 
 void Release(DepthStencilView& dsv)
 {
-/* ---------TODO---------
 	SafeRelease(dsv);
+}
 */
+
+
+void BeginFrame(Context* ctx)
+{
+	HANDLE waitableObjects[] = { ctx->SwapChainWaitableObject, NULL };
+	DWORD numWaitableObjects = 1;
+
+	Context::Frame* frameCtx = &ctx->FrameContexts[ctx->FrameIndex % Context::NUM_FRAMES_IN_FLIGHT];
+	UINT64 fenceValue = frameCtx->FenceValue;
+	if (fenceValue != 0) // means no fence was signaled
+	{
+		frameCtx->FenceValue = 0;
+		ctx->Fence->SetEventOnCompletion(fenceValue, ctx->FenceEvent);
+		waitableObjects[1] = ctx->FenceEvent;
+		numWaitableObjects = 2;
+	}
+
+	WaitForMultipleObjects(numWaitableObjects, waitableObjects, TRUE, INFINITE);
+
+	u32 backBufferIdx = ctx->SwapChain->GetCurrentBackBufferIndex();
+	frameCtx->CommandAllocator->Reset();
+
+	D3D12_RESOURCE_BARRIER barrier = {};
+	barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+	barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+	barrier.Transition.pResource   = ctx->BackBufferResource[backBufferIdx];
+	barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+	barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+	barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	ctx->CommandList->Reset(frameCtx->CommandAllocator, NULL);
+	ctx->CommandList->ResourceBarrier(1, &barrier);
+}
+
+void EndFrame(Context* ctx)
+{
+	// EndFrame is the last step before present, so transition the RT back to a 
+	//	presentable surface.
+	u32 backBufferIdx = ctx->SwapChain->GetCurrentBackBufferIndex();
+	D3D12_RESOURCE_BARRIER barrier = {};
+	barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+	barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+	barrier.Transition.pResource   = ctx->BackBufferResource[backBufferIdx];
+	barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_PRESENT;
+	ctx->CommandList->ResourceBarrier(1, &barrier);
+	ctx->CommandList->Close();
+	// Execute all recorded commands. 
+	ctx->CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&ctx->CommandList);
 }
 
 
@@ -228,56 +347,71 @@ void ClearDepth(Context* ctx, DepthStencilView dsv, float depth)
 
 void ClearBackBufferRtv(Context* ctx)
 {
-/* ---------TODO---------
 	const float clear_0[4] = {0,0,0,0};
-	ctx->DeviceContext->ClearRenderTargetView(ctx->BackBufferRtv, clear_0);
-*/
+	u32 backBufferIdx = ctx->SwapChain->GetCurrentBackBufferIndex();
+	ctx->CommandList->ClearRenderTargetView(ctx->BackBufferDescriptor[backBufferIdx], 
+		clear_0, 0, nullptr);
 }
 
 void BindBackBufferRtv(Context* ctx)
 {
-/* ---------TODO---------
-	ctx->DeviceContext->OMSetRenderTargets(1, &ctx->BackBufferRtv, nullptr);
-*/
+	u32 backBufferIdx = ctx->SwapChain->GetCurrentBackBufferIndex();
+	ctx->CommandList->OMSetRenderTargets(1, &ctx->BackBufferDescriptor[backBufferIdx], 
+		FALSE, NULL);
+	ctx->CommandList->SetDescriptorHeaps(1, &ctx->SrvDescHeap);
 }
 
 void Present(Context* ctx, u8 vblanks)
 {
-/* ---------TODO---------
-	ctx->SwapChain->Present(vblanks, 0); // Present with vsync
-*/
+	ctx->SwapChain->Present(vblanks, 0);
+
+	UINT64 fenceValue = ctx->FenceLastSignaledValue + 1;
+	ctx->CommandQueue->Signal(ctx->Fence, fenceValue);
+	ctx->FenceLastSignaledValue = fenceValue;
+
+	ctx->FrameContexts[ctx->FrameIndex % Context::NUM_FRAMES_IN_FLIGHT].FenceValue = fenceValue;
+	++ctx->FrameIndex;
+}
+
+void WaitForLastSubmittedFrame(Context* ctx)
+{
+	Assert(ctx->FrameIndex > 0, "At least one frame must be submitted.");
+	Context::Frame* frameCtx = 
+		&ctx->FrameContexts[(ctx->FrameIndex-1) % Context::NUM_FRAMES_IN_FLIGHT];
+
+	u64 fenceValue = frameCtx->FenceValue;
+	if (fenceValue == 0)
+		return; // No fence was signaled
+
+	frameCtx->FenceValue = 0;
+	if (ctx->Fence->GetCompletedValue() >= fenceValue)
+		return;
+
+	ctx->Fence->SetEventOnCompletion(fenceValue, ctx->FenceEvent);
+	WaitForSingleObject(ctx->FenceEvent, INFINITE);
 }
 
 void HandleBackBufferResize(Context* ctx, u32 w, u32 h)
 {
-/* ---------TODO---------
-	SafeRelease(ctx->BackBufferRtv);
+	WaitForLastSubmittedFrame(ctx);
+	CleanupBackBuffer(ctx);
 
-	ctx->SwapChain->ResizeBuffers(0, w, h, DXGI_FORMAT_UNKNOWN, 0);
+	HRESULT hr = ctx->SwapChain->ResizeBuffers(0, w, h, DXGI_FORMAT_UNKNOWN, 
+		DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT);
+	Assert(hr == S_OK, "Failed to resize swapchain, hr=%x", hr);
 
-	ID3D11Texture2D* pBackBuffer;
-	ctx->SwapChain->GetBuffer(0, IID_PPV_ARGS(&pBackBuffer));
-	// TODO: Should we not be using an SRGB conversion on the backbuffer? 
-	//	From my understanding we should, but it looks visually wrong to me. 
-	// D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-	// rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-	// rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-	// Device->CreateRenderTargetView(pBackBuffer, &rtvDesc, &ctx->BackBufferRtv);
-	ctx->Device->CreateRenderTargetView(pBackBuffer, nullptr, &ctx->BackBufferRtv);
-	pBackBuffer->Release();
-*/
+	SetupBackBuffer(ctx);
 }
 
 bool CheckD3DValidation(gfx::Context* ctx, std::string& outMessage)
 {
-/* ---------TODO---------
-	UINT64 num = ctx->InfoQueue->GetNumStoredMessages();
+	u64 num = ctx->InfoQueue->GetNumStoredMessages();
 	for (u32 i = 0 ; i < num ; ++i)
 	{
 		size_t messageLength;
 		HRESULT hr = ctx->InfoQueue->GetMessage(i, nullptr, &messageLength);
 		Assert(hr == S_FALSE, "Failed to get message, hr=%x", hr);
-		D3D11_MESSAGE* message = (D3D11_MESSAGE*)malloc(messageLength);
+		D3D12_MESSAGE* message = (D3D12_MESSAGE*)malloc(messageLength);
 		ctx->InfoQueue->GetMessage(i, message, &messageLength);
 		Assert(hr == S_FALSE, "Failed to get message, hr=%x", hr);
 		outMessage += message->pDescription;
@@ -286,7 +420,6 @@ bool CheckD3DValidation(gfx::Context* ctx, std::string& outMessage)
 	ctx->InfoQueue->ClearStoredMessages();
 
 	return num > 0;
-*/
 }
 
 

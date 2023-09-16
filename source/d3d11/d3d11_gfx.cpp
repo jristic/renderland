@@ -184,6 +184,19 @@ void Release(DepthStencilView& dsv)
 }
 
 
+void BeginFrame(Context* ctx)
+{
+	// intentional do nothing
+	(void)ctx;
+}
+
+void EndFrame(Context* ctx)
+{
+	// intentional do nothing
+	(void)ctx;
+}
+
+
 void ClearRenderTarget(Context* ctx, RenderTargetView rtv, const float clear[4])
 {
 	ctx->DeviceContext->ClearRenderTargetView(rtv, clear);
@@ -199,7 +212,6 @@ void ClearBackBufferRtv(Context* ctx)
 {
 	const float clear_0[4] = {0,0,0,0};
 	ctx->DeviceContext->ClearRenderTargetView(ctx->BackBufferRtv, clear_0);
-
 }
 
 void BindBackBufferRtv(Context* ctx)
@@ -210,6 +222,12 @@ void BindBackBufferRtv(Context* ctx)
 void Present(Context* ctx, u8 vblanks)
 {
 	ctx->SwapChain->Present(vblanks, 0); // Present with vsync
+}
+
+void WaitForLastSubmittedFrame(Context* ctx)
+{
+	// intentional do nothing - d3d11 has no manual frame sync
+	(void)ctx;
 }
 
 void HandleBackBufferResize(Context* ctx, u32 w, u32 h)

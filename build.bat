@@ -18,7 +18,7 @@ if /i "%1"=="release" (
 set CommonCompilerDefines=/D_CRT_SECURE_NO_WARNINGS %ProjectPlatformDefines%
 
 set CommonCompilerFlags=%ConfigCompilerOptions% /nologo /fp:fast /Gm- /GR- /EHsc /WX /W4 /FC /Z7 %CommonCompilerDefines% /I%ExternalPath% /I%ExternalPath%/imgui /Fo%BuildFolder%\
-set CommonLinkerFlags=%ConfigLinkerOptions% /incremental:no /subsystem:windows %ProjectPlatformLinkLibs% d3dcompiler.lib dxguid.lib directxtex.lib ole32.lib prebuilt\win32_prebuilt.obj
+set CommonLinkerFlags=%ConfigLinkerOptions% /incremental:no /subsystem:windows %ProjectPlatformLinkLibs% d3dcompiler.lib dxguid.lib dxgi.lib directxtex.lib ole32.lib prebuilt\win32_prebuilt.obj
 
 if not exist %BuildFolder%\ mkdir %BuildFolder%
 

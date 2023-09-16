@@ -24,12 +24,16 @@ namespace gfx {
 	void Release(UnorderedAccessView& tex);
 	void Release(DepthStencilView& tex);
 
+	void BeginFrame(Context* ctx);
+	void EndFrame(Context* ctx);
+
 	void ClearRenderTarget(Context* ctx, RenderTargetView rtv, const float clear[4]);
 	void ClearDepth(Context* ctx, DepthStencilView dsv, float depth);
 
 	void ClearBackBufferRtv(Context* ctx);
 	void BindBackBufferRtv(Context* ctx);
 	void Present(Context* ctx, u8 vblanks);
+	void WaitForLastSubmittedFrame(Context* ctx);
 
 	void HandleBackBufferResize(Context* ctx, u32 w, u32 h);
 	bool CheckD3DValidation(Context* ctx, std::string& outMessage);

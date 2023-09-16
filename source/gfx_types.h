@@ -32,6 +32,7 @@
 #elif D3D12
 	struct ID3D12CommandAllocator;
 	struct ID3D12Device;
+	struct ID3D12InfoQueue;
 	struct ID3D12DescriptorHeap;
 	struct ID3D12CommandQueue;
 	struct ID3D12GraphicsCommandList;
@@ -55,18 +56,20 @@ namespace gfx {
 		IDXGISwapChain*				SwapChain;
 		ID3D11RenderTargetView*		BackBufferRtv;
 #elif D3D12
-		struct FrameContext
+		struct Frame
 		{
 			ID3D12CommandAllocator* CommandAllocator;
 			u64 FenceValue;
 		};
 
 		static u32 const				NUM_FRAMES_IN_FLIGHT = 3;
-		FrameContext					FrameContexts[NUM_FRAMES_IN_FLIGHT] = {};
+		Frame							FrameContexts[NUM_FRAMES_IN_FLIGHT] = {};
 		u32								FrameIndex = 0;
 
 		static u32 const				NUM_BACK_BUFFERS = 3;
 		ID3D12Device*					Device = nullptr;
+		ID3D12Debug*					Debug = nullptr;
+		ID3D12InfoQueue*				InfoQueue = nullptr;
 		ID3D12DescriptorHeap*			RtvDescHeap = nullptr;
 		ID3D12DescriptorHeap*			SrvDescHeap = nullptr;
 		ID3D12CommandQueue*				CommandQueue = nullptr;
@@ -76,8 +79,8 @@ namespace gfx {
 		u64								FenceLastSignaledValue = 0;
 		IDXGISwapChain3*				SwapChain = nullptr;
 		HANDLE							SwapChainWaitableObject = nullptr;
-		ID3D12Resource*					MainRenderTargetResource[NUM_BACK_BUFFERS] = {};
-		D3D12_CPU_DESCRIPTOR_HANDLE		MainRenderTargetDescriptor[NUM_BACK_BUFFERS] = {};
+		ID3D12Resource*					BackBufferResource[NUM_BACK_BUFFERS] = {};
+		D3D12_CPU_DESCRIPTOR_HANDLE		BackBufferDescriptor[NUM_BACK_BUFFERS] = {};
 #else
 	#error unimplemented
 #endif

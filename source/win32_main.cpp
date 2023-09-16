@@ -30,7 +30,7 @@
 	#include <d3dcompiler.h>
 	#include <d3d11sdklayers.h>
 	#if defined(_DEBUG)
-	#include <dxgidebug.h>
+		#include <dxgidebug.h>
 	#endif
 #elif D3D12
 	#include <d3d12.h>
@@ -38,8 +38,7 @@
 	#include <d3dcompiler.h>
 	#include <d3d12sdklayers.h>
 	#include <dxgi1_4.h>
-	#ifdef DX12_ENABLE_DEBUG_LAYER
-		#define DX12_ENABLE_DEBUG_LAYER
+	#ifdef _DEBUG
 		#include <dxgidebug.h>
 	#endif
 #else
@@ -106,7 +105,7 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 	void ImGui_Impl_Shutdown() { ImGui_ImplDX11_Shutdown(); }
 #elif D3D12
 	void ImGui_Impl_Init(gfx::Context* ctx) {
-		ImGui_ImplDX12_Init(ctx->Device, ctx->NUM_FRAMES_IN_FLIGHT,
+		ImGui_ImplDX12_Init(ctx->Device, gfx::Context::NUM_FRAMES_IN_FLIGHT,
 			DXGI_FORMAT_R8G8B8A8_UNORM, ctx->SrvDescHeap,
 			ctx->SrvDescHeap->GetCPUDescriptorHandleForHeapStart(),
 			ctx->SrvDescHeap->GetGPUDescriptorHandleForHeapStart());;
@@ -531,6 +530,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 		// Rendering
 		ImGui::Render();
+
+		gfx::BeginFrame(&Gfx);
+
 		const float clear_color_with_alpha[4] =
 		{
 			clear_color.x * clear_color.w,
@@ -557,6 +559,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		gfx::BindBackBufferRtv(&Gfx);
 		ImGui_Impl_RenderDrawData(&Gfx, ImGui::GetDrawData());
 
+		gfx::EndFrame(&Gfx);
+
 		// Update and Render additional Platform Windows
 		if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
 		{
@@ -575,6 +579,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 		PrevDisplaySize = DisplaySize;
 	}
+
+	gfx::WaitForLastSubmittedFrame(&Gfx);
 
 	// Cleanup
 	ImGui_Impl_Shutdown();
@@ -712,7 +718,7 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	switch (msg)
 	{
 	case WM_SIZE:
-		if (Gfx.Device != NULL && wParam != SIZE_MINIMIZED)
+		if (StartupComplete && wParam != SIZE_MINIMIZED)
 		{
 			gfx::HandleBackBufferResize(&Gfx, (UINT)LOWORD(lParam), (UINT)HIWORD(lParam));
 
