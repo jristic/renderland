@@ -62,11 +62,11 @@ namespace gfx {
 			u64 FenceValue;
 		};
 
-		static u32 const				NUM_FRAMES_IN_FLIGHT = 3;
+		static u32 const				NUM_FRAMES_IN_FLIGHT = 2;
 		Frame							FrameContexts[NUM_FRAMES_IN_FLIGHT] = {};
 		u32								FrameIndex = 0;
 
-		static u32 const				NUM_BACK_BUFFERS = 3;
+		static u32 const				NUM_BACK_BUFFERS = 2;
 		ID3D12Device*					Device = nullptr;
 		ID3D12Debug*					Debug = nullptr;
 		ID3D12InfoQueue*				InfoQueue = nullptr;
@@ -112,12 +112,25 @@ namespace gfx {
 	typedef void* InputLayout;
 	typedef void* PixelShader;
 	typedef void* Buffer;
-	typedef void* Texture;
+	struct Texture {
+		ID3D12Resource* Resource;
+		ID3D12DescriptorHeap* SrvUavDescHeap;
+		ID3D12DescriptorHeap* RtvDescHeap;
+		ID3D12DescriptorHeap* DsvDescHeap;
+	};
 	typedef void* SamplerState;
-	typedef void* ShaderResourceView;
-	typedef void* UnorderedAccessView;
-	typedef void* RenderTargetView;
-	typedef void* DepthStencilView;
+	struct ShaderResourceView {
+		D3D12_GPU_DESCRIPTOR_HANDLE GpuDescriptor;
+	};
+	struct UnorderedAccessView {
+		D3D12_GPU_DESCRIPTOR_HANDLE GpuDescriptor;
+	};
+	struct RenderTargetView  {
+		D3D12_CPU_DESCRIPTOR_HANDLE CpuDescriptor;
+	};
+	struct DepthStencilView  {
+		D3D12_CPU_DESCRIPTOR_HANDLE CpuDescriptor;
+	};
 
 #else
 	#error unimplemented

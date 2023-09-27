@@ -3,7 +3,7 @@ namespace rlf
 {
 
 // TODO: remove
-#define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
+#define SafeRelease(ref) do { if (ref) { (ref)->Release(); (ref) = nullptr; } } while (0);
 
 
 // -----------------------------------------------------------------------------

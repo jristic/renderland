@@ -3,7 +3,7 @@ namespace gfx
 {
 
 
-#define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
+#define SafeRelease(ref) do { if (ref) { (ref)->Release(); (ref) = nullptr; } } while (0);
 
 
 void Initialize(Context* ctx, HWND hwnd)
@@ -124,43 +124,48 @@ Texture CreateTexture2D(Context* ctx, u32 w, u32 h, DXGI_FORMAT fmt, BindFlag fl
 	return D3dObject;
 }
 
-ShaderResourceView CreateShaderResourceView(Context* ctx, Texture tex)
+ShaderResourceView CreateShaderResourceView(Context* ctx, Texture* tex)
 {
 	ID3D11ShaderResourceView* D3dObject;
-	HRESULT hr = ctx->Device->CreateShaderResourceView(tex, nullptr, &D3dObject);
+	HRESULT hr = ctx->Device->CreateShaderResourceView(*tex, nullptr, &D3dObject);
 	Assert(hr == S_OK, "failed to create srv, hr=%x", hr);
 	return D3dObject;
 }
 
-UnorderedAccessView CreateUnorderedAccessView(Context* ctx, Texture tex)
+UnorderedAccessView CreateUnorderedAccessView(Context* ctx, Texture* tex)
 {
 	ID3D11UnorderedAccessView* D3dObject;
-	HRESULT hr = ctx->Device->CreateUnorderedAccessView(tex, nullptr, &D3dObject);
+	HRESULT hr = ctx->Device->CreateUnorderedAccessView(*tex, nullptr, &D3dObject);
 	Assert(hr == S_OK, "failed to create uav, hr=%x", hr);
 	return D3dObject;
 }
 
-RenderTargetView CreateRenderTargetView(Context* ctx, Texture tex)
+RenderTargetView CreateRenderTargetView(Context* ctx, Texture* tex)
 {
 	ID3D11RenderTargetView* D3dObject;
-	HRESULT hr = ctx->Device->CreateRenderTargetView(tex, nullptr, &D3dObject);
+	HRESULT hr = ctx->Device->CreateRenderTargetView(*tex, nullptr, &D3dObject);
 	Assert(hr == S_OK, "failed to create rtv, hr=%x", hr);
 	return RenderTargetView{ D3dObject };
 }
 
-DepthStencilView CreateDepthStencilView(Context* ctx, Texture tex)
+DepthStencilView CreateDepthStencilView(Context* ctx, Texture* tex)
 {
 	ID3D11DepthStencilView* D3dObject;
-	HRESULT hr = ctx->Device->CreateDepthStencilView(tex, nullptr, &D3dObject);
+	HRESULT hr = ctx->Device->CreateDepthStencilView(*tex, nullptr, &D3dObject);
 	Assert(hr == S_OK, "failed to create dsv, hr=%x", hr);
 	return D3dObject;
 }
 
 
-
-void Release(Texture& tex)
+bool IsNull(Texture* tex)
 {
-	SafeRelease(tex);
+	return *tex == nullptr;
+}
+
+
+void Release(Texture* tex)
+{
+	SafeRelease(*tex);
 }
 
 void Release(RenderTargetView& rtv)
@@ -181,6 +186,12 @@ void Release(UnorderedAccessView& uav)
 void Release(DepthStencilView& dsv)
 {
 	SafeRelease(dsv);
+}
+
+
+ImTextureID GetImTextureID(ShaderResourceView srv)
+{
+	return srv;
 }
 
 

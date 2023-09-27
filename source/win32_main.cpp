@@ -60,8 +60,6 @@
 #include "gfx.h"
 #include "gui.h"
 
-#define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
-
 const int LAYOUT_VERSION = 1;
 
 gfx::Context Gfx;
@@ -350,28 +348,28 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			DisplaySize.x = (u32)max(1, vMax.x - vMin.x);
 			DisplaySize.y = (u32)max(1, vMax.y - vMin.y);
 
-			if (RlfDisplayTex == nullptr || PrevDisplaySize != DisplaySize)
+			if (gfx::IsNull(&RlfDisplayTex) || PrevDisplaySize != DisplaySize)
 			{
 				gfx::Release(RlfDisplayUav);
 				gfx::Release(RlfDisplaySrv);
 				gfx::Release(RlfDisplayRtv);
-				gfx::Release(RlfDisplayTex);
+				gfx::Release(&RlfDisplayTex);
 				gfx::Release(RlfDepthStencilView);
-				gfx::Release(RlfDepthStencilTex);
+				gfx::Release(&RlfDepthStencilTex);
 
 				RlfDisplayTex = gfx::CreateTexture2D(&Gfx, DisplaySize.x, DisplaySize.y,
 					DXGI_FORMAT_R8G8B8A8_UNORM, 
 					(gfx::BindFlag)(gfx::BindFlag_SRV | gfx::BindFlag_UAV | gfx::BindFlag_RTV));
-				RlfDisplaySrv = gfx::CreateShaderResourceView(&Gfx, RlfDisplayTex);
-				RlfDisplayUav = gfx::CreateUnorderedAccessView(&Gfx, RlfDisplayTex);
-				RlfDisplayRtv = gfx::CreateRenderTargetView(&Gfx, RlfDisplayTex);
+				RlfDisplaySrv = gfx::CreateShaderResourceView(&Gfx, &RlfDisplayTex);
+				RlfDisplayUav = gfx::CreateUnorderedAccessView(&Gfx, &RlfDisplayTex);
+				RlfDisplayRtv = gfx::CreateRenderTargetView(&Gfx, &RlfDisplayTex);
 
 				RlfDepthStencilTex = gfx::CreateTexture2D(&Gfx, DisplaySize.x, DisplaySize.y,
 					DXGI_FORMAT_D32_FLOAT, gfx::BindFlag_DSV);
-				RlfDepthStencilView = gfx::CreateDepthStencilView(&Gfx, RlfDepthStencilTex);
+				RlfDepthStencilView = gfx::CreateDepthStencilView(&Gfx, &RlfDepthStencilTex);
 			}
 			
-			ImGui::Image(RlfDisplaySrv, ImVec2(vMax.x-vMin.x, vMax.y-vMin.y));
+			ImGui::Image(gfx::GetImTextureID(RlfDisplaySrv), ImVec2(vMax.x-vMin.x, vMax.y-vMin.y));
 		}
 		ImGui::End();
 
@@ -591,11 +589,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 	UnloadRlf();
 
-	gfx::Release(RlfDisplayTex);
+	gfx::Release(&RlfDisplayTex);
 	gfx::Release(RlfDisplayRtv);
 	gfx::Release(RlfDisplaySrv);
 	gfx::Release(RlfDisplayUav);
-	gfx::Release(RlfDepthStencilTex);
+	gfx::Release(&RlfDepthStencilTex);
 	gfx::Release(RlfDepthStencilView);
 
 	gfx::Release(&Gfx);

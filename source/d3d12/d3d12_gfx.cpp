@@ -3,7 +3,7 @@ namespace gfx
 {
 
 
-#define SafeRelease(ref) do { if (ref) { ref->Release(); ref = nullptr; } } while (0);
+#define SafeRelease(ref) do { if (ref) { (ref)->Release(); (ref) = nullptr; } } while (0);
 
 void CheckHresult(HRESULT hr, const char* desc)
 {
@@ -90,6 +90,7 @@ void Initialize(Context* ctx, HWND hwnd)
 		desc.NumDescriptors = 1;
 		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 		hr = ctx->Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&ctx->SrvDescHeap));
+		ctx->SrvDescHeap->SetName(L"Context::SrvDescHeap");
 		CheckHresult(hr, "descriptor heap");
 	}
 
@@ -173,112 +174,149 @@ void Release(Context* ctx)
 
 Texture CreateTexture2D(Context* ctx, u32 w, u32 h, DXGI_FORMAT fmt, BindFlag flags)
 {
-/* ---------TODO---------
+	Texture tex = {};
 
-	ID3D11Texture2D* D3dObject;
-	D3D11_TEXTURE2D_DESC desc = {};
+	D3D12_RESOURCE_DESC desc = {};
+	desc.Format = fmt;
 	desc.Width = w;
 	desc.Height = h;
-	desc.MipLevels = 1;
-	desc.ArraySize = 1;
-	desc.Format = fmt;
+	desc.DepthOrArraySize = 1;
+	desc.MipLevels = 0;
 	desc.SampleDesc.Count = 1;
 	desc.SampleDesc.Quality = 0;
-	desc.Usage = D3D11_USAGE_DEFAULT;
-	desc.BindFlags = 0;
-	if ((flags & BindFlag_SRV) != 0)
-		desc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+	desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	desc.Alignment = 0;
+
+	desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 	if ((flags & BindFlag_UAV) != 0)
-		desc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	if ((flags & BindFlag_RTV) != 0)
-		desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
+		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 	if ((flags & BindFlag_DSV) != 0)
-		desc.BindFlags |= D3D11_BIND_DEPTH_STENCIL;
-	desc.CPUAccessFlags = 0;
-	desc.MiscFlags = 0;
-	HRESULT hr = ctx->Device->CreateTexture2D(&desc, nullptr, &D3dObject);
+		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+	D3D12_HEAP_PROPERTIES defaultProperties;
+	defaultProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+	defaultProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	defaultProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+	defaultProperties.CreationNodeMask = 0;
+	defaultProperties.VisibleNodeMask = 0;
+
+	D3D12_RESOURCE_STATES init_state = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	if ((flags & BindFlag_DSV) != 0)
+		init_state = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+	 
+	HRESULT hr = ctx->Device->CreateCommittedResource(&defaultProperties, D3D12_HEAP_FLAG_NONE, 
+		&desc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&tex.Resource));
 	Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
 
-	return D3dObject;
-*/
-	return nullptr;
+	D3D12_DESCRIPTOR_HEAP_DESC heap_desc = {};
+	heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	heap_desc.NumDescriptors = 2;
+	heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	heap_desc.NodeMask = 1;
+	hr = ctx->Device->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(&tex.SrvUavDescHeap));
+	tex.SrvUavDescHeap->SetName(L"Texture::SrvUavDescHeap");
+	CheckHresult(hr, "descriptor heap");
+
+	heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+	heap_desc.NumDescriptors = 1;
+	heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+	hr = ctx->Device->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(&tex.RtvDescHeap));
+	tex.RtvDescHeap->SetName(L"Texture::RtvDescHeap");
+	CheckHresult(hr, "descriptor heap");
+
+	heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+	heap_desc.NumDescriptors = 1;
+	heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+	hr = ctx->Device->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(&tex.DsvDescHeap));
+	tex.DsvDescHeap->SetName(L"Texture::DsvDescHeap");
+	CheckHresult(hr, "descriptor heap");
+
+	return tex;
 }
 
-ShaderResourceView CreateShaderResourceView(Context* ctx, Texture tex)
+ShaderResourceView CreateShaderResourceView(Context* ctx, Texture* tex)
 {
-/* ---------TODO---------
-
-	ID3D11ShaderResourceView* D3dObject;
-	HRESULT hr = ctx->Device->CreateShaderResourceView(tex, nullptr, &D3dObject);
-	Assert(hr == S_OK, "failed to create srv, hr=%x", hr);
-	return D3dObject;
-*/
-	return nullptr;
+	D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
+		tex->SrvUavDescHeap->GetCPUDescriptorHandleForHeapStart();
+	ctx->Device->CreateShaderResourceView(tex->Resource, nullptr, cpu_descriptor);
+	D3D12_GPU_DESCRIPTOR_HANDLE gpu_descriptor = 
+		tex->SrvUavDescHeap->GetGPUDescriptorHandleForHeapStart();
+	return ShaderResourceView { gpu_descriptor };
 }
 
-UnorderedAccessView CreateUnorderedAccessView(Context* ctx, Texture tex)
+UnorderedAccessView CreateUnorderedAccessView(Context* ctx, Texture* tex)
 {
-/* ---------TODO---------
-	ID3D11UnorderedAccessView* D3dObject;
-	HRESULT hr = ctx->Device->CreateUnorderedAccessView(tex, nullptr, &D3dObject);
-	Assert(hr == S_OK, "failed to create uav, hr=%x", hr);
-	return D3dObject;
-*/	
-	return nullptr;
+	D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
+		tex->SrvUavDescHeap->GetCPUDescriptorHandleForHeapStart();
+	cpu_descriptor.ptr += ctx->Device->GetDescriptorHandleIncrementSize(
+		D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	ctx->Device->CreateUnorderedAccessView(tex->Resource, nullptr, nullptr, cpu_descriptor);
+	D3D12_GPU_DESCRIPTOR_HANDLE gpu_descriptor = 
+		tex->SrvUavDescHeap->GetGPUDescriptorHandleForHeapStart();
+	gpu_descriptor.ptr += ctx->Device->GetDescriptorHandleIncrementSize(
+		D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	return UnorderedAccessView { gpu_descriptor };
 }
 
-RenderTargetView CreateRenderTargetView(Context* ctx, Texture tex)
+RenderTargetView CreateRenderTargetView(Context* ctx, Texture* tex)
 {
-/* ---------TODO---------
-	ID3D11RenderTargetView* D3dObject;
-	HRESULT hr = ctx->Device->CreateRenderTargetView(tex, nullptr, &D3dObject);
-	Assert(hr == S_OK, "failed to create rtv, hr=%x", hr);
-	return RenderTargetView{ D3dObject };
-*/
-	return nullptr;
+	D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
+		tex->RtvDescHeap->GetCPUDescriptorHandleForHeapStart();
+	ctx->Device->CreateRenderTargetView(tex->Resource, nullptr, cpu_descriptor);
+	return RenderTargetView { cpu_descriptor };
 }
 
-DepthStencilView CreateDepthStencilView(Context* ctx, Texture tex)
+DepthStencilView CreateDepthStencilView(Context* ctx, Texture* tex)
 {
-/* ---------TODO---------
-	ID3D11DepthStencilView* D3dObject;
-	HRESULT hr = ctx->Device->CreateDepthStencilView(tex, nullptr, &D3dObject);
-	Assert(hr == S_OK, "failed to create dsv, hr=%x", hr);
-	return D3dObject;
-*/
-	return nullptr;
+	D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
+		tex->DsvDescHeap->GetCPUDescriptorHandleForHeapStart();
+	ctx->Device->CreateDepthStencilView(tex->Resource, nullptr, cpu_descriptor);
+	return DepthStencilView { cpu_descriptor };
 }
 
 
-
-void Release(Texture& tex)
+bool IsNull(Texture* tex)
 {
-/* ---------TODO---------
-	SafeRelease(tex);
-*/
+	return tex->Resource == nullptr;
 }
 
-/* ---------TODO---------
+
+void Release(Texture* tex)
+{
+	SafeRelease(tex->DsvDescHeap);
+	SafeRelease(tex->RtvDescHeap);
+	SafeRelease(tex->SrvUavDescHeap);
+	SafeRelease(tex->Resource);
+}
+
 void Release(RenderTargetView& rtv)
 {
-	SafeRelease(rtv);
+	// intentional no-op
 }
 
 void Release(ShaderResourceView& srv)
 {
-	SafeRelease(srv);
+	// intentional no-op
 }
 
 void Release(UnorderedAccessView& uav)
 {
-	SafeRelease(uav);
+	// intentional no-op
 }
 
 void Release(DepthStencilView& dsv)
 {
-	SafeRelease(dsv);
+	// intentional no-op
 }
-*/
+
+
+ImTextureID GetImTextureID(ShaderResourceView srv)
+{
+	return (ImTextureID)srv.GpuDescriptor.ptr;
+}
 
 
 void BeginFrame(Context* ctx)
@@ -332,17 +370,13 @@ void EndFrame(Context* ctx)
 
 void ClearRenderTarget(Context* ctx, RenderTargetView rtv, const float clear[4])
 {
-/* ---------TODO---------
-	ctx->DeviceContext->ClearRenderTargetView(rtv, clear);
-*/
+	ctx->CommandList->ClearRenderTargetView(rtv.CpuDescriptor, clear, 0, nullptr);
 }
 
 void ClearDepth(Context* ctx, DepthStencilView dsv, float depth)
 {
-/* ---------TODO---------
-	ctx->DeviceContext->ClearDepthStencilView(dsv, 
-		D3D11_CLEAR_DEPTH, depth, 0);
-*/
+	ctx->CommandList->ClearDepthStencilView(dsv.CpuDescriptor, D3D12_CLEAR_FLAG_DEPTH, 
+		depth, 0, 0, nullptr);
 }
 
 void ClearBackBufferRtv(Context* ctx)
@@ -415,6 +449,7 @@ bool CheckD3DValidation(gfx::Context* ctx, std::string& outMessage)
 		ctx->InfoQueue->GetMessage(i, message, &messageLength);
 		Assert(hr == S_FALSE, "Failed to get message, hr=%x", hr);
 		outMessage += message->pDescription;
+		outMessage += "\n";
 		free(message);
 	}
 	ctx->InfoQueue->ClearStoredMessages();

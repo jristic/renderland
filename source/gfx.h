@@ -14,15 +14,18 @@ namespace gfx {
 	void Release(Context* ctx);
 
 	Texture CreateTexture2D(Context* ctx, u32 w, u32 h, DXGI_FORMAT fmt, BindFlag flags);
-	ShaderResourceView CreateShaderResourceView(Context* ctx, Texture tex);
-	UnorderedAccessView CreateUnorderedAccessView(Context* ctx, Texture tex);
-	RenderTargetView CreateRenderTargetView(Context* ctx, Texture tex);
-	DepthStencilView CreateDepthStencilView(Context* ctx, Texture tex);
-	void Release(Texture& tex);
+	ShaderResourceView CreateShaderResourceView(Context* ctx, Texture* tex);
+	UnorderedAccessView CreateUnorderedAccessView(Context* ctx, Texture* tex);
+	RenderTargetView CreateRenderTargetView(Context* ctx, Texture* tex);
+	DepthStencilView CreateDepthStencilView(Context* ctx, Texture* tex);
+	bool IsNull(Texture* tex);
+	void Release(Texture* tex);
 	void Release(RenderTargetView& tex);
 	void Release(ShaderResourceView& tex);
 	void Release(UnorderedAccessView& tex);
 	void Release(DepthStencilView& tex);
+
+	ImTextureID GetImTextureID(ShaderResourceView srv);
 
 	void BeginFrame(Context* ctx);
 	void EndFrame(Context* ctx);
