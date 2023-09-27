@@ -70,8 +70,18 @@ namespace gfx {
 		ID3D12Device*					Device = nullptr;
 		ID3D12Debug*					Debug = nullptr;
 		ID3D12InfoQueue*				InfoQueue = nullptr;
+		static u32 const				MAX_RTV_DESCS = 512;
 		ID3D12DescriptorHeap*			RtvDescHeap = nullptr;
+		u64								RtvDescSize = 0;
+		u64								RtvDescNextIndex = 0;
+		static u32 const				MAX_SRV_DESCS = 1024;
 		ID3D12DescriptorHeap*			SrvDescHeap = nullptr;
+		u64								SrvDescSize = 0;
+		u64								SrvDescNextIndex = 0;
+		static u32 const				MAX_DSV_DESCS = 256;
+		ID3D12DescriptorHeap*			DsvDescHeap = nullptr;
+		u64								DsvDescSize = 0;
+		u64								DsvDescNextIndex = 0;
 		ID3D12CommandQueue*				CommandQueue = nullptr;
 		ID3D12GraphicsCommandList*		CommandList = nullptr;
 		ID3D12Fence*					Fence = nullptr;
@@ -114,9 +124,6 @@ namespace gfx {
 	typedef void* Buffer;
 	struct Texture {
 		ID3D12Resource* Resource;
-		ID3D12DescriptorHeap* SrvUavDescHeap;
-		ID3D12DescriptorHeap* RtvDescHeap;
-		ID3D12DescriptorHeap* DsvDescHeap;
 	};
 	typedef void* SamplerState;
 	struct ShaderResourceView {

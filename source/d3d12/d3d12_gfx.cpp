@@ -69,10 +69,11 @@ void Initialize(Context* ctx, HWND hwnd)
 	{
 		D3D12_DESCRIPTOR_HEAP_DESC desc = {};
 		desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-		desc.NumDescriptors = Context::NUM_BACK_BUFFERS;
+		desc.NumDescriptors = Context::MAX_RTV_DESCS;
 		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 		desc.NodeMask = 1;
 		hr = ctx->Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&ctx->RtvDescHeap));
+		ctx->RtvDescHeap->SetName(L"Context::RtvDescHeap");
 		CheckHresult(hr, "descriptor heap");
 
 		SIZE_T rtvDescriptorSize = ctx->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -82,17 +83,43 @@ void Initialize(Context* ctx, HWND hwnd)
 			ctx->BackBufferDescriptor[i] = rtvHandle;
 			rtvHandle.ptr += rtvDescriptorSize;
 		}
+
+		ctx->RtvDescSize = ctx->Device->GetDescriptorHandleIncrementSize(
+			D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		// 2 hardcoded uses for backbuffers
+		ctx->RtvDescNextIndex = Context::NUM_BACK_BUFFERS;
 	}
 
 	{
 		D3D12_DESCRIPTOR_HEAP_DESC desc = {};
 		desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-		desc.NumDescriptors = 1;
+		desc.NumDescriptors = Context::MAX_SRV_DESCS;
 		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 		hr = ctx->Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&ctx->SrvDescHeap));
 		ctx->SrvDescHeap->SetName(L"Context::SrvDescHeap");
 		CheckHresult(hr, "descriptor heap");
+
+		ctx->SrvDescSize = ctx->Device->GetDescriptorHandleIncrementSize(
+			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		// 1 hardcoded use for imgui fonts
+		ctx->SrvDescNextIndex = 1;
 	}
+
+
+	{
+		D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+		desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+		desc.NumDescriptors = Context::MAX_DSV_DESCS;
+		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+		hr = ctx->Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&ctx->DsvDescHeap));
+		ctx->DsvDescHeap->SetName(L"Context::DsvDescHeap");
+		CheckHresult(hr, "descriptor heap");
+
+		ctx->DsvDescSize = ctx->Device->GetDescriptorHandleIncrementSize(
+			D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+		ctx->DsvDescNextIndex = 0;
+	}
+
 
 	{
 		D3D12_COMMAND_QUEUE_DESC desc = {};
@@ -208,71 +235,66 @@ Texture CreateTexture2D(Context* ctx, u32 w, u32 h, DXGI_FORMAT fmt, BindFlag fl
 		init_state = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 	 
 	HRESULT hr = ctx->Device->CreateCommittedResource(&defaultProperties, D3D12_HEAP_FLAG_NONE, 
-		&desc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&tex.Resource));
+		&desc, init_state, nullptr, IID_PPV_ARGS(&tex.Resource));
 	Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
-
-	D3D12_DESCRIPTOR_HEAP_DESC heap_desc = {};
-	heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-	heap_desc.NumDescriptors = 2;
-	heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	heap_desc.NodeMask = 1;
-	hr = ctx->Device->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(&tex.SrvUavDescHeap));
-	tex.SrvUavDescHeap->SetName(L"Texture::SrvUavDescHeap");
-	CheckHresult(hr, "descriptor heap");
-
-	heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-	heap_desc.NumDescriptors = 1;
-	heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-	hr = ctx->Device->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(&tex.RtvDescHeap));
-	tex.RtvDescHeap->SetName(L"Texture::RtvDescHeap");
-	CheckHresult(hr, "descriptor heap");
-
-	heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-	heap_desc.NumDescriptors = 1;
-	heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-	hr = ctx->Device->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(&tex.DsvDescHeap));
-	tex.DsvDescHeap->SetName(L"Texture::DsvDescHeap");
-	CheckHresult(hr, "descriptor heap");
 
 	return tex;
 }
 
 ShaderResourceView CreateShaderResourceView(Context* ctx, Texture* tex)
 {
+	Assert(ctx->SrvDescNextIndex < Context::MAX_SRV_DESCS, "TODO: reset descriptors on reload");
+	u64 offset = ctx->SrvDescNextIndex * ctx->SrvDescSize;
+	++ctx->SrvDescNextIndex;
+
 	D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
-		tex->SrvUavDescHeap->GetCPUDescriptorHandleForHeapStart();
+		ctx->SrvDescHeap->GetCPUDescriptorHandleForHeapStart();
+	cpu_descriptor.ptr += offset;
 	ctx->Device->CreateShaderResourceView(tex->Resource, nullptr, cpu_descriptor);
 	D3D12_GPU_DESCRIPTOR_HANDLE gpu_descriptor = 
-		tex->SrvUavDescHeap->GetGPUDescriptorHandleForHeapStart();
+		ctx->SrvDescHeap->GetGPUDescriptorHandleForHeapStart();
+	gpu_descriptor.ptr += offset;
 	return ShaderResourceView { gpu_descriptor };
 }
 
 UnorderedAccessView CreateUnorderedAccessView(Context* ctx, Texture* tex)
 {
+	Assert(ctx->SrvDescNextIndex < Context::MAX_SRV_DESCS, "TODO: reset descriptors on reload");
+	u64 offset = ctx->SrvDescNextIndex * ctx->SrvDescSize;
+	++ctx->SrvDescNextIndex;
+
 	D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
-		tex->SrvUavDescHeap->GetCPUDescriptorHandleForHeapStart();
-	cpu_descriptor.ptr += ctx->Device->GetDescriptorHandleIncrementSize(
-		D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		ctx->SrvDescHeap->GetCPUDescriptorHandleForHeapStart();
+	cpu_descriptor.ptr += offset;
 	ctx->Device->CreateUnorderedAccessView(tex->Resource, nullptr, nullptr, cpu_descriptor);
 	D3D12_GPU_DESCRIPTOR_HANDLE gpu_descriptor = 
-		tex->SrvUavDescHeap->GetGPUDescriptorHandleForHeapStart();
-	gpu_descriptor.ptr += ctx->Device->GetDescriptorHandleIncrementSize(
-		D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		ctx->SrvDescHeap->GetGPUDescriptorHandleForHeapStart();
+	gpu_descriptor.ptr += offset;
 	return UnorderedAccessView { gpu_descriptor };
 }
 
 RenderTargetView CreateRenderTargetView(Context* ctx, Texture* tex)
 {
+	Assert(ctx->RtvDescNextIndex < Context::MAX_RTV_DESCS, "TODO: reset descriptors on reload");
+	u64 offset = ctx->RtvDescNextIndex * ctx->RtvDescSize;
+	++ctx->RtvDescNextIndex;
+
 	D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
-		tex->RtvDescHeap->GetCPUDescriptorHandleForHeapStart();
+		ctx->RtvDescHeap->GetCPUDescriptorHandleForHeapStart();
+	cpu_descriptor.ptr += offset;
 	ctx->Device->CreateRenderTargetView(tex->Resource, nullptr, cpu_descriptor);
 	return RenderTargetView { cpu_descriptor };
 }
 
 DepthStencilView CreateDepthStencilView(Context* ctx, Texture* tex)
 {
+	Assert(ctx->DsvDescNextIndex < Context::MAX_DSV_DESCS, "TODO: reset descriptors on reload");
+	u64 offset = ctx->DsvDescNextIndex * ctx->DsvDescSize;
+	++ctx->DsvDescNextIndex;
+
 	D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
-		tex->DsvDescHeap->GetCPUDescriptorHandleForHeapStart();
+		ctx->DsvDescHeap->GetCPUDescriptorHandleForHeapStart();
+	cpu_descriptor.ptr += offset;
 	ctx->Device->CreateDepthStencilView(tex->Resource, nullptr, cpu_descriptor);
 	return DepthStencilView { cpu_descriptor };
 }
@@ -286,28 +308,25 @@ bool IsNull(Texture* tex)
 
 void Release(Texture* tex)
 {
-	SafeRelease(tex->DsvDescHeap);
-	SafeRelease(tex->RtvDescHeap);
-	SafeRelease(tex->SrvUavDescHeap);
 	SafeRelease(tex->Resource);
 }
 
-void Release(RenderTargetView& rtv)
+void Release(RenderTargetView&)
 {
 	// intentional no-op
 }
 
-void Release(ShaderResourceView& srv)
+void Release(ShaderResourceView&)
 {
 	// intentional no-op
 }
 
-void Release(UnorderedAccessView& uav)
+void Release(UnorderedAccessView&)
 {
 	// intentional no-op
 }
 
-void Release(DepthStencilView& dsv)
+void Release(DepthStencilView&)
 {
 	// intentional no-op
 }
@@ -359,6 +378,7 @@ void EndFrame(Context* ctx)
 	barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 	barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
 	barrier.Transition.pResource   = ctx->BackBufferResource[backBufferIdx];
+	barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 	barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 	barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_PRESENT;
 	ctx->CommandList->ResourceBarrier(1, &barrier);
