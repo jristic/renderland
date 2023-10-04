@@ -350,6 +350,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 			if (gfx::IsNull(&RlfDisplayTex) || PrevDisplaySize != DisplaySize)
 			{
+				gfx::WaitForLastSubmittedFrame(&Gfx);
+				
 				gfx::Release(RlfDisplayUav);
 				gfx::Release(RlfDisplaySrv);
 				gfx::Release(RlfDisplayRtv);

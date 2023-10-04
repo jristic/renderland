@@ -429,7 +429,9 @@ void Present(Context* ctx, u8 vblanks)
 
 void WaitForLastSubmittedFrame(Context* ctx)
 {
-	Assert(ctx->FrameIndex > 0, "At least one frame must be submitted.");
+	if (ctx->FrameIndex == 0)
+		return;
+	
 	Context::Frame* frameCtx = 
 		&ctx->FrameContexts[(ctx->FrameIndex-1) % Context::NUM_FRAMES_IN_FLIGHT];
 

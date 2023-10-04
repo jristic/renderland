@@ -804,8 +804,24 @@ void InitMain(
 	{
 		ID3DBlob* blob = dc->Shader->GfxState;
 
+		D3D12_DESCRIPTOR_RANGE1 range = {};
+		range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+		range.NumDescriptors = 1;
+		range.BaseShaderRegister = 0;
+		range.RegisterSpace = 0;
+		range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE ;
+		range.OffsetInDescriptorsFromTableStart = 0;
+
+		D3D12_ROOT_PARAMETER1 param = {};
+		param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		param.DescriptorTable.NumDescriptorRanges = 1;
+		param.DescriptorTable.pDescriptorRanges = &range; 
+		param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
 		D3D12_VERSIONED_ROOT_SIGNATURE_DESC RootSig = {};
 		RootSig.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
+		RootSig.Desc_1_1.NumParameters = 1;
+		RootSig.Desc_1_1.pParameters = &param;
 
 		ID3DBlob* SerializedRootSig;
 		HRESULT hr = D3D12SerializeVersionedRootSignature(&RootSig, &SerializedRootSig, nullptr); 
@@ -1282,7 +1298,8 @@ void ExecuteDispatch(
 {
 	ID3D12GraphicsCommandList* cl = ec->GfxCtx->CommandList;
 	cl->SetPipelineState(dc->GfxPipeline);
-	cl->SetGraphicsRootSignature(dc->GfxRootSig);
+	cl->SetComputeRootSignature(dc->GfxRootSig);
+	cl->SetComputeRootDescriptorTable(0, ec->MainRtUav.GpuDescriptor);
 /* ------TODO-----------
 
 	UINT initialCount = (UINT)-1;
@@ -1530,6 +1547,7 @@ void _Execute(
 	// Clear state so we aren't polluted by previous program drawing or previous 
 	//	execution. 
 	ctx->CommandList->ClearState(nullptr);
+	ctx->CommandList->SetDescriptorHeaps(1, &ctx->SrvDescHeap);
 
 	for (Pass pass : rd->Passes)
 	{
