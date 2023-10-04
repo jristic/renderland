@@ -71,7 +71,7 @@ void Initialize(Context* ctx, HWND hwnd)
 		desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
 		desc.NumDescriptors = Context::MAX_RTV_DESCS;
 		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-		desc.NodeMask = 1;
+		desc.NodeMask = 0;
 		hr = ctx->Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&ctx->RtvDescHeap));
 		ctx->RtvDescHeap->SetName(L"Context::RtvDescHeap");
 		CheckHresult(hr, "descriptor heap");
@@ -125,7 +125,7 @@ void Initialize(Context* ctx, HWND hwnd)
 		D3D12_COMMAND_QUEUE_DESC desc = {};
 		desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 		desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-		desc.NodeMask = 1;
+		desc.NodeMask = 0;
 		hr = ctx->Device->CreateCommandQueue(&desc, IID_PPV_ARGS(&ctx->CommandQueue));
 		CheckHresult(hr, "command queue");
 	}

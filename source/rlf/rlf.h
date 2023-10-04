@@ -334,6 +334,10 @@ namespace rlf
 		std::vector<Bind> Binds;
 		std::vector<SetConstant> Constants;
 		std::vector<ConstantBuffer> CBs;
+		#if D3D12 // TODO: not like this
+			ID3D12PipelineState* GfxPipeline;
+			ID3D12RootSignature* GfxRootSig;
+		#endif
 	};
 	struct TextureTarget
 	{

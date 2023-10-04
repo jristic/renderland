@@ -116,8 +116,8 @@ namespace gfx {
 	typedef void* RasterizerState;
 	typedef void* DepthStencilState;
 	typedef void* BlendState;
-	typedef void* ShaderReflection;
-	typedef void* ComputeShader;
+	typedef ID3D12ShaderReflection* ShaderReflection;
+	typedef ID3DBlob* ComputeShader;
 	typedef void* VertexShader;
 	typedef void* InputLayout;
 	typedef void* PixelShader;

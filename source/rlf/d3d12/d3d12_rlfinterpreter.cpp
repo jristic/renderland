@@ -2,10 +2,7 @@
 namespace rlf
 {
 
-/* ------TODO-----------
 
-
-// TODO: remove
 #define SafeRelease(ref) do { if (ref) { (ref)->Release(); (ref) = nullptr; } } while (0);
 
 
@@ -33,7 +30,7 @@ void InitErrorEx(const char* message)
 	throw ie;
 }
 
-static ID3D11InfoQueue*	gInfoQueue = nullptr;
+static ID3D12InfoQueue*	gInfoQueue = nullptr;
 
 void CheckHresult(HRESULT hr, const char* desc)
 {
@@ -48,7 +45,7 @@ void CheckHresult(HRESULT hr, const char* desc)
 		size_t messageLength;
 		HRESULT hrr = gInfoQueue->GetMessage(i, nullptr, &messageLength);
 		Assert(hrr == S_FALSE, "Failed to get message, hr=%x", hr);
-		D3D11_MESSAGE* message = (D3D11_MESSAGE*)malloc(messageLength);
+		D3D12_MESSAGE* message = (D3D12_MESSAGE*)malloc(messageLength);
 		gInfoQueue->GetMessage(i, message, &messageLength);
 		mes += message->pDescription;
 		mes += "\n";
@@ -70,7 +67,6 @@ do {										\
 } while (0);								\
 
 /* ------TODO-----------
-static ID3D11RasterizerState*   DefaultRasterizerState = nullptr;
 
 D3D11_FILTER RlfToD3d(FilterMode fm)
 {
@@ -262,6 +258,8 @@ D3D11_BLEND_OP RlfToD3d(BlendOp op)
 	return ops[(u32)op];
 }
 
+*/
+
 ID3DBlob* CommonCompileShader(CommonShader* common, const char* dirPath, const char* profile, 
 	ErrorState* errorState)
 {
@@ -334,6 +332,8 @@ ID3DBlob* CommonCompileShader(CommonShader* common, const char* dirPath, const c
 
 	return shaderBlob;
 }
+
+/* ------TODO-----------
 
 void CreateInputLayout(ID3D11Device* device, VertexShader* shader, ID3DBlob* blob)
 {
@@ -780,19 +780,9 @@ void InitMain(
 	const char* workingDirectory,
 	ErrorState* errorState)
 {
-/* ------TODO-----------
-	ID3D11Device* device = ctx->Device;
+	ID3D12Device* device = ctx->Device;
 	gInfoQueue = ctx->InfoQueue;
 
-	if (DefaultRasterizerState == nullptr)
-	{
-		D3D11_RASTERIZER_DESC desc = {};
-		desc.FillMode = D3D11_FILL_SOLID;
-		desc.CullMode = D3D11_CULL_NONE;
-		desc.DepthClipEnable = TRUE;
-		device->CreateRasterizerState(&desc, &DefaultRasterizerState);
-	}
-	
 	std::string dirPath = workingDirectory;
 
 	for (ComputeShader* cs : rd->CShaders)
@@ -800,19 +790,51 @@ void InitMain(
 		ID3DBlob* shaderBlob = CommonCompileShader(&cs->Common, workingDirectory,
 			"cs_5_0", errorState);
 
-		HRESULT hr = device->CreateComputeShader(shaderBlob->GetBufferPointer(), 
-			shaderBlob->GetBufferSize(), NULL, &cs->GfxState);
-		Assert(hr == S_OK, "Failed to create shader, hr=%x", hr);
-
-		hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
+		HRESULT hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
 			IID_ID3D11ShaderReflection, (void**) &cs->Common.Reflector);
 		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
 
 		cs->Common.Reflector->GetThreadGroupSize(&cs->ThreadGroupSize.x, 
 			&cs->ThreadGroupSize.y,	&cs->ThreadGroupSize.z);
 
-		SafeRelease(shaderBlob);
+		cs->GfxState = shaderBlob;
 	}
+
+	for (Dispatch* dc : rd->Dispatches)
+	{
+		ID3DBlob* blob = dc->Shader->GfxState;
+
+		D3D12_VERSIONED_ROOT_SIGNATURE_DESC RootSig = {};
+		RootSig.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
+
+		ID3DBlob* SerializedRootSig;
+		HRESULT hr = D3D12SerializeVersionedRootSignature(&RootSig, &SerializedRootSig, nullptr); 
+		CheckHresult(hr, "Serialized root signature");
+
+		hr = device->CreateRootSignature(0,
+			SerializedRootSig->GetBufferPointer(),
+			SerializedRootSig->GetBufferSize(),
+			__uuidof(ID3D12RootSignature),
+			(void**)&dc->GfxRootSig);
+		CheckHresult(hr, "RootSignature");
+
+		SerializedRootSig->Release();
+
+		D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
+		desc.pRootSignature = dc->GfxRootSig;
+		desc.CS.pShaderBytecode = blob->GetBufferPointer();
+		desc.CS.BytecodeLength = blob->GetBufferSize();
+		desc.NodeMask = 0;
+		desc.CachedPSO.pCachedBlob = nullptr;
+		desc.CachedPSO.CachedBlobSizeInBytes = 0;
+		desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+		hr = device->CreateComputePipelineState(&desc, __uuidof(ID3D12PipelineState),
+			(void**)&dc->GfxPipeline);
+		CheckHresult(hr, "PipelineState");
+
+	}
+
+/* ------TODO-----------
 
 	for (VertexShader* vs : rd->VShaders)
 	{
@@ -1030,15 +1052,21 @@ void InitMain(
 void ReleaseD3D(
 	RenderDescription* rd)
 {
-/* ------TODO-----------
 
-	SafeRelease(DefaultRasterizerState);
+	for (Dispatch* dc : rd->Dispatches)
+	{
+		SafeRelease(dc->GfxPipeline);
+		SafeRelease(dc->GfxRootSig);
+	}
 
 	for (ComputeShader* cs : rd->CShaders)
 	{
 		SafeRelease(cs->GfxState);
 		SafeRelease(cs->Common.Reflector);
 	}
+
+/* ------TODO-----------
+
 	for (VertexShader* vs : rd->VShaders)
 	{
 		SafeRelease(vs->GfxState);
@@ -1246,12 +1274,17 @@ void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets,
 		ctx->Unmap(buf.GfxState, 0);
 	}
 }
+*/
 
 void ExecuteDispatch(
 	Dispatch* dc,
 	ExecuteContext* ec)
 {
-	ID3D11DeviceContext* ctx = ec->GfxCtx->DeviceContext;
+	ID3D12GraphicsCommandList* cl = ec->GfxCtx->CommandList;
+	cl->SetPipelineState(dc->GfxPipeline);
+	cl->SetGraphicsRootSignature(dc->GfxRootSig);
+/* ------TODO-----------
+
 	UINT initialCount = (UINT)-1;
 	ctx->CSSetShader(dc->Shader->GfxState, nullptr, 0);
 	ExecuteSetConstants(ec, dc->Constants, dc->CBs);
@@ -1292,9 +1325,11 @@ void ExecuteDispatch(
 			Assert(false, "invalid type %d", bind.Type);
 		}
 	}
+*/
 	if (dc->IndirectArgs)
 	{
-		ctx->DispatchIndirect(dc->IndirectArgs->GfxState, dc->IndirectArgsOffset);
+		// ctx->DispatchIndirect(dc->IndirectArgs->GfxState, dc->IndirectArgsOffset);
+		Unimplemented();
 	}
 	else
 	{
@@ -1315,10 +1350,11 @@ void ExecuteDispatch(
 			groups = res.Value.Uint3Val;
 		}
 
-		ctx->Dispatch(groups.x, groups.y, groups.z);
+		cl->Dispatch(groups.x, groups.y, groups.z);
 	}
 }
 
+/* ------TODO-----------
 void ExecuteDraw(
 	Draw* draw,
 	ExecuteContext* ec)
@@ -1487,15 +1523,13 @@ void _Execute(
 	ExecuteContext* ec,
 	RenderDescription* rd)
 {
-/* ------TODO-----------
-
-	ID3D11DeviceContext* ctx = ec->GfxCtx->DeviceContext;
+	gfx::Context* ctx = ec->GfxCtx;
 
 	EvaluateConstants(ec->EvCtx, rd->Constants);
 
 	// Clear state so we aren't polluted by previous program drawing or previous 
 	//	execution. 
-	ctx->ClearState();
+	ctx->CommandList->ClearState(nullptr);
 
 	for (Pass pass : rd->Passes)
 	{
@@ -1503,6 +1537,7 @@ void _Execute(
 		{
 			ExecuteDispatch(pass.Dispatch, ec);
 		}
+		/* ------TODO-----------
 		else if (pass.Type == PassType::Draw)
 		{
 			ExecuteDraw(pass.Draw, ec);
@@ -1533,15 +1568,15 @@ void _Execute(
 				pass.Resolve->Src->GfxState, 0, 
 				D3DTextureFormat[(u32)pass.Resolve->Dst->Format]);
 		}
+		*/
 		else
 		{
 			Unimplemented();
 		}
 
 		// Clear state after execution so we don't pollute the rest of program drawing. 
-		ctx->ClearState();
+		ctx->CommandList->ClearState(nullptr);
 	}
-*/
 }
 
 #undef ExecuteAssert
