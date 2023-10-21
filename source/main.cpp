@@ -381,9 +381,9 @@ bool DoUpdate(State* s)
 
 	rlf::ExecuteContext ctx = {};
 	ctx.GfxCtx = s->GfxCtx;
-	ctx.MainRtv = RlfDisplayRtv;
-	ctx.MainRtUav = RlfDisplayUav;
-	ctx.DefaultDepthView = RlfDepthStencilView;
+	ctx.MainRtv = s->RlfDisplayRtv;
+	ctx.MainRtUav = s->RlfDisplayUav;
+	ctx.DefaultDepthView = s->RlfDepthStencilView;
 	ctx.EvCtx.DisplaySize = s->DisplaySize;
 	ctx.EvCtx.Time = s->Time;
 	ctx.EvCtx.ChangedThisFrameFlags = changed;
@@ -418,9 +418,9 @@ void DoRender(State* s)
 	{
 		rlf::ExecuteContext exctx = {};
 		exctx.GfxCtx = s->GfxCtx;
-		exctx.MainRtv = RlfDisplayRtv;
-		exctx.MainRtUav = RlfDisplayUav;
-		exctx.DefaultDepthView = RlfDepthStencilView;
+		exctx.MainRtv = s->RlfDisplayRtv;
+		exctx.MainRtUav = s->RlfDisplayUav;
+		exctx.DefaultDepthView = s->RlfDepthStencilView;
 		exctx.EvCtx.DisplaySize = s->DisplaySize;
 		exctx.EvCtx.Time = s->Time;
 		exctx.EvCtx.ChangedThisFrameFlags = s->ChangedThisFrameFlags;

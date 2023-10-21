@@ -36,6 +36,13 @@ namespace main {
 		ImTextureID (*RetrieveDisplayTextureID)(State*);
 
 		gfx::Context* GfxCtx;
+
+		gfx::Texture				RlfDisplayTex;
+		gfx::RenderTargetView		RlfDisplayRtv;
+		gfx::ShaderResourceView		RlfDisplaySrv;
+		gfx::UnorderedAccessView	RlfDisplayUav;
+		gfx::Texture				RlfDepthStencilTex;
+		gfx::DepthStencilView		RlfDepthStencilView;
 	};
 
 	void Initialize(State* s, const char* config_path);

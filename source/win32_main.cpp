@@ -61,16 +61,6 @@
 #include "gui.h"
 #include "main.h"
 
-gfx::Texture				RlfDisplayTex;
-gfx::RenderTargetView		RlfDisplayRtv;
-gfx::ShaderResourceView		RlfDisplaySrv;
-gfx::UnorderedAccessView	RlfDisplayUav;
-gfx::Texture				RlfDepthStencilTex;
-gfx::DepthStencilView		RlfDepthStencilView;
-
-// unfortunately no great ways to get this pointer to the callback without a global
-main::State* WndProc_State = nullptr;
-
 
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -103,31 +93,36 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 ImTextureID RetrieveDisplayTextureID(main::State* s)
 {
 	gfx::Context* ctx = s->GfxCtx;
-	if (gfx::IsNull(&RlfDisplayTex) || s->PrevDisplaySize != s->DisplaySize)
+	if (gfx::IsNull(&s->RlfDisplayTex) || s->PrevDisplaySize != s->DisplaySize)
 	{
 		gfx::WaitForLastSubmittedFrame(ctx);
 		
-		gfx::Release(RlfDisplayUav);
-		gfx::Release(RlfDisplaySrv);
-		gfx::Release(RlfDisplayRtv);
-		gfx::Release(&RlfDisplayTex);
-		gfx::Release(RlfDepthStencilView);
-		gfx::Release(&RlfDepthStencilTex);
+		gfx::Release(s->RlfDisplayUav);
+		gfx::Release(s->RlfDisplaySrv);
+		gfx::Release(s->RlfDisplayRtv);
+		gfx::Release(&s->RlfDisplayTex);
+		gfx::Release(s->RlfDepthStencilView);
+		gfx::Release(&s->RlfDepthStencilTex);
 
-		RlfDisplayTex = gfx::CreateTexture2D(ctx, s->DisplaySize.x, s->DisplaySize.y,
+		s->RlfDisplayTex = gfx::CreateTexture2D(ctx, s->DisplaySize.x, s->DisplaySize.y,
 			DXGI_FORMAT_R8G8B8A8_UNORM, 
 			(gfx::BindFlag)(gfx::BindFlag_SRV | gfx::BindFlag_UAV | gfx::BindFlag_RTV));
-		RlfDisplaySrv = gfx::CreateShaderResourceView(ctx, &RlfDisplayTex);
-		RlfDisplayUav = gfx::CreateUnorderedAccessView(ctx, &RlfDisplayTex);
-		RlfDisplayRtv = gfx::CreateRenderTargetView(ctx, &RlfDisplayTex);
+		s->RlfDisplaySrv = gfx::CreateShaderResourceView(ctx, &s->RlfDisplayTex);
+		s->RlfDisplayUav = gfx::CreateUnorderedAccessView(ctx, &s->RlfDisplayTex);
+		s->RlfDisplayRtv = gfx::CreateRenderTargetView(ctx, &s->RlfDisplayTex);
 
-		RlfDepthStencilTex = gfx::CreateTexture2D(ctx, s->DisplaySize.x, s->DisplaySize.y,
+		s->RlfDepthStencilTex = gfx::CreateTexture2D(ctx, s->DisplaySize.x, s->DisplaySize.y,
 			DXGI_FORMAT_D32_FLOAT, gfx::BindFlag_DSV);
-		RlfDepthStencilView = gfx::CreateDepthStencilView(ctx, &RlfDepthStencilTex);
+		s->RlfDepthStencilView = gfx::CreateDepthStencilView(ctx, &s->RlfDepthStencilTex);
 	}
 
-	return gfx::GetImTextureID(RlfDisplaySrv);
+	return gfx::GetImTextureID(s->RlfDisplaySrv);
 }
+
+
+// unfortunately no great ways to get this pointer to the callback without a global
+main::State* WndProc_State = nullptr;
+
 
 // Main code
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, int nCmdShow)
@@ -233,8 +228,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			State.ClearColor.z * State.ClearColor.w, 
 			State.ClearColor.w
 		};
-		gfx::ClearRenderTarget(&Gfx, RlfDisplayRtv, clear_color_with_alpha);
-		gfx::ClearDepth(&Gfx, RlfDepthStencilView, 1.f);
+		gfx::ClearRenderTarget(&Gfx, State.RlfDisplayRtv, clear_color_with_alpha);
+		gfx::ClearDepth(&Gfx, State.RlfDepthStencilView, 1.f);
 
 		// Dispatch our shader
 		main::DoRender(&State);
@@ -267,12 +262,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 	main::Shutdown(&State);
 
-	gfx::Release(&RlfDisplayTex);
-	gfx::Release(RlfDisplayRtv);
-	gfx::Release(RlfDisplaySrv);
-	gfx::Release(RlfDisplayUav);
-	gfx::Release(&RlfDepthStencilTex);
-	gfx::Release(RlfDepthStencilView);
+	gfx::Release(&State.RlfDisplayTex);
+	gfx::Release(State.RlfDisplayRtv);
+	gfx::Release(State.RlfDisplaySrv);
+	gfx::Release(State.RlfDisplayUav);
+	gfx::Release(&State.RlfDepthStencilTex);
+	gfx::Release(State.RlfDepthStencilView);
 
 	gfx::Release(&Gfx);
 
