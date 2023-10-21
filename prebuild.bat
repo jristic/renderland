@@ -21,6 +21,12 @@ set CommonCompilerFlags=%ConfigCompilerOptions% /nologo /fp:fast /Gm- /GR- /EHsc
 
 if not exist %BuildFolder%\ mkdir %BuildFolder%
 
-echo Compiling: win32_prebuilt.obj, Config: %Config%
+if %GfxApi% == D3D12 (
+	set CompileFile=win32_d3d12_prebuild
+) else (
+	set CompileFile=win32_d3d11_prebuild
+)
 
-cl.exe /c %CommonCompilerFlags% source/win32_prebuild.cpp /Fo%BuildFolder%\win32_prebuilt.obj
+echo Compiling: %CompileFile%.obj, Config: %Config%
+
+cl.exe /c %CommonCompilerFlags% source/%CompileFile%.cpp /Fo%BuildFolder%\%CompileFile%.obj

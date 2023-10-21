@@ -16,33 +16,15 @@
 
 // Imgui example backend
 #include "imgui_impl_win32.h"
-#if D3D11
-	#include "imgui_impl_dx11.h"
-#elif D3D12
-	#include "imgui_impl_dx12.h"
-#else
-	#error unimplemented
-#endif
+#include "imgui_impl_dx12.h"
 
-#if D3D11
-	#include <d3d11.h>
-	#include <d3d11shader.h>
-	#include <d3dcompiler.h>
-	#include <d3d11sdklayers.h>
-	#if defined(_DEBUG)
-		#include <dxgidebug.h>
-	#endif
-#elif D3D12
-	#include <d3d12.h>
-	#include <d3d12shader.h>
-	#include <d3dcompiler.h>
-	#include <d3d12sdklayers.h>
-	#include <dxgi1_4.h>
-	#ifdef _DEBUG
-		#include <dxgidebug.h>
-	#endif
-#else
-#error unimplemented
+#include <d3d12.h>
+#include <d3d12shader.h>
+#include <d3dcompiler.h>
+#include <d3d12sdklayers.h>
+#include <dxgi1_4.h>
+#ifdef _DEBUG
+	#include <dxgidebug.h>
 #endif
 
 // Project headers
@@ -64,30 +46,18 @@
 
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-#if D3D11
-	void ImGui_Impl_Init(gfx::Context* ctx){ ImGui_ImplDX11_Init(ctx->Device, ctx->DeviceContext); }
-	void ImGui_Impl_NewFrame() { ImGui_ImplDX11_NewFrame(); }
-	void ImGui_Impl_RenderDrawData(gfx::Context* ctx, ImDrawData* idd) {
-		(void)ctx;
-		ImGui_ImplDX11_RenderDrawData(idd);
-	}
-	void ImGui_Impl_Shutdown() { ImGui_ImplDX11_Shutdown(); }
-#elif D3D12
-	void ImGui_Impl_Init(gfx::Context* ctx) {
-		ImGui_ImplDX12_Init(ctx->Device, gfx::Context::NUM_FRAMES_IN_FLIGHT,
-			DXGI_FORMAT_R8G8B8A8_UNORM, ctx->SrvDescHeap,
-			ctx->SrvDescHeap->GetCPUDescriptorHandleForHeapStart(),
-			ctx->SrvDescHeap->GetGPUDescriptorHandleForHeapStart());;
-	}
-	void ImGui_Impl_NewFrame() { ImGui_ImplDX12_NewFrame(); }
-	void ImGui_Impl_RenderDrawData(gfx::Context* ctx, ImDrawData* idd)
-	{
-		ImGui_ImplDX12_RenderDrawData(idd, ctx->CommandList);
-	}
-	void ImGui_Impl_Shutdown() { ImGui_ImplDX12_Shutdown(); }
-#else
-	#error unimplemented
-#endif
+void ImGui_Impl_Init(gfx::Context* ctx) {
+	ImGui_ImplDX12_Init(ctx->Device, gfx::Context::NUM_FRAMES_IN_FLIGHT,
+		DXGI_FORMAT_R8G8B8A8_UNORM, ctx->SrvDescHeap,
+		ctx->SrvDescHeap->GetCPUDescriptorHandleForHeapStart(),
+		ctx->SrvDescHeap->GetGPUDescriptorHandleForHeapStart());;
+}
+void ImGui_Impl_NewFrame() { ImGui_ImplDX12_NewFrame(); }
+void ImGui_Impl_RenderDrawData(gfx::Context* ctx, ImDrawData* idd)
+{
+	ImGui_ImplDX12_RenderDrawData(idd, ctx->CommandList);
+}
+void ImGui_Impl_Shutdown() { ImGui_ImplDX12_Shutdown(); }
 
 
 ImTextureID RetrieveDisplayTextureID(main::State* s)
@@ -346,18 +316,8 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 #include "rlf/rlfparser.cpp"
 #include "rlf/ast.cpp"
 #include "rlf/shaderparser.cpp"
-
-
-#if D3D11
-	#include "d3d11/d3d11_gfx.cpp"
-	#include "rlf/d3d11/d3d11_rlfinterpreter.cpp"
-#elif D3D12
-	#include "d3d12/d3d12_gfx.cpp"
-	#include "rlf/d3d12/d3d12_rlfinterpreter.cpp"
-#else
-	#error unimplemented
-#endif
-
+#include "d3d12/d3d12_gfx.cpp"
+#include "rlf/d3d12/d3d12_rlfinterpreter.cpp"
 #include "gui.cpp"
 #include "rlf/rlfinterpreter.cpp"
 #include "main.cpp"
