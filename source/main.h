@@ -34,6 +34,7 @@ namespace main {
 		u32 ChangedThisFrameFlags = 0;
 
 		ImTextureID (*RetrieveDisplayTextureID)(State*);
+		bool (*CheckD3DValidation)(gfx::Context* ctx, std::string& outMessage);
 
 		gfx::Context* GfxCtx;
 

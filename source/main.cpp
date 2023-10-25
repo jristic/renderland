@@ -442,7 +442,7 @@ void PostFrame(State* s)
 	s->Time = max(0, s->Time + s->Speed * ImGui::GetIO().DeltaTime);
 
 	s->RlfValidationErrorMessage = "Validation error:\n";
-	s->RlfValidationError = gfx::CheckD3DValidation(s->GfxCtx, s->RlfValidationErrorMessage);
+	s->RlfValidationError = s->CheckD3DValidation(s->GfxCtx, s->RlfValidationErrorMessage);
 
 	s->PrevDisplaySize = s->DisplaySize;
 }

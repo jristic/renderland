@@ -62,6 +62,8 @@ void DisplayShaderConstants(std::vector<rlf::ConstantBuffer>& CBs, gfx::ShaderRe
 	}
 #elif D3D12
 	// TODO
+	(void)CBs;
+	(void)reflector;
 #else
 	#error unimplemented
 #endif

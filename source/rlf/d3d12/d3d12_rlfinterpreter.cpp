@@ -850,6 +850,8 @@ void InitMain(
 
 	}
 
+	(void)displaySize;
+
 /* ------TODO-----------
 
 	for (VertexShader* vs : rd->VShaders)
@@ -1145,6 +1147,10 @@ void HandleTextureParametersChanged(
 	ExecuteContext* ec,
 	ErrorState* errorState)
 {
+	(void)rd;
+	(void)ec;
+	(void)errorState;
+
 /* ------TODO-----------
 
 	ID3D11Device* device = ec->GfxCtx->Device;
