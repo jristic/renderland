@@ -223,6 +223,11 @@ ImTextureID RetrieveDisplayTextureID(main::State* s)
 	return (ImTextureID)s->RlfDisplaySrv.GpuDescriptor.ptr;
 }
 
+void OnBeforeUnload(main::State* s)
+{
+	WaitForLastSubmittedFrame(s->GfxCtx);
+}
+
 bool CheckD3DValidation(gfx::Context* ctx, std::string& outMessage)
 {
 	u64 num = ctx->InfoQueue->GetNumStoredMessages();
@@ -276,6 +281,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	main::Initialize(&State, ConfigPath.c_str());
 	State.RetrieveDisplayTextureID = RetrieveDisplayTextureID;
 	State.CheckD3DValidation = CheckD3DValidation;
+	State.OnBeforeUnload = OnBeforeUnload;
 
 	WndProc_State = &State;
 

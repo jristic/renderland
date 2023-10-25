@@ -35,6 +35,7 @@ namespace main {
 
 		ImTextureID (*RetrieveDisplayTextureID)(State*);
 		bool (*CheckD3DValidation)(gfx::Context* ctx, std::string& outMessage);
+		void (*OnBeforeUnload)(State*);
 
 		gfx::Context* GfxCtx;
 
