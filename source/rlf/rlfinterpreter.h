@@ -9,6 +9,7 @@ namespace rlf
 		ErrorState* errorState);
 
 	void ReleaseD3D(
+		gfx::Context* ctx,
 		RenderDescription* rd);
 
 	struct ExecuteContext

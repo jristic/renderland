@@ -1020,6 +1020,7 @@ void InitMain(
 }
 
 void ReleaseD3D(
+	gfx::Context*,
 	RenderDescription* rd)
 {
 	SafeRelease(DefaultRasterizerState);

@@ -1068,8 +1068,13 @@ void InitMain(
 }
 
 void ReleaseD3D(
+	gfx::Context* ctx,
 	RenderDescription* rd)
 {
+	// Reset descriptor heaps
+	ctx->SrvUavDescNextIndex = gfx::Context::NUM_RESERVED_SRV_UAV_SLOTS;
+	ctx->RtvDescNextIndex = gfx::Context::NUM_RESERVED_RTV_SLOTS;
+	ctx->DsvDescNextIndex = gfx::Context::NUM_RESERVED_DSV_SLOTS;
 
 	for (Dispatch* dc : rd->Dispatches)
 	{
@@ -1553,7 +1558,7 @@ void _Execute(
 	// Clear state so we aren't polluted by previous program drawing or previous 
 	//	execution. 
 	ctx->CommandList->ClearState(nullptr);
-	ctx->CommandList->SetDescriptorHeaps(1, &ctx->SrvDescHeap);
+	ctx->CommandList->SetDescriptorHeaps(1, &ctx->SrvUavDescHeap);
 
 	for (Pass pass : rd->Passes)
 	{

@@ -118,7 +118,7 @@ void UnloadRlf(State* s)
 		s->OnBeforeUnload(s);
 	if (s->CurrentRenderDesc)
 	{
-		rlf::ReleaseD3D(s->CurrentRenderDesc);
+		rlf::ReleaseD3D(s->GfxCtx, s->CurrentRenderDesc);
 		rlf::ReleaseData(s->CurrentRenderDesc);
 		s->CurrentRenderDesc = nullptr;
 	}
