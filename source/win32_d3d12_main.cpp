@@ -588,6 +588,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		SafeRelease(Gfx.FrameContexts[i].CommandAllocator);
 	SafeRelease(Gfx.CommandQueue);
 	SafeRelease(Gfx.CommandList);
+	SafeRelease(Gfx.DsvDescHeap);
 	SafeRelease(Gfx.RtvDescHeap);
 	SafeRelease(Gfx.SrvUavDescHeap);
 	SafeRelease(Gfx.Fence);
