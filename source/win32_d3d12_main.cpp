@@ -316,6 +316,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
 		hr = Gfx.Device->QueryInterface(IID_PPV_ARGS(&Gfx.InfoQueue));
 		CheckHresult(hr, "debug info queue");
+		// TODO: decide what to do about these warnings
+		{
+			D3D12_MESSAGE_ID hide [] =
+			{
+				D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
+				D3D12_MESSAGE_ID_CLEARDEPTHSTENCILVIEW_MISMATCHINGCLEARVALUE
+			};
+			D3D12_INFO_QUEUE_FILTER filter = {};
+			filter.DenyList.NumIDs = _countof(hide);
+			filter.DenyList.pIDList = hide;
+			Gfx.InfoQueue->AddStorageFilterEntries(&filter);
+		}
 		if (IsDebuggerPresent())
 		{
 			Gfx.InfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
