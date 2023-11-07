@@ -94,6 +94,12 @@ void WaitForLastSubmittedFrame(gfx::Context* ctx)
 ImTextureID RetrieveDisplayTextureID(main::State* s)
 {
 	gfx::Context* ctx = s->GfxCtx;
+	
+	D3D12_GPU_DESCRIPTOR_HANDLE DisplaySrvGpuHnd = 
+		ctx->ShaderVisDescHeap->GetGPUDescriptorHandleForHeapStart();
+	DisplaySrvGpuHnd.ptr += gfx::Context::RLF_RESERVED_SHADER_VIS_SLOT_INDEX * 
+		ctx->SrvUavDescSize;
+
 	if (s->RlfDisplayTex.Resource == nullptr || s->PrevDisplaySize != s->DisplaySize)
 	{
 		WaitForLastSubmittedFrame(ctx);
@@ -130,6 +136,11 @@ ImTextureID RetrieveDisplayTextureID(main::State* s)
 			Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
 		}
 
+		D3D12_CPU_DESCRIPTOR_HANDLE DisplaySrvCpuHnd = 
+			ctx->ShaderVisDescHeap->GetCPUDescriptorHandleForHeapStart();
+		DisplaySrvCpuHnd.ptr += gfx::Context::RLF_RESERVED_SHADER_VIS_SLOT_INDEX * 
+			ctx->SrvUavDescSize;
+
 		// display texture srv
 		{
 			u64 offset = gfx::Context::RLF_RESERVED_SRV_SLOT_INDEX * ctx->SrvUavDescSize;
@@ -142,7 +153,10 @@ ImTextureID RetrieveDisplayTextureID(main::State* s)
 			D3D12_GPU_DESCRIPTOR_HANDLE gpu_descriptor = 
 				ctx->SrvUavDescHeap->GetGPUDescriptorHandleForHeapStart();
 			gpu_descriptor.ptr += offset;
-			s->RlfDisplaySrv = gfx::ShaderResourceView{ gpu_descriptor };
+			s->RlfDisplaySrv = gfx::ShaderResourceView{ cpu_descriptor, gpu_descriptor };
+
+			ctx->Device->CopyDescriptorsSimple(1, DisplaySrvCpuHnd, cpu_descriptor,
+				D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		}
 		//display texture uav
 		{
@@ -151,11 +165,12 @@ ImTextureID RetrieveDisplayTextureID(main::State* s)
 			D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
 				ctx->SrvUavDescHeap->GetCPUDescriptorHandleForHeapStart();
 			cpu_descriptor.ptr += offset;
-			ctx->Device->CreateUnorderedAccessView(s->RlfDisplayTex.Resource, nullptr, nullptr, cpu_descriptor);
+			ctx->Device->CreateUnorderedAccessView(s->RlfDisplayTex.Resource, nullptr, nullptr,
+				cpu_descriptor);
 			D3D12_GPU_DESCRIPTOR_HANDLE gpu_descriptor = 
 				ctx->SrvUavDescHeap->GetGPUDescriptorHandleForHeapStart();
 			gpu_descriptor.ptr += offset;
-			s->RlfDisplayUav = gfx::UnorderedAccessView { gpu_descriptor };
+			s->RlfDisplayUav = gfx::UnorderedAccessView { cpu_descriptor, gpu_descriptor };
 		}
 		// display texture rtv
 		{
@@ -203,12 +218,13 @@ ImTextureID RetrieveDisplayTextureID(main::State* s)
 			D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
 				ctx->DsvDescHeap->GetCPUDescriptorHandleForHeapStart();
 			cpu_descriptor.ptr += offset;
-			ctx->Device->CreateDepthStencilView(s->RlfDepthStencilTex.Resource, nullptr, cpu_descriptor);
+			ctx->Device->CreateDepthStencilView(s->RlfDepthStencilTex.Resource, nullptr,
+				cpu_descriptor);
 			s->RlfDepthStencilView = gfx::DepthStencilView { cpu_descriptor };
 		}
 	}
 
-	return (ImTextureID)s->RlfDisplaySrv.GpuDescriptor.ptr;
+	return (ImTextureID)DisplaySrvGpuHnd.ptr;
 }
 
 void OnBeforeUnload(main::State* s)
@@ -362,7 +378,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			D3D12_DESCRIPTOR_HEAP_DESC desc = {};
 			desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 			desc.NumDescriptors = gfx::Context::MAX_SRV_UAV_DESCS;
-			desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+			desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 			hr = Gfx.Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&Gfx.SrvUavDescHeap));
 			Gfx.SrvUavDescHeap->SetName(L"gfx::Context::SrvUavDescHeap");
 			CheckHresult(hr, "descriptor heap");
@@ -387,6 +403,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			Gfx.DsvDescNextIndex = gfx::Context::NUM_RESERVED_DSV_SLOTS;
 		}
 
+		{
+			D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+			desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+			desc.NumDescriptors = gfx::Context::MAX_SHADER_VIS_DESCS;
+			desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+			hr = Gfx.Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&Gfx.ShaderVisDescHeap));
+			Gfx.ShaderVisDescHeap->SetName(L"gfx::Context::ShaderVisDescHeap");
+			CheckHresult(hr, "descriptor heap");
+
+			Gfx.ShaderVisDescNextIndex = gfx::Context::NUM_RESERVED_SHADER_VIS_SLOTS;
+		}
 
 		{
 			D3D12_COMMAND_QUEUE_DESC desc = {};
@@ -458,8 +485,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		"If this slot changes, the descriptors passed below need to be updated.");
 	ImGui_ImplDX12_Init(Gfx.Device, gfx::Context::NUM_FRAMES_IN_FLIGHT,
 		DXGI_FORMAT_R8G8B8A8_UNORM, Gfx.SrvUavDescHeap,
-		Gfx.SrvUavDescHeap->GetCPUDescriptorHandleForHeapStart(),
-		Gfx.SrvUavDescHeap->GetGPUDescriptorHandleForHeapStart());
+		Gfx.ShaderVisDescHeap->GetCPUDescriptorHandleForHeapStart(),
+		Gfx.ShaderVisDescHeap->GetGPUDescriptorHandleForHeapStart());
 
 
 	// Main loop
@@ -541,7 +568,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			clear_0, 0, nullptr);
 		Gfx.CommandList->OMSetRenderTargets(1, &Gfx.BackBufferDescriptor[backBufferIdx], 
 			FALSE, NULL);
-		Gfx.CommandList->SetDescriptorHeaps(1, &Gfx.SrvUavDescHeap);
+		Gfx.CommandList->SetDescriptorHeaps(1, &Gfx.ShaderVisDescHeap);
 
 		ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), Gfx.CommandList);
 
@@ -600,6 +627,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		SafeRelease(Gfx.FrameContexts[i].CommandAllocator);
 	SafeRelease(Gfx.CommandQueue);
 	SafeRelease(Gfx.CommandList);
+	SafeRelease(Gfx.ShaderVisDescHeap);
 	SafeRelease(Gfx.DsvDescHeap);
 	SafeRelease(Gfx.RtvDescHeap);
 	SafeRelease(Gfx.SrvUavDescHeap);

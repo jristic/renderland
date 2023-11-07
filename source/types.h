@@ -16,6 +16,8 @@ typedef signed char i8;
 static_assert(sizeof(u8) == 1, "Didn't get expected size.");
 static_assert(sizeof(i8) == 1, "Didn't get expected size.");
 
+static const u32 U32_MAX = (u32)-1;
+
 #pragma warning(disable: 4201)
 
 struct bool4 {

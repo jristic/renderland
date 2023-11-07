@@ -769,6 +769,7 @@ void PrepareConstants(
 
 void InitMain(
 	gfx::Context* ctx,
+	ExecuteResources*, // param intentionally unused in this backend
 	RenderDescription* rd,
 	uint2 displaySize,
 	const char* workingDirectory,
@@ -1251,7 +1252,7 @@ void ExecuteDispatch(
 		case BindType::SystemValue:
 			Assert(bind.IsOutput, "Invalid");
 			if (bind.SystemBind == SystemValue::BackBuffer)
-				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &ec->MainRtUav, 
+				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &ec->Res.MainRtUav, 
 					&initialCount);
 			else
 				Assert(false, "unhandled");
@@ -1369,7 +1370,7 @@ void ExecuteDraw(
 		{
 			if (target.System == SystemValue::BackBuffer)
 			{
-				rtViews[rtCount] = ec->MainRtv;
+				rtViews[rtCount] = ec->Res.MainRtv;
 				vp[rtCount].Width = (float)ec->EvCtx.DisplaySize.x;
 				vp[rtCount].Height = (float)ec->EvCtx.DisplaySize.y;
 			}
@@ -1396,7 +1397,7 @@ void ExecuteDraw(
 		{
 			if (target.System == SystemValue::DefaultDepth)
 			{
-				dsView = ec->DefaultDepthView;
+				dsView = ec->Res.DefaultDepthView;
 				vp[0].Width = (float)ec->EvCtx.DisplaySize.x;
 				vp[0].Height = (float)ec->EvCtx.DisplaySize.y;
 			}

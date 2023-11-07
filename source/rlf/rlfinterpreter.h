@@ -1,8 +1,16 @@
 
 namespace rlf
 {
+	struct ExecuteResources
+	{
+		gfx::RenderTargetView MainRtv;
+		gfx::UnorderedAccessView MainRtUav;
+		gfx::DepthStencilView DefaultDepthView;
+	};
+
 	void InitD3D(
 		gfx::Context* ctx,
+		ExecuteResources* res,
 		RenderDescription* rd,
 		uint2 displaySize,
 		const char* workingDirectory,
@@ -15,9 +23,7 @@ namespace rlf
 	struct ExecuteContext
 	{
 		gfx::Context* GfxCtx;
-		gfx::RenderTargetView MainRtv;
-		gfx::UnorderedAccessView MainRtUav;
-		gfx::DepthStencilView DefaultDepthView;
+		ExecuteResources Res;
 		ast::EvaluationContext EvCtx;
 	};
 

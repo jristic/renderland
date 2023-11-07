@@ -17,6 +17,8 @@ namespace gfx {
 		ID3D12Device*					Device = nullptr;
 		ID3D12Debug*					Debug = nullptr;
 		ID3D12InfoQueue*				InfoQueue = nullptr;
+
+		// Descriptor heaps
 		static u32 const				MAX_RTV_DESCS = 512;
 		static u32 const 				RLF_RESERVED_RTV_SLOT_INDEX = NUM_BACK_BUFFERS;
 		static u32 const 				NUM_RESERVED_RTV_SLOTS = NUM_BACK_BUFFERS + 1;
@@ -24,10 +26,9 @@ namespace gfx {
 		u64								RtvDescSize = 0;
 		u64								RtvDescNextIndex = 0;
 		static u32 const				MAX_SRV_UAV_DESCS = 1024;
-		static u32 const 				IMGUI_FONT_RESERVED_SRV_SLOT_INDEX = 0;
-		static u32 const				RLF_RESERVED_SRV_SLOT_INDEX = 1;
-		static u32 const				RLF_RESERVED_UAV_SLOT_INDEX = 2;
-		static u32 const 				NUM_RESERVED_SRV_UAV_SLOTS = 3;
+		static u32 const				RLF_RESERVED_SRV_SLOT_INDEX = 0;
+		static u32 const				RLF_RESERVED_UAV_SLOT_INDEX = 1;
+		static u32 const 				NUM_RESERVED_SRV_UAV_SLOTS = 2;
 		ID3D12DescriptorHeap*			SrvUavDescHeap = nullptr;
 		u64								SrvUavDescSize = 0;
 		u64								SrvUavDescNextIndex = 0;
@@ -37,6 +38,14 @@ namespace gfx {
 		ID3D12DescriptorHeap*			DsvDescHeap = nullptr;
 		u64								DsvDescSize = 0;
 		u64								DsvDescNextIndex = 0;
+		static u32 const				MAX_SHADER_VIS_DESCS = 2048;
+		static u32 const 				IMGUI_FONT_RESERVED_SRV_SLOT_INDEX = 0;
+		static u32 const				RLF_RESERVED_SHADER_VIS_SLOT_INDEX = 1;
+		static u32 const 				NUM_RESERVED_SHADER_VIS_SLOTS = 2;
+		ID3D12DescriptorHeap*			ShaderVisDescHeap = nullptr;
+		u64								ShaderVisDescNextIndex = 0;
+
+
 		ID3D12CommandQueue*				CommandQueue = nullptr;
 		ID3D12GraphicsCommandList*		CommandList = nullptr;
 		ID3D12Fence*					Fence = nullptr;
@@ -62,9 +71,11 @@ namespace gfx {
 	};
 	typedef void* SamplerState;
 	struct ShaderResourceView {
+		D3D12_CPU_DESCRIPTOR_HANDLE CpuDescriptor;
 		D3D12_GPU_DESCRIPTOR_HANDLE GpuDescriptor;
 	};
 	struct UnorderedAccessView {
+		D3D12_CPU_DESCRIPTOR_HANDLE CpuDescriptor;
 		D3D12_GPU_DESCRIPTOR_HANDLE GpuDescriptor;
 	};
 	struct RenderTargetView  {
