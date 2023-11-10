@@ -1324,6 +1324,16 @@ void ReleaseD3D(
 	for (Draw* d : rd->Draws)
 	{
 		SafeRelease(d->BlendGfxState);
+		for (ConstantBuffer& cb : d->VSCBs)
+		{
+			SafeRelease(cb.GfxState);
+			free(cb.BackingMemory);
+		}
+		for (ConstantBuffer& cb : d->PSCBs)
+		{
+			SafeRelease(cb.GfxState);
+			free(cb.BackingMemory);
+		}
 	}
 */
 }
