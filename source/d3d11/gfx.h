@@ -20,6 +20,7 @@ namespace gfx {
 	typedef ID3D11InputLayout* InputLayout;
 	typedef ID3D11PixelShader* PixelShader;
 	typedef ID3D11Buffer* Buffer;
+	typedef ID3D11Buffer* ConstantBuffer;
 	typedef ID3D11Texture2D* Texture;
 	typedef ID3D11SamplerState* SamplerState;
 	typedef ID3D11ShaderResourceView* ShaderResourceView;

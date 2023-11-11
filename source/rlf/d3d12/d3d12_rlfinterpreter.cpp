@@ -260,6 +260,20 @@ D3D11_BLEND_OP RlfToD3d(BlendOp op)
 
 */
 
+D3D12_CPU_DESCRIPTOR_HANDLE AllocateCbvSrvUavDescriptor(gfx::Context* ctx)
+{
+	u64 offset = ctx->SrvUavDescNextIndex * ctx->SrvUavDescSize;
+
+	D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
+		ctx->SrvUavDescHeap->GetCPUDescriptorHandleForHeapStart();
+	cpu_descriptor.ptr += offset;
+
+	++ctx->SrvUavDescNextIndex;
+
+	return cpu_descriptor;
+}
+
+
 ID3DBlob* CommonCompileShader(CommonShader* common, const char* dirPath, const char* profile, 
 	ErrorState* errorState)
 {
@@ -366,7 +380,7 @@ void CreateRootSignature(ID3D12Device* device, ComputeShader* cs)
 		case D3D_SIT_CBUFFER:
 			cs->CbvMin = min(cs->CbvMin, input.BindPoint);
 			cs->CbvMax = max(cs->CbvMax, input.BindPoint);
-			++cs->NumCbvs;
+			cs->NumCbvs = cs->CbvMax - cs->CbvMin + 1;
 			break;
 		case D3D_SIT_TBUFFER:
 		case D3D_SIT_TEXTURE:
@@ -374,7 +388,7 @@ void CreateRootSignature(ID3D12Device* device, ComputeShader* cs)
 		case D3D_SIT_BYTEADDRESS:
 			cs->SrvMin = min(cs->SrvMin, input.BindPoint);
 			cs->SrvMax = max(cs->SrvMax, input.BindPoint);
-			++cs->NumSrvs;
+			cs->NumSrvs = cs->SrvMax - cs->SrvMin + 1;
 			break;
 		case D3D_SIT_UAV_RWTYPED:
 		case D3D_SIT_UAV_RWSTRUCTURED:
@@ -384,12 +398,12 @@ void CreateRootSignature(ID3D12Device* device, ComputeShader* cs)
 		case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
 			cs->UavMin = min(cs->UavMin, input.BindPoint);
 			cs->UavMax = max(cs->UavMax, input.BindPoint);
-			++cs->NumUavs;
+			cs->NumUavs = cs->UavMax - cs->UavMin + 1;
 			break;
 		case D3D_SIT_SAMPLER:
 			cs->SamplerMin = min(cs->SamplerMin, input.BindPoint);
 			cs->SamplerMax = max(cs->SamplerMax, input.BindPoint);
-			++cs->NumSamplers;
+			cs->NumSamplers = cs->SamplerMax - cs->SamplerMin + 1;
 			break;
 		case D3D_SIT_RTACCELERATIONSTRUCTURE:
 		case D3D_SIT_UAV_FEEDBACKTEXTURE:
@@ -470,7 +484,7 @@ void CreateRootSignature(ID3D12Device* device, ComputeShader* cs)
 
 	ID3DBlob* SerializedRootSig;
 	HRESULT hr = D3D12SerializeVersionedRootSignature(&RootSig, &SerializedRootSig, nullptr); 
-	CheckHresult(hr, "Serialized root signature");
+	Assert(hr == S_OK, "Failed to create serialized root signature, hr=%x", hr);
 
 	ID3D12RootSignature* Sig;
 	hr = device->CreateRootSignature(0,
@@ -478,7 +492,7 @@ void CreateRootSignature(ID3D12Device* device, ComputeShader* cs)
 		SerializedRootSig->GetBufferSize(),
 		__uuidof(ID3D12RootSignature),
 		(void**)&Sig);
-	CheckHresult(hr, "RootSignature");
+	Assert(hr == S_OK, "failed to create root signature, hr=%x", hr);
 
 	SerializedRootSig->Release();
 
@@ -785,25 +799,30 @@ void ResolveBind(Bind& bind, ID3D12ShaderReflection* reflector, const char* path
 	}
 }
 
-/* ------TODO-----------
+u32 AlignU32(u32 val, u32 align)
+{
+	if (!val)
+		return align;
+	return (((val-1) / align) + 1) * align;
+}
 
 void PrepareConstants(
-	ID3D11Device* device, ID3D11ShaderReflection* reflector, 
+	gfx::Context* ctx, ID3D12ShaderReflection* reflector, 
 	std::vector<ConstantBuffer>& buffers, std::vector<SetConstant>& sets, 
 	const char* path)
 {
-	(void)path;
-	D3D11_SHADER_DESC sd;
+	D3D12_SHADER_DESC sd;
 	reflector->GetDesc(&sd);
+	HRESULT hr;
 	for (u32 i = 0 ; i < sd.ConstantBuffers ; ++i)
 	{
 		ConstantBuffer cb = {};
-		D3D11_SHADER_BUFFER_DESC bd;
-		ID3D11ShaderReflectionConstantBuffer* constBuffer = 
+		D3D12_SHADER_BUFFER_DESC bd;
+		ID3D12ShaderReflectionConstantBuffer* constBuffer = 
 			reflector->GetConstantBufferByIndex(i);
 		constBuffer->GetDesc(&bd);
 
-		if (bd.Type != D3D11_CT_CBUFFER)
+		if (bd.Type != D3D_CT_CBUFFER)
 			continue;
 
 		cb.Name = bd.Name;
@@ -812,8 +831,8 @@ void PrepareConstants(
 
 		for (u32 j = 0 ; j < bd.Variables ; ++j)
 		{
-			ID3D11ShaderReflectionVariable* var = constBuffer->GetVariableByIndex(j);
-			D3D11_SHADER_VARIABLE_DESC vd;
+			ID3D12ShaderReflectionVariable* var = constBuffer->GetVariableByIndex(j);
+			D3D12_SHADER_VARIABLE_DESC vd;
 			var->GetDesc(&vd);
 
 			if (vd.DefaultValue)
@@ -822,20 +841,50 @@ void PrepareConstants(
 				ZeroMemory(cb.BackingMemory+vd.StartOffset, vd.Size);
 		}
 
-		D3D11_BUFFER_DESC desc;
-		desc.ByteWidth = bd.Size;
-		desc.Usage = D3D11_USAGE_DYNAMIC;
-		desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-		desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-		desc.MiscFlags = 0;
-		D3D11_SUBRESOURCE_DATA srd = {};
-		srd.pSysMem = cb.BackingMemory;
-		HRESULT hr = device->CreateBuffer(&desc, &srd, &cb.GfxState);
-		Assert(hr == S_OK, "Failed to create CB hr=%x", hr);
+		u32 alignedSize = AlignU32(bd.Size, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+
+		D3D12_RESOURCE_DESC constantBufferDesc;
+		constantBufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		constantBufferDesc.Alignment = 0;
+		constantBufferDesc.Width = alignedSize;
+		constantBufferDesc.Height = 1;
+		constantBufferDesc.DepthOrArraySize = 1;
+		constantBufferDesc.MipLevels = 1;
+		constantBufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+		constantBufferDesc.SampleDesc.Count = 1;
+		constantBufferDesc.SampleDesc.Quality = 0;
+		constantBufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+		constantBufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	 
+		D3D12_HEAP_PROPERTIES uploadHeapProperties;
+		uploadHeapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
+		uploadHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+		uploadHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+		uploadHeapProperties.CreationNodeMask = 0;
+		uploadHeapProperties.VisibleNodeMask = 0;
+
+		for (u32 frame = 0 ; frame < gfx::Context::NUM_FRAMES_IN_FLIGHT ; ++frame)
+		{
+			hr = ctx->Device->CreateCommittedResource(&uploadHeapProperties, D3D12_HEAP_FLAG_NONE, 
+				&constantBufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, 
+				IID_PPV_ARGS(&cb.GfxState.Resource[frame]));
+			Assert(hr == S_OK, "Failed to create buffer, hr=%x", hr);
+			cb.GfxState.Resource[frame]->Map(0, nullptr, (void**)&cb.GfxState.MappedMem[frame]);
+			
+			cb.GfxState.CbvDescriptor[frame] = AllocateCbvSrvUavDescriptor(ctx);
+
+			D3D12_CONSTANT_BUFFER_VIEW_DESC constantBufferViewDesc = {};
+    		constantBufferViewDesc.BufferLocation = 
+    			cb.GfxState.Resource[frame]->GetGPUVirtualAddress();
+    		constantBufferViewDesc.SizeInBytes = alignedSize;
+ 
+    		ctx->Device->CreateConstantBufferView(&constantBufferViewDesc, 
+    			cb.GfxState.CbvDescriptor[frame]);
+		}
 
 		for (u32 k = 0 ; k < sd.BoundResources ; ++k)
 		{
-			D3D11_SHADER_INPUT_BIND_DESC id; 
+			D3D12_SHADER_INPUT_BIND_DESC id; 
 			hr = reflector->GetResourceBindingDesc(k, &id);
 			Assert(hr == S_OK, "Failed to get desc, hr=%x", hr);
 			if (strcmp(id.Name, bd.Name) == 0)
@@ -850,20 +899,20 @@ void PrepareConstants(
 
 	for (SetConstant& set : sets)
 	{
-		ID3D11ShaderReflectionVariable* cvar = nullptr;
+		ID3D12ShaderReflectionVariable* cvar = nullptr;
 		const char* cbufname = nullptr;
 		for (u32 i = 0 ; i < sd.ConstantBuffers ; ++i)
 		{
-			D3D11_SHADER_BUFFER_DESC bd;
-			ID3D11ShaderReflectionConstantBuffer* buffer = 
+			D3D12_SHADER_BUFFER_DESC bd;
+			ID3D12ShaderReflectionConstantBuffer* buffer = 
 				reflector->GetConstantBufferByIndex(i);
 			buffer->GetDesc(&bd);
-			if (bd.Type != D3D11_CT_CBUFFER)
+			if (bd.Type != D3D_CT_CBUFFER)
 				continue;
 			for (u32 j = 0 ; j < bd.Variables ; ++j)
 			{
-				ID3D11ShaderReflectionVariable* var = buffer->GetVariableByIndex(j);
-				D3D11_SHADER_VARIABLE_DESC vd;
+				ID3D12ShaderReflectionVariable* var = buffer->GetVariableByIndex(j);
+				D3D12_SHADER_VARIABLE_DESC vd;
 				var->GetDesc(&vd);
 				if (strcmp(set.VariableName, vd.Name) == 0)
 				{
@@ -874,7 +923,7 @@ void PrepareConstants(
 			}
 		}
 		InitAssert(cvar, "Couldn't find constant %s in shader %s", set.VariableName, path);
-		D3D11_SHADER_VARIABLE_DESC vd;
+		D3D12_SHADER_VARIABLE_DESC vd;
 		cvar->GetDesc(&vd);
 		set.Offset = vd.StartOffset;
 		set.Size = vd.Size;
@@ -890,8 +939,8 @@ void PrepareConstants(
 		}
 		Assert(found, "Failed to find cbuffer resource binding");
 
-		ID3D11ShaderReflectionType* ctype = cvar->GetType();
-		D3D11_SHADER_TYPE_DESC td;
+		ID3D12ShaderReflectionType* ctype = cvar->GetType();
+		D3D12_SHADER_TYPE_DESC td;
 		ctype->GetDesc(&td);
 		switch (td.Type)
 		{
@@ -927,7 +976,7 @@ void PrepareConstants(
 		}
 	}
 }
-*/
+
 
 void InitMain(
 	gfx::Context* ctx,
@@ -948,7 +997,7 @@ void InitMain(
 			"cs_5_0", errorState);
 
 		HRESULT hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
-			IID_ID3D11ShaderReflection, (void**) &cs->Common.Reflector);
+			IID_ID3D12ShaderReflection, (void**) &cs->Common.Reflector);
 		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
 
 		cs->Common.Reflector->GetThreadGroupSize(&cs->ThreadGroupSize.x, 
@@ -968,7 +1017,7 @@ void InitMain(
 		desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 		hr = device->CreateComputePipelineState(&desc, __uuidof(ID3D12PipelineState),
 			(void**)&cs->GfxPipeline);
-		CheckHresult(hr, "PipelineState");
+		Assert(hr == S_OK, "Failed to create pipeline state, hr=%x", hr);
 	}
 
 	for (Dispatch* dc : rd->Dispatches)
@@ -1006,43 +1055,31 @@ void InitMain(
 				{
 					Assert(bind.ViewBind->Type == ViewType::UAV, "mismatched view");
 					DestSlot = cs->NumCbvs + cs->NumSrvs + (bind.BindIndex - cs->UavMin);
-					// TODO
-					//SrcDesc = bind.ViewBind->UAVGfxState.CpuDescriptor;
-					SrcDesc.ptr = 0;
+					SrcDesc = bind.ViewBind->UAVGfxState.CpuDescriptor;
 				}
 				else
 				{
 					Assert(bind.ViewBind->Type == ViewType::SRV, "mismatched view");
 					DestSlot = cs->NumCbvs + (bind.BindIndex - cs->SrvMin);
-					// TODO
-					// SrcDesc = bind.ViewBind->SRVGfxState.CpuDescriptor;
-					SrcDesc.ptr = 0;
+					SrcDesc = bind.ViewBind->SRVGfxState.CpuDescriptor;
 				}
 				break;
 			case BindType::Sampler:
 			default:
 				Unimplemented();
 			}
-			// TODO: complete, assert
-			if (SrcDesc.ptr)
-			{
-				D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = 
-					ctx->ShaderVisDescHeap->GetCPUDescriptorHandleForHeapStart();
-				DestDesc.ptr += (ctx->ShaderVisDescNextIndex + DestSlot) * ctx->SrvUavDescSize;
-				ctx->Device->CopyDescriptorsSimple(1, DestDesc, SrcDesc,
-					D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-			}
+			D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = 
+				ctx->ShaderVisDescHeap->GetCPUDescriptorHandleForHeapStart();
+			DestDesc.ptr += (ctx->ShaderVisDescNextIndex + DestSlot) * ctx->SrvUavDescSize;
+			ctx->Device->CopyDescriptorsSimple(1, DestDesc, SrcDesc,
+				D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		}
 
 		dc->CbvSrvUavDescTableStart = ctx->ShaderVisDescNextIndex;
 		ctx->ShaderVisDescNextIndex += cs->NumCbvs + cs->NumSrvs + cs->NumUavs + cs->NumSamplers;
 
-		// TODO:
-		// PrepareConstants(device, reflector, dc->CBs, dc->Constants,
-		// 	dc->Shader->Common.ShaderPath);
+		PrepareConstants(ctx, reflector, dc->CBs, dc->Constants, cs->Common.ShaderPath);
 	}
-
-
 
 	(void)displaySize;
 
@@ -1092,7 +1129,7 @@ void InitMain(
 		{
 			ResolveBind(bind, reflector, draw->VShader->Common.ShaderPath);
 		}
-		PrepareConstants(device, reflector, draw->VSCBs, draw->VSConstants,
+		PrepareConstants(ctx, reflector, draw->VSCBs, draw->VSConstants,
 			draw->VShader->Common.ShaderPath);
 		if (draw->PShader)
 		{
@@ -1101,7 +1138,7 @@ void InitMain(
 			{
 				ResolveBind(bind, reflector, draw->PShader->Common.ShaderPath);
 			}
-			PrepareConstants(device, reflector, draw->PSCBs, draw->PSConstants,
+			PrepareConstants(ctx, reflector, draw->PSCBs, draw->PSConstants,
 				draw->PShader->Common.ShaderPath);
 		}
 
@@ -1269,6 +1306,19 @@ void ReleaseD3D(
 		SafeRelease(cs->GfxState);
 	}
 
+	for (Dispatch* dc : rd->Dispatches)
+	{
+		for (ConstantBuffer& cb : dc->CBs)
+		{
+			for (u32 frame = 0 ; frame < gfx::Context::NUM_FRAMES_IN_FLIGHT ; ++frame)
+			{
+				cb.GfxState.Resource[frame]->Unmap(0, nullptr);
+				SafeRelease(cb.GfxState.Resource[frame]);
+			}
+			free(cb.BackingMemory);
+		}
+	}
+
 /* ------TODO-----------
 
 	for (VertexShader* vs : rd->VShaders)
@@ -1310,15 +1360,6 @@ void ReleaseD3D(
 	for (DepthStencilState* dss : rd->DepthStencilStates)
 	{
 		SafeRelease(dss->GfxState);
-	}
-
-	for (Dispatch* dc : rd->Dispatches)
-	{
-		for (ConstantBuffer& cb : dc->CBs)
-		{
-			SafeRelease(cb.GfxState);
-			free(cb.BackingMemory);
-		}
 	}
 
 	for (Draw* d : rd->Draws)
@@ -1476,7 +1517,6 @@ void HandleTextureParametersChanged(
 // ------------------------------ EXECUTION ------------------------------------
 // -----------------------------------------------------------------------------
 
-/* ------TODO-----------
 void ExecuteError(const char* str, ...)
 {
 	char buf[512];
@@ -1501,7 +1541,7 @@ do {											\
 void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets, 
 	std::vector<ConstantBuffer>& buffers)
 {
-	ID3D11DeviceContext* ctx = ec->GfxCtx->DeviceContext;
+	gfx::Context* ctx = ec->GfxCtx;
 	for (const SetConstant& set : sets)
 	{
 		ast::Result res;
@@ -1519,23 +1559,34 @@ void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets,
 	}
 	for (const ConstantBuffer& buf : buffers)
 	{
-		D3D11_MAPPED_SUBRESOURCE mapped_resource;
-		HRESULT hr = ctx->Map(buf.GfxState, 0, D3D11_MAP_WRITE_DISCARD, 
-			0, &mapped_resource);
-		Assert(hr == S_OK, "failed to map CB hr=%x", hr);
-		memcpy(mapped_resource.pData, buf.BackingMemory, buf.Size);
-		ctx->Unmap(buf.GfxState, 0);
+		u32 frame = ctx->FrameIndex % gfx::Context::NUM_FRAMES_IN_FLIGHT;
+		memcpy(buf.GfxState.MappedMem[frame], buf.BackingMemory, buf.Size);
 	}
 }
-*/
 
 void ExecuteDispatch(
 	Dispatch* dc,
 	ExecuteContext* ec)
 {
+	ComputeShader* cs = dc->Shader;
+	ExecuteSetConstants(ec, dc->Constants, dc->CBs);
+
+	// Update cbvs in descriptor table since we use a different one each frame.
+	for (const ConstantBuffer& buf : dc->CBs)
+	{
+		u32 frame = ec->GfxCtx->FrameIndex % gfx::Context::NUM_FRAMES_IN_FLIGHT;
+		u32 DestSlot = buf.Slot - cs->CbvMin;
+
+		D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = 
+			ec->GfxCtx->ShaderVisDescHeap->GetCPUDescriptorHandleForHeapStart();
+		DestDesc.ptr += (dc->CbvSrvUavDescTableStart + DestSlot) * ec->GfxCtx->SrvUavDescSize;
+		ec->GfxCtx->Device->CopyDescriptorsSimple(1, DestDesc, buf.GfxState.CbvDescriptor[frame],
+			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	}
+
 	ID3D12GraphicsCommandList* cl = ec->GfxCtx->CommandList;
-	cl->SetPipelineState(dc->Shader->GfxPipeline);
-	cl->SetComputeRootSignature(dc->Shader->GfxRootSig);
+	cl->SetPipelineState(cs->GfxPipeline);
+	cl->SetComputeRootSignature(cs->GfxRootSig);
 	D3D12_GPU_DESCRIPTOR_HANDLE table_handle = 
 		ec->GfxCtx->ShaderVisDescHeap->GetGPUDescriptorHandleForHeapStart();
 	table_handle.ptr += dc->CbvSrvUavDescTableStart * ec->GfxCtx->SrvUavDescSize;
@@ -1543,12 +1594,6 @@ void ExecuteDispatch(
 /* ------TODO-----------
 
 	UINT initialCount = (UINT)-1;
-	ctx->CSSetShader(dc->Shader->GfxState, nullptr, 0);
-	ExecuteSetConstants(ec, dc->Constants, dc->CBs);
-	for (const ConstantBuffer& buf : dc->CBs)
-	{
-		ctx->CSSetConstantBuffers(buf.Slot, 1, &buf.GfxState);
-	}
 	for (Bind& bind : dc->Binds)
 	{
 		switch (bind.Type)
@@ -1585,6 +1630,7 @@ void ExecuteDispatch(
 */
 	if (dc->IndirectArgs)
 	{
+		// TODO: implement indirect args
 		// ctx->DispatchIndirect(dc->IndirectArgs->GfxState, dc->IndirectArgsOffset);
 		Unimplemented();
 	}

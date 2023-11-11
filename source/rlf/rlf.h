@@ -326,7 +326,7 @@ namespace rlf
 	struct ConstantBuffer
 	{
 		u8* BackingMemory;
-		gfx::Buffer GfxState;
+		gfx::ConstantBuffer GfxState;
 		std::string Name;
 		u32 Slot;
 		u32 Size;

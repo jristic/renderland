@@ -65,6 +65,11 @@ namespace gfx {
 	typedef void* VertexShader;
 	typedef void* InputLayout;
 	typedef void* PixelShader;
+	struct ConstantBuffer {
+		ID3D12Resource* Resource[Context::NUM_FRAMES_IN_FLIGHT];
+		void* MappedMem[Context::NUM_FRAMES_IN_FLIGHT];
+		D3D12_CPU_DESCRIPTOR_HANDLE CbvDescriptor[Context::NUM_FRAMES_IN_FLIGHT];
+	};
 	typedef void* Buffer;
 	struct Texture {
 		ID3D12Resource* Resource;
