@@ -18,6 +18,7 @@ namespace gfx {
 		ID3D12Debug*					Debug = nullptr;
 		ID3D12InfoQueue*				InfoQueue = nullptr;
 
+		// TODO: commonize heaps into array of structures, with an enum type for indexing.
 		// Descriptor heaps
 		static u32 const				MAX_RTV_DESCS = 512;
 		static u32 const 				RLF_RESERVED_RTV_SLOT_INDEX = NUM_BACK_BUFFERS;
@@ -44,6 +45,7 @@ namespace gfx {
 		static u32 const 				NUM_RESERVED_SHADER_VIS_SLOTS = 2;
 		ID3D12DescriptorHeap*			ShaderVisDescHeap = nullptr;
 		u64								ShaderVisDescNextIndex = 0;
+		// TODO: sampler heap
 
 
 		ID3D12CommandQueue*				CommandQueue = nullptr;
@@ -70,18 +72,20 @@ namespace gfx {
 		void* MappedMem[Context::NUM_FRAMES_IN_FLIGHT];
 		D3D12_CPU_DESCRIPTOR_HANDLE CbvDescriptor[Context::NUM_FRAMES_IN_FLIGHT];
 	};
-	typedef void* Buffer;
+	struct Buffer {
+		ID3D12Resource* Resource;
+	};
 	struct Texture {
 		ID3D12Resource* Resource;
 	};
 	typedef void* SamplerState;
 	struct ShaderResourceView {
 		D3D12_CPU_DESCRIPTOR_HANDLE CpuDescriptor;
-		D3D12_GPU_DESCRIPTOR_HANDLE GpuDescriptor;
+		D3D12_GPU_DESCRIPTOR_HANDLE GpuDescriptor;// todo: unneeded? reduce from struct to typedef
 	};
 	struct UnorderedAccessView {
 		D3D12_CPU_DESCRIPTOR_HANDLE CpuDescriptor;
-		D3D12_GPU_DESCRIPTOR_HANDLE GpuDescriptor;
+		D3D12_GPU_DESCRIPTOR_HANDLE GpuDescriptor;// todo: unneeded? reduce from struct to typedef
 	};
 	struct RenderTargetView  {
 		D3D12_CPU_DESCRIPTOR_HANDLE CpuDescriptor;

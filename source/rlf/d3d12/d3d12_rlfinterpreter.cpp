@@ -138,28 +138,6 @@ D3D11_CULL_MODE RlfToD3d(CullMode cm)
 	return cms[(u32)cm];
 }
 
-u32 RlfToD3d_Bind(BufferFlag flags)
-{
-	u32 f = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-	if (flags & BufferFlag_Vertex)
-		f |= D3D11_BIND_VERTEX_BUFFER;
-	if (flags & BufferFlag_Index)
-		f |= D3D11_BIND_INDEX_BUFFER;
-	return f;
-}
-
-u32 RlfToD3d_Misc(BufferFlag flags)
-{
-	u32 f = 0;
-	if (flags & BufferFlag_Structured) 
-		f |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-	if (flags & BufferFlag_IndirectArgs) 
-		f |= D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
-	if (flags & BufferFlag_Raw)
-		f |= D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
-	return f;
-}
-
 u32 RlfToD3d(TextureFlag flags)
 {
 	u32 f = 0;
@@ -269,6 +247,32 @@ D3D12_CPU_DESCRIPTOR_HANDLE AllocateCbvSrvUavDescriptor(gfx::Context* ctx)
 	cpu_descriptor.ptr += offset;
 
 	++ctx->SrvUavDescNextIndex;
+
+	return cpu_descriptor;
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE AllocateRtvDescriptor(gfx::Context* ctx)
+{
+	u64 offset = ctx->RtvDescNextIndex * ctx->RtvDescSize;
+
+	D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
+		ctx->RtvDescHeap->GetCPUDescriptorHandleForHeapStart();
+	cpu_descriptor.ptr += offset;
+
+	++ctx->RtvDescNextIndex;
+
+	return cpu_descriptor;
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE AllocateDsvDescriptor(gfx::Context* ctx)
+{
+	u64 offset = ctx->DsvDescNextIndex * ctx->DsvDescSize;
+
+	D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
+		ctx->DsvDescHeap->GetCPUDescriptorHandleForHeapStart();
+	cpu_descriptor.ptr += offset;
+
+	++ctx->DsvDescNextIndex;
 
 	return cpu_descriptor;
 }
@@ -601,9 +605,13 @@ void CreateTexture(ID3D11Device* device, Texture* tex)
 	CheckHresult(hr, "Texture");
 }
 
-void CreateBuffer(ID3D11Device* device, Buffer* buf)
+*/
+
+void CreateBuffer(ID3D12Device* device, Buffer* buf)
 {
 	u32 bufSize = buf->ElementSize * buf->ElementCount;
+
+	/* TODO: init data
 	void* initData = malloc(bufSize);
 	if (buf->InitToZero)
 		ZeroMemory(initData, bufSize);
@@ -612,144 +620,147 @@ void CreateBuffer(ID3D11Device* device, Buffer* buf)
 		Assert(buf->InitData, "No data but size is set");
 		memcpy(initData, buf->InitData, buf->InitDataSize);
 	}
+	*/
 
-	D3D11_SUBRESOURCE_DATA subRes = {};
-	subRes.pSysMem = buf->InitData;
+	D3D12_RESOURCE_DESC bufferDesc;
+	bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	bufferDesc.Alignment = 0;
+	bufferDesc.Width = bufSize;
+	bufferDesc.Height = 1;
+	bufferDesc.DepthOrArraySize = 1;
+	bufferDesc.MipLevels = 1;
+	bufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+	bufferDesc.SampleDesc.Count = 1;
+	bufferDesc.SampleDesc.Quality = 0;
+	bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	bufferDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+ 
+	D3D12_HEAP_PROPERTIES uploadHeapProperties;
+	uploadHeapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+	uploadHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	uploadHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+	uploadHeapProperties.CreationNodeMask = 0;
+	uploadHeapProperties.VisibleNodeMask = 0;
 
-	D3D11_BUFFER_DESC desc;
-	desc.ByteWidth = bufSize;
-	desc.Usage = D3D11_USAGE_DEFAULT;
-	desc.BindFlags = RlfToD3d_Bind(buf->Flags);
-	desc.CPUAccessFlags = 0;
-	desc.StructureByteStride = buf->ElementSize;
-	desc.MiscFlags = RlfToD3d_Misc(buf->Flags); 
-
-	HRESULT hr = device->CreateBuffer(&desc, subRes.pSysMem ? &subRes : nullptr,
-		&buf->GfxState);
-	free(initData);
-	CheckHresult(hr, "Buffer");
+	HRESULT hr = device->CreateCommittedResource(&uploadHeapProperties, 
+		D3D12_HEAP_FLAG_NONE, &bufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, 
+		NULL, IID_PPV_ARGS(&buf->GfxState.Resource));
+	Assert(hr == S_OK, "Failed to create buffer, hr=%x", hr);
 }
 
-void CreateView(ID3D11Device* device, View* v)
+void CreateView(gfx::Context* ctx, View* v, bool allocate_descriptor)
 {
-	ID3D11Resource* res = nullptr;
+	ID3D12Device* device = ctx->Device;
+	ID3D12Resource* res = nullptr;
 	if (v->ResourceType == ResourceType::Buffer)
-		res = v->Buffer->GfxState;
+		res = v->Buffer->GfxState.Resource;
 	else if (v->ResourceType == ResourceType::Texture)
-		res = v->Texture->GfxState;
+		res = v->Texture->GfxState.Resource;
 	else
 		Unimplemented();
 	DXGI_FORMAT fmt = D3DTextureFormat[(u32)v->Format];
 	if (v->Type == ViewType::SRV)
 	{
-		D3D11_SHADER_RESOURCE_VIEW_DESC vd;
+		D3D12_SHADER_RESOURCE_VIEW_DESC vd;
 		vd.Format = fmt;
+		vd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 		if (v->ResourceType == ResourceType::Buffer)
 		{
 			if (v->Buffer->Flags & BufferFlag_Raw)
 			{
-				vd.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
-				vd.BufferEx.FirstElement = 0;
-				vd.BufferEx.NumElements = v->NumElements > 0 ? v->NumElements :
-					v->Buffer->ElementCount;
-				vd.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
-			}
-			else
-			{
-				vd.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+				vd.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
 				vd.Buffer.FirstElement = 0;
 				vd.Buffer.NumElements = v->NumElements > 0 ? v->NumElements :
 					v->Buffer->ElementCount;
+				vd.Buffer.StructureByteStride = 0;
+				vd.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+			}
+			else
+			{
+				vd.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+				vd.Buffer.FirstElement = 0;
+				vd.Buffer.NumElements = v->NumElements > 0 ? v->NumElements :
+					v->Buffer->ElementCount;
+				vd.Buffer.StructureByteStride = v->Buffer->ElementSize;
+				vd.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 			}
 		}
 		else if (v->ResourceType == ResourceType::Texture)
 		{
 			vd.ViewDimension = v->Texture->SampleCount > 1 ? 
-				D3D11_SRV_DIMENSION_TEXTURE2DMS : D3D11_SRV_DIMENSION_TEXTURE2D;
+				D3D12_SRV_DIMENSION_TEXTURE2DMS : D3D12_SRV_DIMENSION_TEXTURE2D;
 			vd.Texture2D.MostDetailedMip = 0;
 			vd.Texture2D.MipLevels = (u32)-1;
+			vd.Texture2D.PlaneSlice = 0;
+			vd.Texture2D.ResourceMinLODClamp = 0.f;
 		}
 		else 
 			Unimplemented();
-		HRESULT hr = device->CreateShaderResourceView(res, &vd, &v->SRVGfxState);
-		CheckHresult(hr, "SRV");
+		if (allocate_descriptor)
+			v->SRVGfxState.CpuDescriptor = AllocateCbvSrvUavDescriptor(ctx);
+		device->CreateShaderResourceView(res, &vd, v->SRVGfxState.CpuDescriptor);
 	}
 	else if (v->Type == ViewType::UAV)
 	{
-		D3D11_UNORDERED_ACCESS_VIEW_DESC vd;
+		D3D12_UNORDERED_ACCESS_VIEW_DESC vd;
 		vd.Format = fmt;
 		if (v->ResourceType == ResourceType::Buffer)
 		{
-			vd.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+			vd.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
 			vd.Buffer.FirstElement = 0;
 			vd.Buffer.NumElements = v->NumElements > 0 ? v->NumElements : 
 				v->Buffer->ElementCount;
+			vd.Buffer.StructureByteStride = v->Buffer->Flags & BufferFlag_Raw ?
+				0 : v->Buffer->ElementSize;
+			vd.Buffer.CounterOffsetInBytes = 0;
 			vd.Buffer.Flags = v->Buffer->Flags & BufferFlag_Raw ? 
-				D3D11_BUFFER_UAV_FLAG_RAW : 0;
+				D3D12_BUFFER_UAV_FLAG_RAW : D3D12_BUFFER_UAV_FLAG_NONE;
 		}
 		else if (v->ResourceType == ResourceType::Texture)
 		{
-			vd.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+			vd.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
 			vd.Texture2D.MipSlice = 0;
+			vd.Texture2D.PlaneSlice = 0;
 		}
 		else 
 			Unimplemented();
-		HRESULT hr = device->CreateUnorderedAccessView(res, &vd, &v->UAVGfxState);
-		CheckHresult(hr, "UAV");
+		if (allocate_descriptor)
+			v->UAVGfxState.CpuDescriptor = AllocateCbvSrvUavDescriptor(ctx);
+		device->CreateUnorderedAccessView(res, nullptr, &vd, v->UAVGfxState.CpuDescriptor);
 	}
 	else if (v->Type == ViewType::RTV)
 	{
-		D3D11_RENDER_TARGET_VIEW_DESC vd;
+		D3D12_RENDER_TARGET_VIEW_DESC vd;
 		vd.Format = fmt;
 		Assert(v->ResourceType == ResourceType::Texture, "Invalid");
 		vd.ViewDimension = v->Texture->SampleCount > 1 ? 
-			D3D11_RTV_DIMENSION_TEXTURE2DMS : D3D11_RTV_DIMENSION_TEXTURE2D;
+			D3D12_RTV_DIMENSION_TEXTURE2DMS : D3D12_RTV_DIMENSION_TEXTURE2D;
+		// NOTE: technically there is a separate field Texture2DMS that should be
+		//	filled for that dimension but it has no fields so I'm not bothering.
 		vd.Texture2D.MipSlice = 0;
-		HRESULT hr = device->CreateRenderTargetView(res, &vd, &v->RTVGfxState);
-		CheckHresult(hr, "RTV");
+		vd.Texture2D.PlaneSlice = 0;
+		if (allocate_descriptor)
+			v->RTVGfxState.CpuDescriptor = AllocateRtvDescriptor(ctx);
+		device->CreateRenderTargetView(res, &vd, v->RTVGfxState.CpuDescriptor);
 	}
 	else if (v->Type == ViewType::DSV)
 	{
-		D3D11_DEPTH_STENCIL_VIEW_DESC vd;
+		D3D12_DEPTH_STENCIL_VIEW_DESC vd;
 		vd.Format = fmt;
 		Assert(v->ResourceType == ResourceType::Texture, "Invalid");
 		vd.ViewDimension = v->Texture->SampleCount > 1 ? 
-			D3D11_DSV_DIMENSION_TEXTURE2DMS : D3D11_DSV_DIMENSION_TEXTURE2D;
+			D3D12_DSV_DIMENSION_TEXTURE2DMS : D3D12_DSV_DIMENSION_TEXTURE2D;
+		vd.Flags = D3D12_DSV_FLAG_NONE;
+		// NOTE: technically there is a separate field Texture2DMS that should be
+		//	filled for that dimension but it has no fields so I'm not bothering.
 		vd.Texture2D.MipSlice = 0;
-		vd.Flags = 0;
-		HRESULT hr = device->CreateDepthStencilView(res, &vd, &v->DSVGfxState);
-		CheckHresult(hr, "DSV");
+		if (allocate_descriptor)
+			v->DSVGfxState.CpuDescriptor = AllocateDsvDescriptor(ctx);
+		device->CreateDepthStencilView(res, &vd, v->DSVGfxState.CpuDescriptor);
 	}
 	else
 		Unimplemented();
 }
-
-void ReleaseView(View* v)
-{
-	switch (v->Type)
-	{
-	case ViewType::SRV:
-		SafeRelease(v->SRVGfxState);
-		break;
-	case ViewType::UAV:
-		SafeRelease(v->UAVGfxState);
-		break;
-	case ViewType::RTV:
-		SafeRelease(v->RTVGfxState);
-		break;
-	case ViewType::DSV:
-		SafeRelease(v->DSVGfxState);
-		break;
-	case ViewType::Auto:
-		// NOTE: intentional do-nothing, if Auto hasn't been replaced then an object
-		//	was never created.
-		break;
-	default:
-		Unimplemented();
-	}
-}
-
-*/
 
 void ResolveBind(Bind& bind, ID3D12ShaderReflection* reflector, const char* path)
 {
@@ -796,6 +807,61 @@ void ResolveBind(Bind& bind, ID3D12ShaderReflection* reflector, const char* path
 			bind.ViewBind->Type = ViewType::UAV;
 		else
 			bind.ViewBind->Type = ViewType::SRV;
+	}
+}
+
+void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
+	const Dispatch* dc)
+{
+	const ComputeShader* cs = dc->Shader;
+	for (const Bind& bind : dc->Binds)
+	{
+		u32 DestSlot = 0;
+		D3D12_CPU_DESCRIPTOR_HANDLE SrcDesc = {};
+		switch(bind.Type)
+		{
+		case BindType::SystemValue:
+			switch (bind.SystemBind)
+			{
+			case SystemValue::BackBuffer:
+				if (bind.IsOutput)
+				{
+					DestSlot = cs->NumCbvs + cs->NumSrvs + (bind.BindIndex - cs->UavMin);
+					SrcDesc = resources->MainRtUav.CpuDescriptor;
+				}
+				else
+					Unimplemented();
+				break;
+			case SystemValue::DefaultDepth:
+				Assert(false, "Can not bind DSV to shader");
+				break;
+			default:
+				Unimplemented();
+			}
+			break;
+		case BindType::View:
+			if (bind.IsOutput)
+			{
+				Assert(bind.ViewBind->Type == ViewType::UAV, "mismatched view");
+				DestSlot = cs->NumCbvs + cs->NumSrvs + (bind.BindIndex - cs->UavMin);
+				SrcDesc = bind.ViewBind->UAVGfxState.CpuDescriptor;
+			}
+			else
+			{
+				Assert(bind.ViewBind->Type == ViewType::SRV, "mismatched view");
+				DestSlot = cs->NumCbvs + (bind.BindIndex - cs->SrvMin);
+				SrcDesc = bind.ViewBind->SRVGfxState.CpuDescriptor;
+			}
+			break;
+		case BindType::Sampler:
+		default:
+			Unimplemented();
+		}
+		D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = 
+			ctx->ShaderVisDescHeap->GetCPUDescriptorHandleForHeapStart();
+		DestDesc.ptr += (dc->CbvSrvUavDescTableStart + DestSlot) * ctx->SrvUavDescSize;
+		ctx->Device->CopyDescriptorsSimple(1, DestDesc, SrcDesc,
+			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	}
 }
 
@@ -874,12 +940,12 @@ void PrepareConstants(
 			cb.GfxState.CbvDescriptor[frame] = AllocateCbvSrvUavDescriptor(ctx);
 
 			D3D12_CONSTANT_BUFFER_VIEW_DESC constantBufferViewDesc = {};
-    		constantBufferViewDesc.BufferLocation = 
-    			cb.GfxState.Resource[frame]->GetGPUVirtualAddress();
-    		constantBufferViewDesc.SizeInBytes = alignedSize;
+			constantBufferViewDesc.BufferLocation = 
+				cb.GfxState.Resource[frame]->GetGPUVirtualAddress();
+			constantBufferViewDesc.SizeInBytes = alignedSize;
  
-    		ctx->Device->CreateConstantBufferView(&constantBufferViewDesc, 
-    			cb.GfxState.CbvDescriptor[frame]);
+			ctx->Device->CreateConstantBufferView(&constantBufferViewDesc, 
+				cb.GfxState.CbvDescriptor[frame]);
 		}
 
 		for (u32 k = 0 ; k < sd.BoundResources ; ++k)
@@ -980,7 +1046,7 @@ void PrepareConstants(
 
 void InitMain(
 	gfx::Context* ctx,
-	ExecuteResources* res,
+	ExecuteResources* resources,
 	RenderDescription* rd,
 	uint2 displaySize,
 	const char* workingDirectory,
@@ -1027,61 +1093,91 @@ void InitMain(
 		for (Bind& bind : dc->Binds)
 		{
 			ResolveBind(bind, reflector, cs->Common.ShaderPath);
-			u32 DestSlot = 0;
-			D3D12_CPU_DESCRIPTOR_HANDLE SrcDesc = {};
-			switch(bind.Type)
-			{
-			case BindType::SystemValue:
-				switch (bind.SystemBind)
-				{
-				case SystemValue::BackBuffer:
-					if (bind.IsOutput)
-					{
-						DestSlot = cs->NumCbvs + cs->NumSrvs + (bind.BindIndex - cs->UavMin);
-						SrcDesc = res->MainRtUav.CpuDescriptor;
-					}
-					else
-						Unimplemented();
-					break;
-				case SystemValue::DefaultDepth:
-					Assert(false, "Can not bind DSV to shader");
-					break;
-				default:
-					Unimplemented();
-				}
-				break;
-			case BindType::View:
-				if (bind.IsOutput)
-				{
-					Assert(bind.ViewBind->Type == ViewType::UAV, "mismatched view");
-					DestSlot = cs->NumCbvs + cs->NumSrvs + (bind.BindIndex - cs->UavMin);
-					SrcDesc = bind.ViewBind->UAVGfxState.CpuDescriptor;
-				}
-				else
-				{
-					Assert(bind.ViewBind->Type == ViewType::SRV, "mismatched view");
-					DestSlot = cs->NumCbvs + (bind.BindIndex - cs->SrvMin);
-					SrcDesc = bind.ViewBind->SRVGfxState.CpuDescriptor;
-				}
-				break;
-			case BindType::Sampler:
-			default:
-				Unimplemented();
-			}
-			D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = 
-				ctx->ShaderVisDescHeap->GetCPUDescriptorHandleForHeapStart();
-			DestDesc.ptr += (ctx->ShaderVisDescNextIndex + DestSlot) * ctx->SrvUavDescSize;
-			ctx->Device->CopyDescriptorsSimple(1, DestDesc, SrcDesc,
-				D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		}
-
-		dc->CbvSrvUavDescTableStart = ctx->ShaderVisDescNextIndex;
-		ctx->ShaderVisDescNextIndex += cs->NumCbvs + cs->NumSrvs + cs->NumUavs + cs->NumSamplers;
-
 		PrepareConstants(ctx, reflector, dc->CBs, dc->Constants, cs->Common.ShaderPath);
 	}
 
-	(void)displaySize;
+	ast::EvaluationContext evCtx;
+	evCtx.DisplaySize = displaySize;
+	evCtx.Time = 0;
+	evCtx.ChangedThisFrameFlags = 0;
+
+	// Size expressions may depend on constants so we need to evaluate them first
+	EvaluateConstants(evCtx, rd->Constants);
+
+	for (Buffer* buf : rd->Buffers)
+	{
+		// Obj initialized buffers don't have expressions.
+		if (buf->ElementSizeExpr || buf->ElementCountExpr)
+		{
+			ast::Result res;
+			EvaluateExpression(evCtx, buf->ElementSizeExpr, res, UintType, 
+				"Buffer::ElementSize");
+			buf->ElementSize = res.Value.UintVal;
+			EvaluateExpression(evCtx, buf->ElementCountExpr, res, UintType, 
+				"Buffer::ElementCount");
+			buf->ElementCount = res.Value.UintVal;
+		}
+
+		CreateBuffer(device, buf);
+	}
+
+	/* TODO
+	for (Texture* tex : rd->Textures)
+	{
+		if (tex->DDSPath)
+		{
+			std::string ddsPath = dirPath + tex->DDSPath;
+			HANDLE dds = fileio::OpenFileOptional(ddsPath.c_str(), GENERIC_READ);
+			InitAssert(dds != INVALID_HANDLE_VALUE, "Couldn't find DDS file: %s", 
+				ddsPath.c_str());
+
+			u32 ddsSize = fileio::GetFileSize(dds);
+			char* ddsBuffer = (char*)malloc(ddsSize);
+			Assert(ddsBuffer != nullptr, "failed to alloc");
+
+			fileio::ReadFile(dds, ddsBuffer, ddsSize);
+
+			CloseHandle(dds);
+
+			DirectX::TexMetadata meta;
+			DirectX::ScratchImage scratch;
+			DirectX::LoadFromDDSMemory(ddsBuffer, ddsSize, DirectX::DDS_FLAGS_NONE, 
+				&meta, scratch);
+			ID3D11Resource* res;
+			free(ddsBuffer);
+			HRESULT hr = DirectX::CreateTextureEx(device, scratch.GetImages(),
+				scratch.GetImageCount(), meta, D3D11_USAGE_IMMUTABLE, 
+				D3D11_BIND_SHADER_RESOURCE, 0, 0, false, &res);
+			Assert(hr == S_OK, "Failed to create texture from DDS, hr=%x", hr);
+			hr = res->QueryInterface(IID_ID3D11Texture2D, (void**)&tex->GfxState);
+			SafeRelease(res);
+			Assert(hr == S_OK, "Failed to query texture object, hr=%x", hr);
+		}
+		else
+		{
+			ast::Result res;
+			EvaluateExpression(evCtx, tex->SizeExpr, res, Uint2Type, "Texture::Size");
+			tex->Size = res.Value.Uint2Val;
+
+			CreateTexture(device, tex);
+		}
+	}
+	*/
+
+	for (View* v : rd->Views)
+	{
+		CreateView(ctx, v, /*allocate_descriptor:*/true);
+	}
+
+	for (Dispatch* dc : rd->Dispatches)
+	{
+		ComputeShader* cs = dc->Shader;
+		dc->CbvSrvUavDescTableStart = ctx->ShaderVisDescNextIndex;
+		ctx->ShaderVisDescNextIndex += cs->NumCbvs + cs->NumSrvs + cs->NumUavs +
+			cs->NumSamplers;
+		CopyBindDescriptors(ctx, resources, dc);
+	}
 
 /* ------TODO-----------
 
@@ -1164,74 +1260,6 @@ void InitMain(
 			HRESULT hr = device->CreateBlendState(&desc, &draw->BlendGfxState);
 			CheckHresult(hr, "BlendState");
 		}
-	}
-
-	ast::EvaluationContext evCtx;
-	evCtx.DisplaySize = displaySize;
-	evCtx.Time = 0;
-
-	// Size expressions may depend on constants so we need to evaluate them first
-	EvaluateConstants(evCtx, rd->Constants);
-
-	for (Buffer* buf : rd->Buffers)
-	{
-		// Obj initialized buffers don't have expressions.
-		if (buf->ElementSizeExpr || buf->ElementCountExpr)
-		{
-			ast::Result res;
-			EvaluateExpression(evCtx, buf->ElementSizeExpr, res, UintType, "Buffer::ElementSize");
-			buf->ElementSize = res.Value.UintVal;
-			EvaluateExpression(evCtx, buf->ElementCountExpr, res, UintType, "Buffer::ElementCount");
-			buf->ElementCount = res.Value.UintVal;
-		}
-
-		CreateBuffer(device, buf);
-	}
-
-	for (Texture* tex : rd->Textures)
-	{
-		if (tex->DDSPath)
-		{
-			std::string ddsPath = dirPath + tex->DDSPath;
-			HANDLE dds = fileio::OpenFileOptional(ddsPath.c_str(), GENERIC_READ);
-			InitAssert(dds != INVALID_HANDLE_VALUE, "Couldn't find DDS file: %s", 
-				ddsPath.c_str());
-
-			u32 ddsSize = fileio::GetFileSize(dds);
-			char* ddsBuffer = (char*)malloc(ddsSize);
-			Assert(ddsBuffer != nullptr, "failed to alloc");
-
-			fileio::ReadFile(dds, ddsBuffer, ddsSize);
-
-			CloseHandle(dds);
-
-			DirectX::TexMetadata meta;
-			DirectX::ScratchImage scratch;
-			DirectX::LoadFromDDSMemory(ddsBuffer, ddsSize, DirectX::DDS_FLAGS_NONE, 
-				&meta, scratch);
-			ID3D11Resource* res;
-			free(ddsBuffer);
-			HRESULT hr = DirectX::CreateTextureEx(device, scratch.GetImages(),
-				scratch.GetImageCount(), meta, D3D11_USAGE_IMMUTABLE, 
-				D3D11_BIND_SHADER_RESOURCE, 0, 0, false, &res);
-			Assert(hr == S_OK, "Failed to create texture from DDS, hr=%x", hr);
-			hr = res->QueryInterface(IID_ID3D11Texture2D, (void**)&tex->GfxState);
-			SafeRelease(res);
-			Assert(hr == S_OK, "Failed to query texture object, hr=%x", hr);
-		}
-		else
-		{
-			ast::Result res;
-			EvaluateExpression(evCtx, tex->SizeExpr, res, Uint2Type, "Texture::Size");
-			tex->Size = res.Value.Uint2Val;
-
-			CreateTexture(device, tex);
-		}
-	}
-
-	for (View* v : rd->Views)
-	{
-		CreateView(device, v);
 	}
 
 	for (Sampler* s : rd->Samplers)
@@ -1319,6 +1347,11 @@ void ReleaseD3D(
 		}
 	}
 
+	for (Buffer* buf : rd->Buffers)
+	{
+		SafeRelease(buf->GfxState.Resource);
+	}
+
 /* ------TODO-----------
 
 	for (VertexShader* vs : rd->VShaders)
@@ -1333,19 +1366,9 @@ void ReleaseD3D(
 		SafeRelease(ps->Common.Reflector);
 	}
 
-	for (Buffer* buf : rd->Buffers)
-	{
-		SafeRelease(buf->GfxState);
-	}
-
 	for (Texture* tex : rd->Textures)
 	{
 		SafeRelease(tex->GfxState);
-	}
-
-	for (View* v : rd->Views)
-	{
-		ReleaseView(v);
 	}
 
 	for (Sampler* s : rd->Samplers)
@@ -1389,49 +1412,11 @@ void HandleTextureParametersChanged(
 	errorState->Success = true;
 	errorState->Warning = false;
 
-	for (Dispatch* dc : rd->Dispatches)
-	{
-		ComputeShader* cs = dc->Shader;
-		for (Bind& bind : dc->Binds)
-		{
-			u32 DestSlot = 0;
-			D3D12_CPU_DESCRIPTOR_HANDLE SrcDesc = {};
-			if (bind.Type == BindType::SystemValue)
-			{
-				switch (bind.SystemBind)
-				{
-				case SystemValue::BackBuffer:
-					if (bind.IsOutput)
-					{
-						DestSlot = cs->NumCbvs + cs->NumSrvs + 
-							(bind.BindIndex - cs->UavMin);
-						SrcDesc = ec->Res.MainRtUav.CpuDescriptor;
-					}
-					else
-						Unimplemented();
-					break;
-				case SystemValue::DefaultDepth:
-					Assert(false, "Can not bind DSV to shader");
-					break;
-				default:
-					Unimplemented();
-				}
-			}
-			D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = 
-				ctx->ShaderVisDescHeap->GetCPUDescriptorHandleForHeapStart();
-			DestDesc.ptr += (dc->CbvSrvUavDescTableStart + DestSlot) * 
-				ctx->SrvUavDescSize;
-			device->CopyDescriptorsSimple(1, DestDesc, SrcDesc,
-				D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		}
-	}
-
-/* ------TODO-----------
-
 	try {
 		// Size expressions may depend on constants so we need to evaluate them first
 		EvaluateConstants(ec->EvCtx, rd->Constants);
 
+/* ------TODO-----------
 		for (Texture* tex : rd->Textures)
 		{
 			// DDS textures are always sized based on the file. 
@@ -1458,12 +1443,12 @@ void HandleTextureParametersChanged(
 					if (view->ResourceType == ResourceType::Texture && 
 						view->Texture == tex)
 					{
-						ReleaseView(view);
-						CreateView(device, view);
+						CreateView(device, view, allocate_descriptor:false);
 					}
 				}
 			}
 		}
+*/
 
 		for (Buffer* buf : rd->Buffers)
 		{
@@ -1486,7 +1471,7 @@ void HandleTextureParametersChanged(
 				buf->ElementSize = newSize;
 				buf->ElementCount = newCount;
 
-				SafeRelease(buf->GfxState);
+				SafeRelease(buf->GfxState.Resource);
 				
 				CreateBuffer(device, buf);
 
@@ -1496,8 +1481,7 @@ void HandleTextureParametersChanged(
 					if (view->ResourceType == ResourceType::Buffer && 
 						view->Buffer == buf)
 					{
-						ReleaseView(view);
-						CreateView(device, view);
+						CreateView(ctx, view, /*allocate_descriptor:*/false);
 					}
 				}
 			}
@@ -1508,7 +1492,12 @@ void HandleTextureParametersChanged(
 		errorState->Success = false;
 		errorState->Info = ie;
 	}
-*/
+
+	// TODO: do textures too
+	for (Dispatch* dc : rd->Dispatches)
+	{
+		CopyBindDescriptors(ctx, &ec->Res, dc);
+	}
 }
 
 
@@ -1590,44 +1579,10 @@ void ExecuteDispatch(
 	D3D12_GPU_DESCRIPTOR_HANDLE table_handle = 
 		ec->GfxCtx->ShaderVisDescHeap->GetGPUDescriptorHandleForHeapStart();
 	table_handle.ptr += dc->CbvSrvUavDescTableStart * ec->GfxCtx->SrvUavDescSize;
+	// TODO: check if cbv/srv/uav table exists
 	cl->SetComputeRootDescriptorTable(0, table_handle);
-/* ------TODO-----------
+	// TODO: check and bind sampler table if it exists
 
-	UINT initialCount = (UINT)-1;
-	for (Bind& bind : dc->Binds)
-	{
-		switch (bind.Type)
-		{
-		case BindType::SystemValue:
-			Assert(bind.IsOutput, "Invalid");
-			if (bind.SystemBind == SystemValue::BackBuffer)
-				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &ec->MainRtUav, 
-					&initialCount);
-			else
-				Assert(false, "unhandled");
-			break;
-		case BindType::View:
-			if (bind.IsOutput)
-			{
-				Assert(bind.ViewBind->Type == ViewType::UAV, "Invalid");
-				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, 
-					&bind.ViewBind->UAVGfxState, &initialCount);
-			}
-			else
-			{
-				Assert(bind.ViewBind->Type == ViewType::SRV, "Invalid");
-				ctx->CSSetShaderResources(bind.BindIndex, 1, 
-					&bind.ViewBind->SRVGfxState);
-			}
-			break;
-		case BindType::Sampler:
-			ctx->CSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->GfxState);
-			break;
-		default:
-			Assert(false, "invalid type %d", bind.Type);
-		}
-	}
-*/
 	if (dc->IndirectArgs)
 	{
 		// TODO: implement indirect args
@@ -1880,6 +1835,7 @@ void _Execute(
 
 		// Clear state after execution so we don't pollute the rest of program drawing. 
 		ctx->CommandList->ClearState(nullptr);
+		ctx->CommandList->SetDescriptorHeaps(1, &ctx->ShaderVisDescHeap);
 	}
 }
 

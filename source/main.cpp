@@ -397,6 +397,9 @@ bool DoUpdate(State* s)
 
 	if (s->RlfCompileSuccess && (changed & VariesByForTexture) != 0)
 	{
+		if (s->OnBeforeUnload)
+			s->OnBeforeUnload(s);
+
 		rlf::ErrorState ies = {};
 		rlf::HandleTextureParametersChanged(s->CurrentRenderDesc, 
 			&ctx, &ies);
