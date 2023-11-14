@@ -138,19 +138,21 @@ D3D11_CULL_MODE RlfToD3d(CullMode cm)
 	return cms[(u32)cm];
 }
 
-u32 RlfToD3d(TextureFlag flags)
+*/
+
+D3D12_RESOURCE_FLAGS RlfToD3d(TextureFlag flags)
 {
-	u32 f = 0;
-	if (flags & TextureFlag_SRV)
-		f |= D3D11_BIND_SHADER_RESOURCE; 
+	D3D12_RESOURCE_FLAGS f = D3D12_RESOURCE_FLAG_NONE;
 	if (flags & TextureFlag_UAV)
-		f |= D3D11_BIND_UNORDERED_ACCESS;
+		f |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	if (flags & TextureFlag_RTV)
-		f |= D3D11_BIND_RENDER_TARGET;
+		f |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 	if (flags & TextureFlag_DSV)
-		f |= D3D11_BIND_DEPTH_STENCIL;
+		f |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 	return f;
 }
+
+/* ------------ TODO -----------
 
 D3D11_COMPARISON_FUNC RlfToD3d(ComparisonFunc cf)
 {
@@ -584,31 +586,43 @@ void CreateInputLayout(ID3D11Device* device, VertexShader* shader, ID3DBlob* blo
 	}
 }
 
-void CreateTexture(ID3D11Device* device, Texture* tex)
-{
-	Assert(tex->GfxState == nullptr, "Leaking object");
-
-	D3D11_TEXTURE2D_DESC desc;
-	desc.Width = tex->Size.x;
-	desc.Height = tex->Size.y;
-	desc.MipLevels = 1;
-	desc.ArraySize = 1;
-	desc.Format = D3DTextureFormat[(u32)tex->Format];
-	desc.SampleDesc.Count = tex->SampleCount;
-	desc.SampleDesc.Quality = 0;
-	desc.Usage = D3D11_USAGE_DEFAULT;
-	desc.BindFlags = RlfToD3d(tex->Flags);
-	desc.CPUAccessFlags = 0;
-	desc.MiscFlags = 0;
-
-	HRESULT hr = device->CreateTexture2D(&desc, nullptr, &tex->GfxState);
-	CheckHresult(hr, "Texture");
-}
-
 */
+
+void CreateTexture(ID3D12Device* device, Texture* tex)
+{
+	Assert(tex->GfxState.Resource == nullptr, "Leaking object");
+
+	D3D12_RESOURCE_DESC bufferDesc;
+	bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	bufferDesc.Alignment = 0;
+	bufferDesc.Width = tex->Size.x;
+	bufferDesc.Height = tex->Size.y;
+	bufferDesc.DepthOrArraySize = 1;
+	bufferDesc.MipLevels = 1;
+	bufferDesc.Format = D3DTextureFormat[(u32)tex->Format];
+	bufferDesc.SampleDesc.Count = tex->SampleCount;
+	bufferDesc.SampleDesc.Quality = 0;
+	bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	bufferDesc.Flags = RlfToD3d(tex->Flags);
+ 
+	D3D12_HEAP_PROPERTIES uploadHeapProperties;
+	uploadHeapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+	uploadHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	uploadHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+	uploadHeapProperties.CreationNodeMask = 0;
+	uploadHeapProperties.VisibleNodeMask = 0;
+
+	HRESULT hr = device->CreateCommittedResource(&uploadHeapProperties, 
+		D3D12_HEAP_FLAG_NONE, &bufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, 
+		NULL, IID_PPV_ARGS(&tex->GfxState.Resource));
+	CheckHresult(hr, "Texture");
+
+}
 
 void CreateBuffer(ID3D12Device* device, Buffer* buf)
 {
+	Assert(buf->GfxState.Resource == nullptr, "Leaking object");
+
 	u32 bufSize = buf->ElementSize * buf->ElementCount;
 
 	/* TODO: init data
@@ -645,7 +659,7 @@ void CreateBuffer(ID3D12Device* device, Buffer* buf)
 	HRESULT hr = device->CreateCommittedResource(&uploadHeapProperties, 
 		D3D12_HEAP_FLAG_NONE, &bufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, 
 		NULL, IID_PPV_ARGS(&buf->GfxState.Resource));
-	Assert(hr == S_OK, "Failed to create buffer, hr=%x", hr);
+	CheckHresult(hr, "buffer");
 }
 
 void CreateView(gfx::Context* ctx, View* v, bool allocate_descriptor)
@@ -1122,11 +1136,12 @@ void InitMain(
 		CreateBuffer(device, buf);
 	}
 
-	/* TODO
 	for (Texture* tex : rd->Textures)
 	{
 		if (tex->DDSPath)
 		{
+			Unimplemented();
+	/* TODO
 			std::string ddsPath = dirPath + tex->DDSPath;
 			HANDLE dds = fileio::OpenFileOptional(ddsPath.c_str(), GENERIC_READ);
 			InitAssert(dds != INVALID_HANDLE_VALUE, "Couldn't find DDS file: %s", 
@@ -1153,6 +1168,7 @@ void InitMain(
 			hr = res->QueryInterface(IID_ID3D11Texture2D, (void**)&tex->GfxState);
 			SafeRelease(res);
 			Assert(hr == S_OK, "Failed to query texture object, hr=%x", hr);
+	*/
 		}
 		else
 		{
@@ -1163,7 +1179,6 @@ void InitMain(
 			CreateTexture(device, tex);
 		}
 	}
-	*/
 
 	for (View* v : rd->Views)
 	{
@@ -1352,6 +1367,11 @@ void ReleaseD3D(
 		SafeRelease(buf->GfxState.Resource);
 	}
 
+	for (Texture* tex : rd->Textures)
+	{
+		SafeRelease(tex->GfxState.Resource);
+	}
+
 /* ------TODO-----------
 
 	for (VertexShader* vs : rd->VShaders)
@@ -1364,11 +1384,6 @@ void ReleaseD3D(
 	{
 		SafeRelease(ps->GfxState);
 		SafeRelease(ps->Common.Reflector);
-	}
-
-	for (Texture* tex : rd->Textures)
-	{
-		SafeRelease(tex->GfxState);
 	}
 
 	for (Sampler* s : rd->Samplers)
@@ -1416,7 +1431,6 @@ void HandleTextureParametersChanged(
 		// Size expressions may depend on constants so we need to evaluate them first
 		EvaluateConstants(ec->EvCtx, rd->Constants);
 
-/* ------TODO-----------
 		for (Texture* tex : rd->Textures)
 		{
 			// DDS textures are always sized based on the file. 
@@ -1433,7 +1447,7 @@ void HandleTextureParametersChanged(
 			{
 				tex->Size = newSize;
 
-				SafeRelease(tex->GfxState);
+				SafeRelease(tex->GfxState.Resource);
 				
 				CreateTexture(device, tex);
 
@@ -1443,12 +1457,11 @@ void HandleTextureParametersChanged(
 					if (view->ResourceType == ResourceType::Texture && 
 						view->Texture == tex)
 					{
-						CreateView(device, view, allocate_descriptor:false);
+						CreateView(ctx, view, /*allocate_descriptor*/false);
 					}
 				}
 			}
 		}
-*/
 
 		for (Buffer* buf : rd->Buffers)
 		{
@@ -1493,7 +1506,7 @@ void HandleTextureParametersChanged(
 		errorState->Info = ie;
 	}
 
-	// TODO: do textures too
+	// TODO: do draws too
 	for (Dispatch* dc : rd->Dispatches)
 	{
 		CopyBindDescriptors(ctx, &ec->Res, dc);
