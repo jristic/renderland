@@ -66,25 +66,24 @@ do {										\
 	}										\
 } while (0);								\
 
-/* ------TODO-----------
 
-D3D11_FILTER RlfToD3d(FilterMode fm)
+D3D12_FILTER RlfToD3d(FilterMode fm)
 {
 	if (fm.Min == Filter::Aniso || fm.Mag == Filter::Aniso ||
 		fm.Mip == Filter::Aniso)
 	{
-		return D3D11_FILTER_ANISOTROPIC;
+		return D3D12_FILTER_ANISOTROPIC;
 	}
 
-	static D3D11_FILTER filters[] = {
-		D3D11_FILTER_MIN_MAG_MIP_POINT,
-		D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR,
-		D3D11_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT,
-		D3D11_FILTER_MIN_POINT_MAG_MIP_LINEAR,
-		D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT,
-		D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR,
-		D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT,
-		D3D11_FILTER_MIN_MAG_MIP_LINEAR,
+	static D3D12_FILTER filters[] = {
+		D3D12_FILTER_MIN_MAG_MIP_POINT,
+		D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR,
+		D3D12_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT,
+		D3D12_FILTER_MIN_POINT_MAG_MIP_LINEAR,
+		D3D12_FILTER_MIN_LINEAR_MAG_MIP_POINT,
+		D3D12_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR,
+		D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT,
+		D3D12_FILTER_MIN_MAG_MIP_LINEAR,
 	};
 
 	u32 i = 0;
@@ -98,19 +97,21 @@ D3D11_FILTER RlfToD3d(FilterMode fm)
 	return filters[i];
 }
 
-D3D11_TEXTURE_ADDRESS_MODE RlfToD3d(AddressMode m)
+D3D12_TEXTURE_ADDRESS_MODE RlfToD3d(AddressMode m)
 {
 	Assert(m != AddressMode::Invalid, "Invalid");
-	static D3D11_TEXTURE_ADDRESS_MODE modes[] = {
-		(D3D11_TEXTURE_ADDRESS_MODE)0, //invalid
-		D3D11_TEXTURE_ADDRESS_WRAP,
-		D3D11_TEXTURE_ADDRESS_MIRROR,
-		D3D11_TEXTURE_ADDRESS_MIRROR_ONCE,
-		D3D11_TEXTURE_ADDRESS_CLAMP,
-		D3D11_TEXTURE_ADDRESS_BORDER,
+	static D3D12_TEXTURE_ADDRESS_MODE modes[] = {
+		(D3D12_TEXTURE_ADDRESS_MODE)0, //invalid
+		D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+		D3D12_TEXTURE_ADDRESS_MODE_MIRROR,
+		D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE,
+		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+		D3D12_TEXTURE_ADDRESS_MODE_BORDER,
 	};
 	return modes[(u32)m];
 }
+
+/* ------TODO-----------
 
 D3D11_PRIMITIVE_TOPOLOGY RlfToD3d(Topology topo)
 {
@@ -832,6 +833,7 @@ void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
 	{
 		u32 DestSlot = 0;
 		D3D12_CPU_DESCRIPTOR_HANDLE SrcDesc = {};
+		bool sampler = false;
 		switch(bind.Type)
 		{
 		case BindType::SystemValue:
@@ -868,14 +870,27 @@ void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
 			}
 			break;
 		case BindType::Sampler:
+		{
+			sampler = true;
+			D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = 
+				ctx->SamplerHeap.Object->GetCPUDescriptorHandleForHeapStart();
+			DestDesc.ptr += (dc->SamplerDescTableStart + (bind.BindIndex - cs->SamplerMin)) *
+				ctx->SamplerHeap.DescriptorSize;
+			ctx->Device->CopyDescriptorsSimple(1, DestDesc, bind.SamplerBind->GfxState,
+				D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+			break;
+		}
 		default:
 			Unimplemented();
 		}
-		D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = 
-			ctx->ShaderVisDescHeap->GetCPUDescriptorHandleForHeapStart();
-		DestDesc.ptr += (dc->CbvSrvUavDescTableStart + DestSlot) * ctx->SrvUavDescSize;
-		ctx->Device->CopyDescriptorsSimple(1, DestDesc, SrcDesc,
-			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		if (!sampler)
+		{
+			D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = 
+				ctx->ShaderVisDescHeap->GetCPUDescriptorHandleForHeapStart();
+			DestDesc.ptr += (dc->CbvSrvUavDescTableStart + DestSlot) * ctx->SrvUavDescSize;
+			ctx->Device->CopyDescriptorsSimple(1, DestDesc, SrcDesc,
+				D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		}
 	}
 }
 
@@ -1185,12 +1200,34 @@ void InitMain(
 		CreateView(ctx, v, /*allocate_descriptor:*/true);
 	}
 
+	for (Sampler* s : rd->Samplers)
+	{
+		D3D12_SAMPLER_DESC desc = {};
+		desc.Filter = RlfToD3d(s->Filter);
+		desc.AddressU = RlfToD3d(s->AddressMode.U);
+		desc.AddressV = RlfToD3d(s->AddressMode.V);
+		desc.AddressW = RlfToD3d(s->AddressMode.W);
+		desc.MipLODBias = s->MipLODBias;
+		desc.MaxAnisotropy = s->MaxAnisotropy;
+		desc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+		desc.BorderColor[0] = s->BorderColor.x;
+		desc.BorderColor[1] = s->BorderColor.y;
+		desc.BorderColor[2] = s->BorderColor.z;
+		desc.BorderColor[3] = s->BorderColor.w;
+		desc.MinLOD = s->MinLOD;
+		desc.MaxLOD = s->MaxLOD;
+
+		s->GfxState = gfx::AllocateDescriptor(&ctx->SamplerCreationHeap);
+		device->CreateSampler(&desc, s->GfxState);
+	}
+
 	for (Dispatch* dc : rd->Dispatches)
 	{
 		ComputeShader* cs = dc->Shader;
 		dc->CbvSrvUavDescTableStart = ctx->ShaderVisDescNextIndex;
-		ctx->ShaderVisDescNextIndex += cs->NumCbvs + cs->NumSrvs + cs->NumUavs +
-			cs->NumSamplers;
+		ctx->ShaderVisDescNextIndex += cs->NumCbvs + cs->NumSrvs + cs->NumUavs;
+		dc->SamplerDescTableStart = ctx->SamplerHeap.NextIndex;
+		ctx->SamplerHeap.NextIndex += cs->NumSamplers;
 		CopyBindDescriptors(ctx, resources, dc);
 	}
 
@@ -1277,27 +1314,6 @@ void InitMain(
 		}
 	}
 
-	for (Sampler* s : rd->Samplers)
-	{
-		D3D11_SAMPLER_DESC desc = {};
-		desc.Filter = RlfToD3d(s->Filter);
-		desc.AddressU = RlfToD3d(s->AddressMode.U);
-		desc.AddressV = RlfToD3d(s->AddressMode.V);
-		desc.AddressW = RlfToD3d(s->AddressMode.W);
-		desc.MipLODBias = s->MipLODBias;
-		desc.MaxAnisotropy = s->MaxAnisotropy;
-		desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-		desc.BorderColor[0] = s->BorderColor.x;
-		desc.BorderColor[1] = s->BorderColor.y;
-		desc.BorderColor[2] = s->BorderColor.z;
-		desc.BorderColor[3] = s->BorderColor.w;
-		desc.MinLOD = s->MinLOD;
-		desc.MaxLOD = s->MaxLOD;
-
-		HRESULT hr = device->CreateSamplerState(&desc, &s->GfxState);
-		Assert(hr == S_OK, "failed to create sampler, hr=%x", hr);
-	}
-
 	for (RasterizerState* rs : rd->RasterizerStates)
 	{
 		D3D11_RASTERIZER_DESC desc = {};
@@ -1340,6 +1356,8 @@ void ReleaseD3D(
 	ctx->RtvDescNextIndex = gfx::Context::NUM_RESERVED_RTV_SLOTS;
 	ctx->DsvDescNextIndex = gfx::Context::NUM_RESERVED_DSV_SLOTS;
 	ctx->ShaderVisDescNextIndex = gfx::Context::NUM_RESERVED_SHADER_VIS_SLOTS;
+	gfx::ResetHeap(&ctx->SamplerCreationHeap);
+	gfx::ResetHeap(&ctx->SamplerHeap);
 
 	for (ComputeShader* cs : rd->CShaders)
 	{
@@ -1384,11 +1402,6 @@ void ReleaseD3D(
 	{
 		SafeRelease(ps->GfxState);
 		SafeRelease(ps->Common.Reflector);
-	}
-
-	for (Sampler* s : rd->Samplers)
-	{
-		SafeRelease(s->GfxState);
 	}
 
 	for (RasterizerState* rs : rd->RasterizerStates)
@@ -1589,12 +1602,22 @@ void ExecuteDispatch(
 	ID3D12GraphicsCommandList* cl = ec->GfxCtx->CommandList;
 	cl->SetPipelineState(cs->GfxPipeline);
 	cl->SetComputeRootSignature(cs->GfxRootSig);
-	D3D12_GPU_DESCRIPTOR_HANDLE table_handle = 
-		ec->GfxCtx->ShaderVisDescHeap->GetGPUDescriptorHandleForHeapStart();
-	table_handle.ptr += dc->CbvSrvUavDescTableStart * ec->GfxCtx->SrvUavDescSize;
-	// TODO: check if cbv/srv/uav table exists
-	cl->SetComputeRootDescriptorTable(0, table_handle);
-	// TODO: check and bind sampler table if it exists
+	u32 table_index = 0;
+	if (cs->NumCbvs + cs->NumSrvs + cs->NumUavs > 0)
+	{
+		D3D12_GPU_DESCRIPTOR_HANDLE cbv_srv_uav_table_handle = 
+			ec->GfxCtx->ShaderVisDescHeap->GetGPUDescriptorHandleForHeapStart();
+		cbv_srv_uav_table_handle.ptr += dc->CbvSrvUavDescTableStart * ec->GfxCtx->SrvUavDescSize;
+		cl->SetComputeRootDescriptorTable(table_index++, cbv_srv_uav_table_handle);
+	}
+	if (cs->NumSamplers > 0)
+	{
+		D3D12_GPU_DESCRIPTOR_HANDLE sampler_table_handle = 
+			ec->GfxCtx->SamplerHeap.Object->GetGPUDescriptorHandleForHeapStart();
+		sampler_table_handle.ptr += dc->SamplerDescTableStart * 
+			ec->GfxCtx->SamplerHeap.DescriptorSize;
+		cl->SetComputeRootDescriptorTable(table_index++, sampler_table_handle);
+	}
 
 	if (dc->IndirectArgs)
 	{
@@ -1801,7 +1824,11 @@ void _Execute(
 	// Clear state so we aren't polluted by previous program drawing or previous 
 	//	execution. 
 	ctx->CommandList->ClearState(nullptr);
-	ctx->CommandList->SetDescriptorHeaps(1, &ctx->ShaderVisDescHeap);
+	ID3D12DescriptorHeap* ShaderDescriptorHeaps[2] = {
+		ctx->ShaderVisDescHeap, ctx->SamplerHeap.Object
+	};
+	ctx->CommandList->SetDescriptorHeaps(2, ShaderDescriptorHeaps);
+
 
 	for (Pass pass : rd->Passes)
 	{
@@ -1848,7 +1875,7 @@ void _Execute(
 
 		// Clear state after execution so we don't pollute the rest of program drawing. 
 		ctx->CommandList->ClearState(nullptr);
-		ctx->CommandList->SetDescriptorHeaps(1, &ctx->ShaderVisDescHeap);
+		ctx->CommandList->SetDescriptorHeaps(2, ShaderDescriptorHeaps);
 	}
 }
 

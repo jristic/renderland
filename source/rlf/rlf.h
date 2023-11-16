@@ -352,6 +352,7 @@ namespace rlf
 		std::vector<ConstantBuffer> CBs;
 		#if D3D12
 			u64 CbvSrvUavDescTableStart;
+			u64 SamplerDescTableStart;
 		#endif
 	};
 	struct TextureTarget
