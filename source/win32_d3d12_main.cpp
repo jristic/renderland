@@ -95,10 +95,8 @@ ImTextureID RetrieveDisplayTextureID(main::State* s)
 {
 	gfx::Context* ctx = s->GfxCtx;
 	
-	D3D12_GPU_DESCRIPTOR_HANDLE DisplaySrvGpuHnd = 
-		ctx->ShaderVisDescHeap->GetGPUDescriptorHandleForHeapStart();
-	DisplaySrvGpuHnd.ptr += gfx::Context::RLF_RESERVED_SHADER_VIS_SLOT_INDEX * 
-		ctx->SrvUavDescSize;
+	D3D12_GPU_DESCRIPTOR_HANDLE DisplaySrvGpuHnd = gfx::GetGPUDescriptor(
+		&ctx->CbvSrvUavHeap, gfx::Context::RLF_RESERVED_SHADER_VIS_SLOT_INDEX);
 
 	if (s->RlfDisplayTex.Resource == nullptr || s->PrevDisplaySize != s->DisplaySize)
 	{
@@ -137,46 +135,32 @@ ImTextureID RetrieveDisplayTextureID(main::State* s)
 			Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
 		}
 
-		D3D12_CPU_DESCRIPTOR_HANDLE DisplaySrvCpuHnd = 
-			ctx->ShaderVisDescHeap->GetCPUDescriptorHandleForHeapStart();
-		DisplaySrvCpuHnd.ptr += gfx::Context::RLF_RESERVED_SHADER_VIS_SLOT_INDEX * 
-			ctx->SrvUavDescSize;
+		D3D12_CPU_DESCRIPTOR_HANDLE DisplaySrvCpuHnd = gfx::GetCPUDescriptor(
+			&ctx->CbvSrvUavHeap, gfx::Context::RLF_RESERVED_SHADER_VIS_SLOT_INDEX);
 
 		// display texture srv
 		{
-			u64 offset = gfx::Context::RLF_RESERVED_SRV_SLOT_INDEX * ctx->SrvUavDescSize;
-
-			D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
-				ctx->SrvUavDescHeap->GetCPUDescriptorHandleForHeapStart();
-			cpu_descriptor.ptr += offset;
+			s->RlfDisplaySrv = gfx::GetCPUDescriptor(&ctx->CbvSrvUavCreationHeap,
+				gfx::Context::RLF_RESERVED_SRV_SLOT_INDEX);
 			ctx->Device->CreateShaderResourceView(s->RlfDisplayTex.Resource, nullptr, 
-				cpu_descriptor);
-			s->RlfDisplaySrv = gfx::ShaderResourceView{ cpu_descriptor };
+				s->RlfDisplaySrv);
 
-			ctx->Device->CopyDescriptorsSimple(1, DisplaySrvCpuHnd, cpu_descriptor,
+			ctx->Device->CopyDescriptorsSimple(1, DisplaySrvCpuHnd, s->RlfDisplaySrv,
 				D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		}
 		//display texture uav
 		{
-			u64 offset = gfx::Context::RLF_RESERVED_UAV_SLOT_INDEX * ctx->SrvUavDescSize;
-
-			D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
-				ctx->SrvUavDescHeap->GetCPUDescriptorHandleForHeapStart();
-			cpu_descriptor.ptr += offset;
+			s->RlfDisplayUav = gfx::GetCPUDescriptor(&ctx->CbvSrvUavCreationHeap,
+				gfx::Context::RLF_RESERVED_UAV_SLOT_INDEX);
 			ctx->Device->CreateUnorderedAccessView(s->RlfDisplayTex.Resource, nullptr, nullptr,
-				cpu_descriptor);
-			s->RlfDisplayUav = gfx::UnorderedAccessView { cpu_descriptor };
+				s->RlfDisplayUav);
 		}
 		// display texture rtv
 		{
-			u64 offset = gfx::Context::RLF_RESERVED_RTV_SLOT_INDEX * ctx->RtvDescSize;
-
-			D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
-				ctx->RtvDescHeap->GetCPUDescriptorHandleForHeapStart();
-			cpu_descriptor.ptr += offset;
+			s->RlfDisplayRtv = GetCPUDescriptor(&ctx->RtvHeap, 
+				gfx::Context::RLF_RESERVED_RTV_SLOT_INDEX);
 			ctx->Device->CreateRenderTargetView(s->RlfDisplayTex.Resource, nullptr, 
-				cpu_descriptor);
-			s->RlfDisplayRtv = gfx::RenderTargetView { cpu_descriptor };
+				s->RlfDisplayRtv);
 		}
 
 		// create depth stencil
@@ -209,14 +193,10 @@ ImTextureID RetrieveDisplayTextureID(main::State* s)
 		}
 		// depth stencil view
 		{
-			u64 offset = gfx::Context::RLF_RESERVED_DSV_SLOT_INDEX * ctx->DsvDescSize;
-
-			D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
-				ctx->DsvDescHeap->GetCPUDescriptorHandleForHeapStart();
-			cpu_descriptor.ptr += offset;
+			s->RlfDepthStencilView = GetCPUDescriptor(&ctx->DsvHeap, 
+				gfx::Context::RLF_RESERVED_DSV_SLOT_INDEX);
 			ctx->Device->CreateDepthStencilView(s->RlfDepthStencilTex.Resource, nullptr,
-				cpu_descriptor);
-			s->RlfDepthStencilView = gfx::DepthStencilView { cpu_descriptor };
+				s->RlfDepthStencilView);
 		}
 	}
 
@@ -353,68 +333,28 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		}
 
 		{
-			D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-			desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-			desc.NumDescriptors = gfx::Context::MAX_RTV_DESCS;
-			desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-			desc.NodeMask = 0;
-			hr = Gfx.Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&Gfx.RtvDescHeap));
-			Gfx.RtvDescHeap->SetName(L"RtvDescHeap");
-			CheckHresult(hr, "descriptor heap");
+			gfx::CreateDescriptorHeap(&Gfx, &Gfx.RtvHeap, L"RtvHeap",
+				D3D12_DESCRIPTOR_HEAP_TYPE_RTV, D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+				gfx::Context::MAX_RTV_DESCS, gfx::Context::NUM_RESERVED_RTV_SLOTS);
 
-			SIZE_T rtvDescriptorSize = Gfx.Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-			D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = Gfx.RtvDescHeap->GetCPUDescriptorHandleForHeapStart();
 			for (u32 i = 0; i < gfx::Context::NUM_BACK_BUFFERS; i++)
 			{
-				Gfx.BackBufferDescriptor[i] = rtvHandle;
-				rtvHandle.ptr += rtvDescriptorSize;
+				Gfx.BackBufferDescriptor[i] = gfx::GetCPUDescriptor(&Gfx.RtvHeap, i);
 			}
-
-			Gfx.RtvDescSize = Gfx.Device->GetDescriptorHandleIncrementSize(
-				D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-			Gfx.RtvDescNextIndex = gfx::Context::NUM_RESERVED_RTV_SLOTS;
 		}
 
-		{
-			D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-			desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-			desc.NumDescriptors = gfx::Context::MAX_SRV_UAV_DESCS;
-			desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-			hr = Gfx.Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&Gfx.SrvUavDescHeap));
-			Gfx.SrvUavDescHeap->SetName(L"SrvUavDescHeap");
-			CheckHresult(hr, "descriptor heap");
+		gfx::CreateDescriptorHeap(&Gfx, &Gfx.DsvHeap, L"DsvHeap",
+			D3D12_DESCRIPTOR_HEAP_TYPE_DSV, D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+			gfx::Context::MAX_DSV_DESCS, gfx::Context::NUM_RESERVED_DSV_SLOTS);
 
-			Gfx.SrvUavDescSize = Gfx.Device->GetDescriptorHandleIncrementSize(
-				D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-			Gfx.SrvUavDescNextIndex = gfx::Context::NUM_RESERVED_SRV_UAV_SLOTS;
-		}
+		gfx::CreateDescriptorHeap(&Gfx, &Gfx.CbvSrvUavCreationHeap, L"CbvSrvUavCreationHeap",
+			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+			gfx::Context::MAX_CBV_SRV_UAV_DESCS, gfx::Context::NUM_RESERVED_CBV_SRV_UAV_SLOTS);
 
+		gfx::CreateDescriptorHeap(&Gfx, &Gfx.CbvSrvUavHeap, L"CbvSrvUavHeap",
+			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+			gfx::Context::MAX_SHADER_VIS_DESCS, gfx::Context::NUM_RESERVED_SHADER_VIS_SLOTS);
 
-		{
-			D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-			desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-			desc.NumDescriptors = gfx::Context::MAX_DSV_DESCS;
-			desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-			hr = Gfx.Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&Gfx.DsvDescHeap));
-			Gfx.DsvDescHeap->SetName(L":DsvDescHeap");
-			CheckHresult(hr, "descriptor heap");
-
-			Gfx.DsvDescSize = Gfx.Device->GetDescriptorHandleIncrementSize(
-				D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-			Gfx.DsvDescNextIndex = gfx::Context::NUM_RESERVED_DSV_SLOTS;
-		}
-
-		{
-			D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-			desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-			desc.NumDescriptors = gfx::Context::MAX_SHADER_VIS_DESCS;
-			desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-			hr = Gfx.Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&Gfx.ShaderVisDescHeap));
-			Gfx.ShaderVisDescHeap->SetName(L"ShaderVisDescHeap");
-			CheckHresult(hr, "descriptor heap");
-
-			Gfx.ShaderVisDescNextIndex = gfx::Context::NUM_RESERVED_SHADER_VIS_SLOTS;
-		}
 
 		gfx::CreateDescriptorHeap(&Gfx, &Gfx.SamplerCreationHeap, L"SamplerCreationHeap",
 			D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, D3D12_DESCRIPTOR_HEAP_FLAG_NONE, 
@@ -493,9 +433,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	Assert(gfx::Context::IMGUI_FONT_RESERVED_SRV_SLOT_INDEX == 0, 
 		"If this slot changes, the descriptors passed below need to be updated.");
 	ImGui_ImplDX12_Init(Gfx.Device, gfx::Context::NUM_FRAMES_IN_FLIGHT,
-		DXGI_FORMAT_R8G8B8A8_UNORM, Gfx.SrvUavDescHeap,
-		Gfx.ShaderVisDescHeap->GetCPUDescriptorHandleForHeapStart(),
-		Gfx.ShaderVisDescHeap->GetGPUDescriptorHandleForHeapStart());
+		DXGI_FORMAT_R8G8B8A8_UNORM, Gfx.CbvSrvUavHeap.Object,
+		Gfx.CbvSrvUavHeap.Object->GetCPUDescriptorHandleForHeapStart(),
+		Gfx.CbvSrvUavHeap.Object->GetGPUDescriptorHandleForHeapStart());
 
 
 	// Main loop
@@ -563,9 +503,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			State.ClearColor.z * State.ClearColor.w, 
 			State.ClearColor.w
 		};
-		Gfx.CommandList->ClearRenderTargetView(State.RlfDisplayRtv.CpuDescriptor, 
+		Gfx.CommandList->ClearRenderTargetView(State.RlfDisplayRtv, 
 			clear_color_with_alpha, 0, nullptr);
-		Gfx.CommandList->ClearDepthStencilView(State.RlfDepthStencilView.CpuDescriptor,
+		Gfx.CommandList->ClearDepthStencilView(State.RlfDepthStencilView,
 			D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, nullptr);
 
 
@@ -578,7 +518,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		Gfx.CommandList->OMSetRenderTargets(1, &Gfx.BackBufferDescriptor[backBufferIdx], 
 			FALSE, NULL);
 		ID3D12DescriptorHeap* ShaderDescriptorHeaps[2] = {
-			Gfx.ShaderVisDescHeap, Gfx.SamplerHeap.Object
+			Gfx.CbvSrvUavHeap.Object, Gfx.SamplerHeap.Object
 		};
 		Gfx.CommandList->SetDescriptorHeaps(2, ShaderDescriptorHeaps);
 
@@ -641,10 +581,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	SafeRelease(Gfx.CommandList);
 	SafeRelease(Gfx.SamplerHeap.Object);
 	SafeRelease(Gfx.SamplerCreationHeap.Object);
-	SafeRelease(Gfx.ShaderVisDescHeap);
-	SafeRelease(Gfx.DsvDescHeap);
-	SafeRelease(Gfx.RtvDescHeap);
-	SafeRelease(Gfx.SrvUavDescHeap);
+	SafeRelease(Gfx.CbvSrvUavHeap.Object);
+	SafeRelease(Gfx.CbvSrvUavCreationHeap.Object);
+	SafeRelease(Gfx.DsvHeap.Object);
+	SafeRelease(Gfx.RtvHeap.Object);
 	SafeRelease(Gfx.Fence);
 	CloseHandle(Gfx.FenceEvent); Gfx.FenceEvent = nullptr;
 	SafeRelease(Gfx.InfoQueue);

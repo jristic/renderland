@@ -241,46 +241,6 @@ D3D11_BLEND_OP RlfToD3d(BlendOp op)
 
 */
 
-D3D12_CPU_DESCRIPTOR_HANDLE AllocateCbvSrvUavDescriptor(gfx::Context* ctx)
-{
-	u64 offset = ctx->SrvUavDescNextIndex * ctx->SrvUavDescSize;
-
-	D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
-		ctx->SrvUavDescHeap->GetCPUDescriptorHandleForHeapStart();
-	cpu_descriptor.ptr += offset;
-
-	++ctx->SrvUavDescNextIndex;
-
-	return cpu_descriptor;
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE AllocateRtvDescriptor(gfx::Context* ctx)
-{
-	u64 offset = ctx->RtvDescNextIndex * ctx->RtvDescSize;
-
-	D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
-		ctx->RtvDescHeap->GetCPUDescriptorHandleForHeapStart();
-	cpu_descriptor.ptr += offset;
-
-	++ctx->RtvDescNextIndex;
-
-	return cpu_descriptor;
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE AllocateDsvDescriptor(gfx::Context* ctx)
-{
-	u64 offset = ctx->DsvDescNextIndex * ctx->DsvDescSize;
-
-	D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
-		ctx->DsvDescHeap->GetCPUDescriptorHandleForHeapStart();
-	cpu_descriptor.ptr += offset;
-
-	++ctx->DsvDescNextIndex;
-
-	return cpu_descriptor;
-}
-
-
 ID3DBlob* CommonCompileShader(CommonShader* common, const char* dirPath, const char* profile, 
 	ErrorState* errorState)
 {
@@ -712,8 +672,8 @@ void CreateView(gfx::Context* ctx, View* v, bool allocate_descriptor)
 		else 
 			Unimplemented();
 		if (allocate_descriptor)
-			v->SRVGfxState.CpuDescriptor = AllocateCbvSrvUavDescriptor(ctx);
-		device->CreateShaderResourceView(res, &vd, v->SRVGfxState.CpuDescriptor);
+			v->SRVGfxState = AllocateDescriptor(&ctx->CbvSrvUavCreationHeap);
+		device->CreateShaderResourceView(res, &vd, v->SRVGfxState);
 	}
 	else if (v->Type == ViewType::UAV)
 	{
@@ -740,8 +700,8 @@ void CreateView(gfx::Context* ctx, View* v, bool allocate_descriptor)
 		else 
 			Unimplemented();
 		if (allocate_descriptor)
-			v->UAVGfxState.CpuDescriptor = AllocateCbvSrvUavDescriptor(ctx);
-		device->CreateUnorderedAccessView(res, nullptr, &vd, v->UAVGfxState.CpuDescriptor);
+			v->UAVGfxState = AllocateDescriptor(&ctx->CbvSrvUavCreationHeap);
+		device->CreateUnorderedAccessView(res, nullptr, &vd, v->UAVGfxState);
 	}
 	else if (v->Type == ViewType::RTV)
 	{
@@ -755,8 +715,8 @@ void CreateView(gfx::Context* ctx, View* v, bool allocate_descriptor)
 		vd.Texture2D.MipSlice = 0;
 		vd.Texture2D.PlaneSlice = 0;
 		if (allocate_descriptor)
-			v->RTVGfxState.CpuDescriptor = AllocateRtvDescriptor(ctx);
-		device->CreateRenderTargetView(res, &vd, v->RTVGfxState.CpuDescriptor);
+			v->RTVGfxState = AllocateDescriptor(&ctx->RtvHeap);
+		device->CreateRenderTargetView(res, &vd, v->RTVGfxState);
 	}
 	else if (v->Type == ViewType::DSV)
 	{
@@ -770,8 +730,8 @@ void CreateView(gfx::Context* ctx, View* v, bool allocate_descriptor)
 		//	filled for that dimension but it has no fields so I'm not bothering.
 		vd.Texture2D.MipSlice = 0;
 		if (allocate_descriptor)
-			v->DSVGfxState.CpuDescriptor = AllocateDsvDescriptor(ctx);
-		device->CreateDepthStencilView(res, &vd, v->DSVGfxState.CpuDescriptor);
+			v->DSVGfxState = AllocateDescriptor(&ctx->DsvHeap);
+		device->CreateDepthStencilView(res, &vd, v->DSVGfxState);
 	}
 	else
 		Unimplemented();
@@ -843,7 +803,7 @@ void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
 				if (bind.IsOutput)
 				{
 					DestSlot = cs->NumCbvs + cs->NumSrvs + (bind.BindIndex - cs->UavMin);
-					SrcDesc = resources->MainRtUav.CpuDescriptor;
+					SrcDesc = resources->MainRtUav;
 				}
 				else
 					Unimplemented();
@@ -860,22 +820,20 @@ void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
 			{
 				Assert(bind.ViewBind->Type == ViewType::UAV, "mismatched view");
 				DestSlot = cs->NumCbvs + cs->NumSrvs + (bind.BindIndex - cs->UavMin);
-				SrcDesc = bind.ViewBind->UAVGfxState.CpuDescriptor;
+				SrcDesc = bind.ViewBind->UAVGfxState;
 			}
 			else
 			{
 				Assert(bind.ViewBind->Type == ViewType::SRV, "mismatched view");
 				DestSlot = cs->NumCbvs + (bind.BindIndex - cs->SrvMin);
-				SrcDesc = bind.ViewBind->SRVGfxState.CpuDescriptor;
+				SrcDesc = bind.ViewBind->SRVGfxState;
 			}
 			break;
 		case BindType::Sampler:
 		{
 			sampler = true;
-			D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = 
-				ctx->SamplerHeap.Object->GetCPUDescriptorHandleForHeapStart();
-			DestDesc.ptr += (dc->SamplerDescTableStart + (bind.BindIndex - cs->SamplerMin)) *
-				ctx->SamplerHeap.DescriptorSize;
+			D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ctx->SamplerHeap,
+				dc->SamplerDescTableStart + bind.BindIndex - cs->SamplerMin);
 			ctx->Device->CopyDescriptorsSimple(1, DestDesc, bind.SamplerBind->GfxState,
 				D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 			break;
@@ -885,9 +843,8 @@ void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
 		}
 		if (!sampler)
 		{
-			D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = 
-				ctx->ShaderVisDescHeap->GetCPUDescriptorHandleForHeapStart();
-			DestDesc.ptr += (dc->CbvSrvUavDescTableStart + DestSlot) * ctx->SrvUavDescSize;
+			D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ctx->CbvSrvUavHeap,
+				dc->CbvSrvUavDescTableStart + DestSlot);
 			ctx->Device->CopyDescriptorsSimple(1, DestDesc, SrcDesc,
 				D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		}
@@ -966,7 +923,8 @@ void PrepareConstants(
 			Assert(hr == S_OK, "Failed to create buffer, hr=%x", hr);
 			cb.GfxState.Resource[frame]->Map(0, nullptr, (void**)&cb.GfxState.MappedMem[frame]);
 			
-			cb.GfxState.CbvDescriptor[frame] = AllocateCbvSrvUavDescriptor(ctx);
+			cb.GfxState.CbvDescriptor[frame] = gfx::AllocateDescriptor(
+				&ctx->CbvSrvUavCreationHeap);
 
 			D3D12_CONSTANT_BUFFER_VIEW_DESC constantBufferViewDesc = {};
 			constantBufferViewDesc.BufferLocation = 
@@ -1224,8 +1182,8 @@ void InitMain(
 	for (Dispatch* dc : rd->Dispatches)
 	{
 		ComputeShader* cs = dc->Shader;
-		dc->CbvSrvUavDescTableStart = ctx->ShaderVisDescNextIndex;
-		ctx->ShaderVisDescNextIndex += cs->NumCbvs + cs->NumSrvs + cs->NumUavs;
+		dc->CbvSrvUavDescTableStart = ctx->CbvSrvUavHeap.NextIndex;
+		ctx->CbvSrvUavHeap.NextIndex += (cs->NumCbvs + cs->NumSrvs + cs->NumUavs);
 		dc->SamplerDescTableStart = ctx->SamplerHeap.NextIndex;
 		ctx->SamplerHeap.NextIndex += cs->NumSamplers;
 		CopyBindDescriptors(ctx, resources, dc);
@@ -1352,10 +1310,10 @@ void ReleaseD3D(
 	RenderDescription* rd)
 {
 	// Reset descriptor heaps
-	ctx->SrvUavDescNextIndex = gfx::Context::NUM_RESERVED_SRV_UAV_SLOTS;
-	ctx->RtvDescNextIndex = gfx::Context::NUM_RESERVED_RTV_SLOTS;
-	ctx->DsvDescNextIndex = gfx::Context::NUM_RESERVED_DSV_SLOTS;
-	ctx->ShaderVisDescNextIndex = gfx::Context::NUM_RESERVED_SHADER_VIS_SLOTS;
+	gfx::ResetHeap(&ctx->RtvHeap);
+	gfx::ResetHeap(&ctx->DsvHeap);
+	gfx::ResetHeap(&ctx->CbvSrvUavCreationHeap);
+	gfx::ResetHeap(&ctx->CbvSrvUavHeap);
 	gfx::ResetHeap(&ctx->SamplerCreationHeap);
 	gfx::ResetHeap(&ctx->SamplerHeap);
 
@@ -1592,9 +1550,8 @@ void ExecuteDispatch(
 		u32 frame = ec->GfxCtx->FrameIndex % gfx::Context::NUM_FRAMES_IN_FLIGHT;
 		u32 DestSlot = buf.Slot - cs->CbvMin;
 
-		D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = 
-			ec->GfxCtx->ShaderVisDescHeap->GetCPUDescriptorHandleForHeapStart();
-		DestDesc.ptr += (dc->CbvSrvUavDescTableStart + DestSlot) * ec->GfxCtx->SrvUavDescSize;
+		D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ec->GfxCtx->CbvSrvUavHeap, 
+			dc->CbvSrvUavDescTableStart + DestSlot);
 		ec->GfxCtx->Device->CopyDescriptorsSimple(1, DestDesc, buf.GfxState.CbvDescriptor[frame],
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	}
@@ -1605,17 +1562,14 @@ void ExecuteDispatch(
 	u32 table_index = 0;
 	if (cs->NumCbvs + cs->NumSrvs + cs->NumUavs > 0)
 	{
-		D3D12_GPU_DESCRIPTOR_HANDLE cbv_srv_uav_table_handle = 
-			ec->GfxCtx->ShaderVisDescHeap->GetGPUDescriptorHandleForHeapStart();
-		cbv_srv_uav_table_handle.ptr += dc->CbvSrvUavDescTableStart * ec->GfxCtx->SrvUavDescSize;
+		D3D12_GPU_DESCRIPTOR_HANDLE cbv_srv_uav_table_handle = GetGPUDescriptor(
+			&ec->GfxCtx->CbvSrvUavHeap, dc->CbvSrvUavDescTableStart);
 		cl->SetComputeRootDescriptorTable(table_index++, cbv_srv_uav_table_handle);
 	}
 	if (cs->NumSamplers > 0)
 	{
-		D3D12_GPU_DESCRIPTOR_HANDLE sampler_table_handle = 
-			ec->GfxCtx->SamplerHeap.Object->GetGPUDescriptorHandleForHeapStart();
-		sampler_table_handle.ptr += dc->SamplerDescTableStart * 
-			ec->GfxCtx->SamplerHeap.DescriptorSize;
+		D3D12_GPU_DESCRIPTOR_HANDLE sampler_table_handle = GetGPUDescriptor(
+			&ec->GfxCtx->SamplerHeap, dc->SamplerDescTableStart);
 		cl->SetComputeRootDescriptorTable(table_index++, sampler_table_handle);
 	}
 
@@ -1825,7 +1779,7 @@ void _Execute(
 	//	execution. 
 	ctx->CommandList->ClearState(nullptr);
 	ID3D12DescriptorHeap* ShaderDescriptorHeaps[2] = {
-		ctx->ShaderVisDescHeap, ctx->SamplerHeap.Object
+		ctx->CbvSrvUavHeap.Object, ctx->SamplerHeap.Object
 	};
 	ctx->CommandList->SetDescriptorHeaps(2, ShaderDescriptorHeaps);
 

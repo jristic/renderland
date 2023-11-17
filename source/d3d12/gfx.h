@@ -26,34 +26,29 @@ namespace gfx {
 		ID3D12Debug*					Debug = nullptr;
 		ID3D12InfoQueue*				InfoQueue = nullptr;
 
-		// TODO: commonize heaps into array of structures, with an enum type for indexing.
 		// Descriptor heaps
 		static u32 const				MAX_RTV_DESCS = 512;
 		static u32 const 				RLF_RESERVED_RTV_SLOT_INDEX = NUM_BACK_BUFFERS;
 		static u32 const 				NUM_RESERVED_RTV_SLOTS = NUM_BACK_BUFFERS + 1;
-		ID3D12DescriptorHeap*			RtvDescHeap = nullptr;
-		u64								RtvDescSize = 0;
-		u64								RtvDescNextIndex = 0;
-		static u32 const				MAX_SRV_UAV_DESCS = 1024;
+
+		static u32 const				MAX_CBV_SRV_UAV_DESCS = 1024;
 		static u32 const				RLF_RESERVED_SRV_SLOT_INDEX = 0;
 		static u32 const				RLF_RESERVED_UAV_SLOT_INDEX = 1;
-		static u32 const 				NUM_RESERVED_SRV_UAV_SLOTS = 2;
-		ID3D12DescriptorHeap*			SrvUavDescHeap = nullptr;
-		u64								SrvUavDescSize = 0;
-		u64								SrvUavDescNextIndex = 0;
+		static u32 const 				NUM_RESERVED_CBV_SRV_UAV_SLOTS = 2;
+
 		static u32 const				MAX_DSV_DESCS = 256;
 		static u32 const				RLF_RESERVED_DSV_SLOT_INDEX = 0;
 		static u32 const 				NUM_RESERVED_DSV_SLOTS = 1;
-		ID3D12DescriptorHeap*			DsvDescHeap = nullptr;
-		u64								DsvDescSize = 0;
-		u64								DsvDescNextIndex = 0;
+
 		static u32 const				MAX_SHADER_VIS_DESCS = 2048;
 		static u32 const 				IMGUI_FONT_RESERVED_SRV_SLOT_INDEX = 0;
 		static u32 const				RLF_RESERVED_SHADER_VIS_SLOT_INDEX = 1;
 		static u32 const 				NUM_RESERVED_SHADER_VIS_SLOTS = 2;
-		ID3D12DescriptorHeap*			ShaderVisDescHeap = nullptr;
-		u64								ShaderVisDescNextIndex = 0;
 
+		DescriptorHeap		RtvHeap;
+		DescriptorHeap		DsvHeap;
+		DescriptorHeap		CbvSrvUavCreationHeap;
+		DescriptorHeap		CbvSrvUavHeap;
 		DescriptorHeap		SamplerCreationHeap;
 		DescriptorHeap		SamplerHeap;
 
@@ -89,18 +84,10 @@ namespace gfx {
 		ID3D12Resource* Resource;
 	};
 	typedef D3D12_CPU_DESCRIPTOR_HANDLE SamplerState;
-	struct ShaderResourceView {
-		D3D12_CPU_DESCRIPTOR_HANDLE CpuDescriptor;
-	};
-	struct UnorderedAccessView {
-		D3D12_CPU_DESCRIPTOR_HANDLE CpuDescriptor;
-	};
-	struct RenderTargetView  {
-		D3D12_CPU_DESCRIPTOR_HANDLE CpuDescriptor;
-	};
-	struct DepthStencilView  {
-		D3D12_CPU_DESCRIPTOR_HANDLE CpuDescriptor;
-	};
+	typedef D3D12_CPU_DESCRIPTOR_HANDLE ShaderResourceView;
+	typedef D3D12_CPU_DESCRIPTOR_HANDLE UnorderedAccessView;
+	typedef D3D12_CPU_DESCRIPTOR_HANDLE RenderTargetView;
+	typedef D3D12_CPU_DESCRIPTOR_HANDLE DepthStencilView;
 
 
 	void CreateDescriptorHeap(gfx::Context* ctx, DescriptorHeap* heap, const wchar_t* name,
@@ -136,16 +123,20 @@ namespace gfx {
 		return cpu_descriptor;
 	}
 
-	D3D12_CPU_DESCRIPTOR_HANDLE GetReservedDescriptor(DescriptorHeap* heap, u32 slot)
+	D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptor(DescriptorHeap* heap, u64 slot)
 	{
-		Assert(slot < heap->ReservedSlots, "Invalid reserved slot.");
-		u64 offset = slot * heap->DescriptorSize;
-
 		D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
 			heap->Object->GetCPUDescriptorHandleForHeapStart();
-		cpu_descriptor.ptr += offset;
-
+		cpu_descriptor.ptr += slot * heap->DescriptorSize;
 		return cpu_descriptor;
+	}
+
+	D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptor(DescriptorHeap* heap, u64 slot)
+	{
+		D3D12_GPU_DESCRIPTOR_HANDLE gpu_descriptor = 
+			heap->Object->GetGPUDescriptorHandleForHeapStart();
+		gpu_descriptor.ptr += slot * heap->DescriptorSize;
+		return gpu_descriptor;
 	}
 
 	void ResetHeap(DescriptorHeap* heap)
