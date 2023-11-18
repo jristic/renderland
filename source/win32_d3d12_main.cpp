@@ -131,6 +131,7 @@ ImTextureID RetrieveDisplayTextureID(main::State* s)
 			HRESULT hr = ctx->Device->CreateCommittedResource(&defaultProperties, 
 				D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr, 
 				IID_PPV_ARGS(&s->RlfDisplayTex.Resource));
+			s->RlfDisplayTex.State = D3D12_RESOURCE_STATE_RENDER_TARGET;
 			s->RlfDisplayTex.Resource->SetName(L"RlfDisplayTex");
 			Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
 		}
@@ -188,6 +189,7 @@ ImTextureID RetrieveDisplayTextureID(main::State* s)
 			HRESULT hr = ctx->Device->CreateCommittedResource(&defaultProperties,
 				D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_DEPTH_WRITE, nullptr, 
 				IID_PPV_ARGS(&s->RlfDepthStencilTex.Resource));
+			s->RlfDepthStencilTex.State = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 			s->RlfDepthStencilTex.Resource->SetName(L"RlfDepthStencilTex");
 			Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
 		}
@@ -496,6 +498,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		Gfx.CommandList->Reset(frameCtx->CommandAllocator, NULL);
 		Gfx.CommandList->ResourceBarrier(1, &barrier);
 
+		// Transition to RTV usable for clear
+		TransitionResource(&Gfx, &State.RlfDisplayTex, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
 		const float clear_color_with_alpha[4] =
 		{
 			State.ClearColor.x * State.ClearColor.w,
@@ -521,6 +526,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 			Gfx.CbvSrvUavHeap.Object, Gfx.SamplerHeap.Object
 		};
 		Gfx.CommandList->SetDescriptorHeaps(2, ShaderDescriptorHeaps);
+
+		// Transition to SRV usable for imgui render
+		TransitionResource(&Gfx, &State.RlfDisplayTex, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), Gfx.CommandList);
 

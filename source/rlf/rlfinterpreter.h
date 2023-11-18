@@ -3,9 +3,11 @@ namespace rlf
 {
 	struct ExecuteResources
 	{
-		gfx::RenderTargetView MainRtv;
-		gfx::UnorderedAccessView MainRtUav;
-		gfx::DepthStencilView DefaultDepthView;
+		gfx::Texture*				MainRtTex;
+		gfx::RenderTargetView		MainRtv;
+		gfx::UnorderedAccessView	MainRtUav;
+		gfx::Texture*				DefaultDepthTex;
+		gfx::DepthStencilView		DefaultDepthView;
 	};
 
 	void InitD3D(

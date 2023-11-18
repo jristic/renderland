@@ -78,9 +78,11 @@ namespace gfx {
 		D3D12_CPU_DESCRIPTOR_HANDLE CbvDescriptor[Context::NUM_FRAMES_IN_FLIGHT];
 	};
 	struct Buffer {
+		D3D12_RESOURCE_STATES State;
 		ID3D12Resource* Resource;
 	};
 	struct Texture {
+		D3D12_RESOURCE_STATES State;
 		ID3D12Resource* Resource;
 	};
 	typedef D3D12_CPU_DESCRIPTOR_HANDLE SamplerState;
@@ -142,6 +144,39 @@ namespace gfx {
 	void ResetHeap(DescriptorHeap* heap)
 	{
 		heap->NextIndex = heap->ReservedSlots;
+	}
+
+
+	void TransitionResource(Context* ctx, Texture* tex, D3D12_RESOURCE_STATES state)
+	{
+		if (tex->State == state)
+			return;
+		D3D12_RESOURCE_BARRIER barrier = {};
+		barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+		barrier.Transition.pResource   = tex->Resource;
+		barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+		barrier.Transition.StateBefore = tex->State;
+		barrier.Transition.StateAfter  = state;
+		ctx->CommandList->ResourceBarrier(1, &barrier);
+
+		tex->State = state;
+	}
+
+	void TransitionResource(Context* ctx, Buffer* buf, D3D12_RESOURCE_STATES state)
+	{
+		if (buf->State == state)
+			return;
+		D3D12_RESOURCE_BARRIER barrier = {};
+		barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+		barrier.Transition.pResource   = buf->Resource;
+		barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+		barrier.Transition.StateBefore = buf->State;
+		barrier.Transition.StateAfter  = state;
+		ctx->CommandList->ResourceBarrier(1, &barrier);
+		
+		buf->State = state;
 	}
 
 }

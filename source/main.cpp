@@ -98,8 +98,10 @@ void LoadRlf(State* s)
 
 	es = {};
 	rlf::ExecuteResources Res;
+	Res.MainRtTex = &s->RlfDisplayTex;
 	Res.MainRtv = s->RlfDisplayRtv;
 	Res.MainRtUav = s->RlfDisplayUav;
+	Res.DefaultDepthTex = &s->RlfDepthStencilTex;
 	Res.DefaultDepthView = s->RlfDepthStencilView;
 
 	rlf::InitD3D(s->GfxCtx, &Res, s->CurrentRenderDesc, s->DisplaySize, 
@@ -388,8 +390,10 @@ bool DoUpdate(State* s)
 
 	rlf::ExecuteContext ctx = {};
 	ctx.GfxCtx = s->GfxCtx;
+	ctx.Res.MainRtTex = &s->RlfDisplayTex;
 	ctx.Res.MainRtv = s->RlfDisplayRtv;
 	ctx.Res.MainRtUav = s->RlfDisplayUav;
+	ctx.Res.DefaultDepthTex = &s->RlfDepthStencilTex;
 	ctx.Res.DefaultDepthView = s->RlfDepthStencilView;
 	ctx.EvCtx.DisplaySize = s->DisplaySize;
 	ctx.EvCtx.Time = s->Time;
@@ -428,8 +432,10 @@ void DoRender(State* s)
 	{
 		rlf::ExecuteContext exctx = {};
 		exctx.GfxCtx = s->GfxCtx;
+		exctx.Res.MainRtTex = &s->RlfDisplayTex;
 		exctx.Res.MainRtv = s->RlfDisplayRtv;
 		exctx.Res.MainRtUav = s->RlfDisplayUav;
+		exctx.Res.DefaultDepthTex = &s->RlfDepthStencilTex;
 		exctx.Res.DefaultDepthView = s->RlfDepthStencilView;
 		exctx.EvCtx.DisplaySize = s->DisplaySize;
 		exctx.EvCtx.Time = s->Time;

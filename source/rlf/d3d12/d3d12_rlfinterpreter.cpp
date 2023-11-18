@@ -578,6 +578,7 @@ void CreateTexture(ID3D12Device* device, Texture* tex)
 		NULL, IID_PPV_ARGS(&tex->GfxState.Resource));
 	CheckHresult(hr, "Texture");
 
+	tex->GfxState.State = D3D12_RESOURCE_STATE_GENERIC_READ;
 }
 
 void CreateBuffer(ID3D12Device* device, Buffer* buf)
@@ -621,6 +622,8 @@ void CreateBuffer(ID3D12Device* device, Buffer* buf)
 		D3D12_HEAP_FLAG_NONE, &bufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, 
 		NULL, IID_PPV_ARGS(&buf->GfxState.Resource));
 	CheckHresult(hr, "buffer");
+
+	buf->GfxState.State = D3D12_RESOURCE_STATE_GENERIC_READ;
 }
 
 void CreateView(gfx::Context* ctx, View* v, bool allocate_descriptor)
@@ -922,6 +925,8 @@ void PrepareConstants(
 				IID_PPV_ARGS(&cb.GfxState.Resource[frame]));
 			Assert(hr == S_OK, "Failed to create buffer, hr=%x", hr);
 			cb.GfxState.Resource[frame]->Map(0, nullptr, (void**)&cb.GfxState.MappedMem[frame]);
+			// TODO: do CBs need resource transitions?
+			// cb.GfxState.State = D3D12_RESOURCE_STATE_GENERIC_READ;
 			
 			cb.GfxState.CbvDescriptor[frame] = gfx::AllocateDescriptor(
 				&ctx->CbvSrvUavCreationHeap);
@@ -1537,6 +1542,63 @@ void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets,
 	}
 }
 
+void TransitionBinds(gfx::Context* ctx, ExecuteResources* resources, std::vector<Bind>& binds)
+{
+	for (const Bind& bind : binds)
+	{
+		switch(bind.Type)
+		{
+		case BindType::SystemValue:
+			switch (bind.SystemBind)
+			{
+			case SystemValue::BackBuffer:
+				if (bind.IsOutput)
+				{
+					TransitionResource(ctx, resources->MainRtTex, 
+						D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				}
+				else
+					Unimplemented();
+				break;
+			case SystemValue::DefaultDepth:
+				Assert(false, "Can not bind DSV to shader");
+				break;
+			default:
+				Unimplemented();
+			}
+			break;
+		case BindType::View:
+			if (bind.IsOutput)
+			{
+				Assert(bind.ViewBind->Type == ViewType::UAV, "mismatched view");
+				if (bind.ViewBind->ResourceType == ResourceType::Buffer)
+					TransitionResource(ctx, &bind.ViewBind->Buffer->GfxState,
+						D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				else if (bind.ViewBind->ResourceType == ResourceType::Texture)
+					TransitionResource(ctx, &bind.ViewBind->Texture->GfxState,
+						D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			}
+			else
+			{
+				Assert(bind.ViewBind->Type == ViewType::SRV, "mismatched view");
+				if (bind.ViewBind->ResourceType == ResourceType::Buffer)
+					TransitionResource(ctx, &bind.ViewBind->Buffer->GfxState,
+						D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | 
+						D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+				else if (bind.ViewBind->ResourceType == ResourceType::Texture)
+					TransitionResource(ctx, &bind.ViewBind->Texture->GfxState,
+						D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | 
+						D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			}
+			break;
+		case BindType::Sampler:
+			break;
+		default:
+			Unimplemented();
+		}
+	}
+}
+
 void ExecuteDispatch(
 	Dispatch* dc,
 	ExecuteContext* ec)
@@ -1555,6 +1617,8 @@ void ExecuteDispatch(
 		ec->GfxCtx->Device->CopyDescriptorsSimple(1, DestDesc, buf.GfxState.CbvDescriptor[frame],
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	}
+
+	TransitionBinds(ec->GfxCtx, &ec->Res, dc->Binds);
 
 	ID3D12GraphicsCommandList* cl = ec->GfxCtx->CommandList;
 	cl->SetPipelineState(cs->GfxPipeline);
