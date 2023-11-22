@@ -108,8 +108,8 @@ namespace gfx {
 	typedef D3D12_CPU_DESCRIPTOR_HANDLE DepthStencilView;
 
 	struct DispatchData {
-		u64 CbvSrvUavDescTableStart;
-		u64 SamplerDescTableStart;
+		u64 CbvSrvUavDescTableStart[Context::NUM_FRAMES_IN_FLIGHT];
+		u64 SamplerDescTableStart[Context::NUM_FRAMES_IN_FLIGHT];
 	};
 
 

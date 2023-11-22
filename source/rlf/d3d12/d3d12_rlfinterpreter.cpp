@@ -836,10 +836,13 @@ void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
 		case BindType::Sampler:
 		{
 			sampler = true;
-			D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ctx->SamplerHeap,
-				dc->GfxState.SamplerDescTableStart + bind.BindIndex - cs->SamplerMin);
-			ctx->Device->CopyDescriptorsSimple(1, DestDesc, bind.SamplerBind->GfxState,
-				D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+			for (u32 frame = 0 ; frame < gfx::Context::NUM_FRAMES_IN_FLIGHT ; ++frame)
+			{
+				D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ctx->SamplerHeap,
+					dc->GfxState.SamplerDescTableStart[frame] + bind.BindIndex - cs->SamplerMin);
+				ctx->Device->CopyDescriptorsSimple(1, DestDesc, bind.SamplerBind->GfxState,
+					D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+			}
 			break;
 		}
 		default:
@@ -847,10 +850,13 @@ void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
 		}
 		if (!sampler)
 		{
-			D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ctx->CbvSrvUavHeap,
-				dc->GfxState.CbvSrvUavDescTableStart + DestSlot);
-			ctx->Device->CopyDescriptorsSimple(1, DestDesc, SrcDesc,
-				D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+			for (u32 frame = 0 ; frame < gfx::Context::NUM_FRAMES_IN_FLIGHT ; ++frame)
+			{
+				D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ctx->CbvSrvUavHeap,
+					dc->GfxState.CbvSrvUavDescTableStart[frame] + DestSlot);
+				ctx->Device->CopyDescriptorsSimple(1, DestDesc, SrcDesc,
+					D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+			}
 		}
 	}
 }
@@ -1188,11 +1194,27 @@ void InitMain(
 	for (Dispatch* dc : rd->Dispatches)
 	{
 		gfx::ComputeShader* cs = &dc->Shader->GfxState;
-		dc->GfxState.CbvSrvUavDescTableStart = ctx->CbvSrvUavHeap.NextIndex;
-		ctx->CbvSrvUavHeap.NextIndex += (cs->NumCbvs + cs->NumSrvs + cs->NumUavs);
-		dc->GfxState.SamplerDescTableStart = ctx->SamplerHeap.NextIndex;
-		ctx->SamplerHeap.NextIndex += cs->NumSamplers;
+		for (u32 frame = 0 ; frame < gfx::Context::NUM_FRAMES_IN_FLIGHT ; ++frame)
+		{
+			dc->GfxState.CbvSrvUavDescTableStart[frame] = ctx->CbvSrvUavHeap.NextIndex;
+			ctx->CbvSrvUavHeap.NextIndex += (cs->NumCbvs + cs->NumSrvs + cs->NumUavs);
+			dc->GfxState.SamplerDescTableStart[frame] = ctx->SamplerHeap.NextIndex;
+			ctx->SamplerHeap.NextIndex += cs->NumSamplers;
+		}
 		CopyBindDescriptors(ctx, resources, dc);
+
+		// Binding of constant buffers descriptors is separate from other views
+		for (const ConstantBuffer& buf : dc->CBs)
+		{
+			u32 DestSlot = buf.Slot - cs->CbvMin;
+			for (u32 frame = 0 ; frame < gfx::Context::NUM_FRAMES_IN_FLIGHT ; ++frame)
+			{
+				D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ctx->CbvSrvUavHeap, 
+					dc->GfxState.CbvSrvUavDescTableStart[frame] + DestSlot);
+				ctx->Device->CopyDescriptorsSimple(1, DestDesc, buf.GfxState.CbvDescriptor[frame],
+					D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+			}
+		}
 	}
 
 /* ------TODO-----------
@@ -1607,19 +1629,9 @@ void ExecuteDispatch(
 	gfx::ComputeShader* cs = &dc->Shader->GfxState;
 	ExecuteSetConstants(ec, dc->Constants, dc->CBs);
 
-	// Update cbvs in descriptor table since we use a different one each frame.
-	for (const ConstantBuffer& buf : dc->CBs)
-	{
-		u32 frame = ec->GfxCtx->FrameIndex % gfx::Context::NUM_FRAMES_IN_FLIGHT;
-		u32 DestSlot = buf.Slot - cs->CbvMin;
-
-		D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ec->GfxCtx->CbvSrvUavHeap, 
-			dc->GfxState.CbvSrvUavDescTableStart + DestSlot);
-		ec->GfxCtx->Device->CopyDescriptorsSimple(1, DestDesc, buf.GfxState.CbvDescriptor[frame],
-			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	}
-
 	TransitionBinds(ec->GfxCtx, &ec->Res, dc->Binds);
+
+	u32 frame = ec->GfxCtx->FrameIndex % gfx::Context::NUM_FRAMES_IN_FLIGHT;
 
 	ID3D12GraphicsCommandList* cl = ec->GfxCtx->CommandList;
 	cl->SetPipelineState(cs->Pipeline);
@@ -1628,13 +1640,13 @@ void ExecuteDispatch(
 	if (cs->NumCbvs + cs->NumSrvs + cs->NumUavs > 0)
 	{
 		D3D12_GPU_DESCRIPTOR_HANDLE cbv_srv_uav_table_handle = GetGPUDescriptor(
-			&ec->GfxCtx->CbvSrvUavHeap, dc->GfxState.CbvSrvUavDescTableStart);
+			&ec->GfxCtx->CbvSrvUavHeap, dc->GfxState.CbvSrvUavDescTableStart[frame]);
 		cl->SetComputeRootDescriptorTable(table_index++, cbv_srv_uav_table_handle);
 	}
 	if (cs->NumSamplers > 0)
 	{
 		D3D12_GPU_DESCRIPTOR_HANDLE sampler_table_handle = GetGPUDescriptor(
-			&ec->GfxCtx->SamplerHeap, dc->GfxState.SamplerDescTableStart);
+			&ec->GfxCtx->SamplerHeap, dc->GfxState.SamplerDescTableStart[frame]);
 		cl->SetComputeRootDescriptorTable(table_index++, sampler_table_handle);
 	}
 
