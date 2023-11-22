@@ -27,4 +27,6 @@ namespace gfx {
 	typedef ID3D11UnorderedAccessView* UnorderedAccessView;
 	typedef ID3D11RenderTargetView* RenderTargetView;
 	typedef ID3D11DepthStencilView* DepthStencilView;
+
+	struct DispatchData {};
 }

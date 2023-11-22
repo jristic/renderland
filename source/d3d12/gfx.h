@@ -68,7 +68,23 @@ namespace gfx {
 	typedef void* DepthStencilState;
 	typedef void* BlendState;
 	typedef ID3D12ShaderReflection* ShaderReflection;
-	typedef ID3DBlob* ComputeShader;
+	struct ComputeShader {
+		ID3DBlob* Blob;
+		ID3D12PipelineState* Pipeline;
+		ID3D12RootSignature* RootSig;
+		u32 NumCbvs;
+		u32 NumSrvs;
+		u32 NumUavs;
+		u32 NumSamplers;
+		u32 CbvMin;
+		u32 CbvMax;
+		u32 SrvMin;
+		u32 SrvMax;
+		u32 UavMin;
+		u32 UavMax;
+		u32 SamplerMin;
+		u32 SamplerMax;
+	};
 	typedef void* VertexShader;
 	typedef void* InputLayout;
 	typedef void* PixelShader;
@@ -90,6 +106,11 @@ namespace gfx {
 	typedef D3D12_CPU_DESCRIPTOR_HANDLE UnorderedAccessView;
 	typedef D3D12_CPU_DESCRIPTOR_HANDLE RenderTargetView;
 	typedef D3D12_CPU_DESCRIPTOR_HANDLE DepthStencilView;
+
+	struct DispatchData {
+		u64 CbvSrvUavDescTableStart;
+		u64 SamplerDescTableStart;
+	};
 
 
 	void CreateDescriptorHeap(gfx::Context* ctx, DescriptorHeap* heap, const wchar_t* name,

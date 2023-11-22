@@ -314,9 +314,10 @@ ID3DBlob* CommonCompileShader(CommonShader* common, const char* dirPath, const c
 	return shaderBlob;
 }
 
-void CreateRootSignature(ID3D12Device* device, ComputeShader* cs)
+void CreateRootSignature(ID3D12Device* device, ComputeShader* c)
 {
-	ID3D12ShaderReflection* reflector = cs->Common.Reflector;
+	gfx::ComputeShader* cs = &c->GfxState;
+	ID3D12ShaderReflection* reflector = c->Common.Reflector;
 	D3D12_SHADER_DESC ShaderDesc = {};
 	reflector->GetDesc(&ShaderDesc);
 
@@ -463,7 +464,7 @@ void CreateRootSignature(ID3D12Device* device, ComputeShader* cs)
 
 	SerializedRootSig->Release();
 
-	cs->GfxRootSig = Sig;
+	cs->RootSig = Sig;
 }
 
 /* ------TODO-----------
@@ -791,7 +792,7 @@ void ResolveBind(Bind& bind, ID3D12ShaderReflection* reflector, const char* path
 void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
 	const Dispatch* dc)
 {
-	const ComputeShader* cs = dc->Shader;
+	const gfx::ComputeShader* cs = &dc->Shader->GfxState;
 	for (const Bind& bind : dc->Binds)
 	{
 		u32 DestSlot = 0;
@@ -836,7 +837,7 @@ void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
 		{
 			sampler = true;
 			D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ctx->SamplerHeap,
-				dc->SamplerDescTableStart + bind.BindIndex - cs->SamplerMin);
+				dc->GfxState.SamplerDescTableStart + bind.BindIndex - cs->SamplerMin);
 			ctx->Device->CopyDescriptorsSimple(1, DestDesc, bind.SamplerBind->GfxState,
 				D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 			break;
@@ -847,7 +848,7 @@ void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
 		if (!sampler)
 		{
 			D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ctx->CbvSrvUavHeap,
-				dc->CbvSrvUavDescTableStart + DestSlot);
+				dc->GfxState.CbvSrvUavDescTableStart + DestSlot);
 			ctx->Device->CopyDescriptorsSimple(1, DestDesc, SrcDesc,
 				D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		}
@@ -1061,12 +1062,12 @@ void InitMain(
 		cs->Common.Reflector->GetThreadGroupSize(&cs->ThreadGroupSize.x, 
 			&cs->ThreadGroupSize.y,	&cs->ThreadGroupSize.z);
 
-		cs->GfxState = shaderBlob;
+		cs->GfxState.Blob = shaderBlob;
 
 		CreateRootSignature(device, cs);
 
 		D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
-		desc.pRootSignature = cs->GfxRootSig;
+		desc.pRootSignature = cs->GfxState.RootSig;
 		desc.CS.pShaderBytecode = shaderBlob->GetBufferPointer();
 		desc.CS.BytecodeLength = shaderBlob->GetBufferSize();
 		desc.NodeMask = 0;
@@ -1074,7 +1075,7 @@ void InitMain(
 		desc.CachedPSO.CachedBlobSizeInBytes = 0;
 		desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 		hr = device->CreateComputePipelineState(&desc, __uuidof(ID3D12PipelineState),
-			(void**)&cs->GfxPipeline);
+			(void**)&cs->GfxState.Pipeline);
 		Assert(hr == S_OK, "Failed to create pipeline state, hr=%x", hr);
 	}
 
@@ -1186,10 +1187,10 @@ void InitMain(
 
 	for (Dispatch* dc : rd->Dispatches)
 	{
-		ComputeShader* cs = dc->Shader;
-		dc->CbvSrvUavDescTableStart = ctx->CbvSrvUavHeap.NextIndex;
+		gfx::ComputeShader* cs = &dc->Shader->GfxState;
+		dc->GfxState.CbvSrvUavDescTableStart = ctx->CbvSrvUavHeap.NextIndex;
 		ctx->CbvSrvUavHeap.NextIndex += (cs->NumCbvs + cs->NumSrvs + cs->NumUavs);
-		dc->SamplerDescTableStart = ctx->SamplerHeap.NextIndex;
+		dc->GfxState.SamplerDescTableStart = ctx->SamplerHeap.NextIndex;
 		ctx->SamplerHeap.NextIndex += cs->NumSamplers;
 		CopyBindDescriptors(ctx, resources, dc);
 	}
@@ -1324,10 +1325,10 @@ void ReleaseD3D(
 
 	for (ComputeShader* cs : rd->CShaders)
 	{
-		SafeRelease(cs->GfxPipeline);
-		SafeRelease(cs->GfxRootSig);
+		SafeRelease(cs->GfxState.Pipeline);
+		SafeRelease(cs->GfxState.RootSig);
 		SafeRelease(cs->Common.Reflector);
-		SafeRelease(cs->GfxState);
+		SafeRelease(cs->GfxState.Blob);
 	}
 
 	for (Dispatch* dc : rd->Dispatches)
@@ -1603,7 +1604,7 @@ void ExecuteDispatch(
 	Dispatch* dc,
 	ExecuteContext* ec)
 {
-	ComputeShader* cs = dc->Shader;
+	gfx::ComputeShader* cs = &dc->Shader->GfxState;
 	ExecuteSetConstants(ec, dc->Constants, dc->CBs);
 
 	// Update cbvs in descriptor table since we use a different one each frame.
@@ -1613,7 +1614,7 @@ void ExecuteDispatch(
 		u32 DestSlot = buf.Slot - cs->CbvMin;
 
 		D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ec->GfxCtx->CbvSrvUavHeap, 
-			dc->CbvSrvUavDescTableStart + DestSlot);
+			dc->GfxState.CbvSrvUavDescTableStart + DestSlot);
 		ec->GfxCtx->Device->CopyDescriptorsSimple(1, DestDesc, buf.GfxState.CbvDescriptor[frame],
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	}
@@ -1621,19 +1622,19 @@ void ExecuteDispatch(
 	TransitionBinds(ec->GfxCtx, &ec->Res, dc->Binds);
 
 	ID3D12GraphicsCommandList* cl = ec->GfxCtx->CommandList;
-	cl->SetPipelineState(cs->GfxPipeline);
-	cl->SetComputeRootSignature(cs->GfxRootSig);
+	cl->SetPipelineState(cs->Pipeline);
+	cl->SetComputeRootSignature(cs->RootSig);
 	u32 table_index = 0;
 	if (cs->NumCbvs + cs->NumSrvs + cs->NumUavs > 0)
 	{
 		D3D12_GPU_DESCRIPTOR_HANDLE cbv_srv_uav_table_handle = GetGPUDescriptor(
-			&ec->GfxCtx->CbvSrvUavHeap, dc->CbvSrvUavDescTableStart);
+			&ec->GfxCtx->CbvSrvUavHeap, dc->GfxState.CbvSrvUavDescTableStart);
 		cl->SetComputeRootDescriptorTable(table_index++, cbv_srv_uav_table_handle);
 	}
 	if (cs->NumSamplers > 0)
 	{
 		D3D12_GPU_DESCRIPTOR_HANDLE sampler_table_handle = GetGPUDescriptor(
-			&ec->GfxCtx->SamplerHeap, dc->SamplerDescTableStart);
+			&ec->GfxCtx->SamplerHeap, dc->GfxState.SamplerDescTableStart);
 		cl->SetComputeRootDescriptorTable(table_index++, sampler_table_handle);
 	}
 

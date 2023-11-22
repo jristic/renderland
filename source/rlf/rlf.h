@@ -208,22 +208,6 @@ namespace rlf
 		CommonShader Common;
 		gfx::ComputeShader GfxState;
 		uint3 ThreadGroupSize;
-		#if D3D12 // TODO: not like this
-			ID3D12PipelineState* GfxPipeline;
-			ID3D12RootSignature* GfxRootSig;
-			u32 NumCbvs;
-			u32 NumSrvs;
-			u32 NumUavs;
-			u32 NumSamplers;
-			u32 CbvMin;
-			u32 CbvMax;
-			u32 SrvMin;
-			u32 SrvMax;
-			u32 UavMin;
-			u32 UavMax;
-			u32 SamplerMin;
-			u32 SamplerMax;
-		#endif
 	};
 	struct VertexShader
 	{
@@ -350,10 +334,7 @@ namespace rlf
 		std::vector<Bind> Binds;
 		std::vector<SetConstant> Constants;
 		std::vector<ConstantBuffer> CBs;
-		#if D3D12
-			u64 CbvSrvUavDescTableStart;
-			u64 SamplerDescTableStart;
-		#endif
+		gfx::DispatchData GfxState;
 	};
 	struct TextureTarget
 	{
