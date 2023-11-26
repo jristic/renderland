@@ -110,6 +110,7 @@ namespace gfx {
 	struct DispatchData {
 		u64 CbvSrvUavDescTableStart[Context::NUM_FRAMES_IN_FLIGHT];
 		u64 SamplerDescTableStart[Context::NUM_FRAMES_IN_FLIGHT];
+		ID3D12CommandSignature* CommandSig;
 	};
 
 

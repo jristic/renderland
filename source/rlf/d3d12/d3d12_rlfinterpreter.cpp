@@ -689,8 +689,8 @@ void CreateView(gfx::Context* ctx, View* v, bool allocate_descriptor)
 			vd.Buffer.FirstElement = 0;
 			vd.Buffer.NumElements = v->NumElements > 0 ? v->NumElements : 
 				v->Buffer->ElementCount;
-			vd.Buffer.StructureByteStride = v->Buffer->Flags & BufferFlag_Raw ?
-				0 : v->Buffer->ElementSize;
+			vd.Buffer.StructureByteStride = v->Buffer->Flags & BufferFlag_Structured ?
+				v->Buffer->ElementSize : 0;
 			vd.Buffer.CounterOffsetInBytes = 0;
 			vd.Buffer.Flags = v->Buffer->Flags & BufferFlag_Raw ? 
 				D3D12_BUFFER_UAV_FLAG_RAW : D3D12_BUFFER_UAV_FLAG_NONE;
@@ -1215,6 +1215,21 @@ void InitMain(
 					D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 			}
 		}
+
+		if (dc->IndirectArgs)
+		{
+			D3D12_INDIRECT_ARGUMENT_DESC arg = {};
+			arg.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
+
+			D3D12_COMMAND_SIGNATURE_DESC desc = {};
+			desc.ByteStride = 12;
+			desc.NumArgumentDescs = 1;
+			desc.pArgumentDescs = &arg;
+			desc.NodeMask = 0;
+			HRESULT hr = ctx->Device->CreateCommandSignature(&desc, nullptr,
+				IID_PPV_ARGS(&dc->GfxState.CommandSig));
+			Assert(hr == S_OK, "Failed to create command signature, hr=%x", hr);
+		}
 	}
 
 /* ------TODO-----------
@@ -1355,6 +1370,7 @@ void ReleaseD3D(
 
 	for (Dispatch* dc : rd->Dispatches)
 	{
+		SafeRelease(dc->GfxState.CommandSig);
 		for (ConstantBuffer& cb : dc->CBs)
 		{
 			for (u32 frame = 0 ; frame < gfx::Context::NUM_FRAMES_IN_FLIGHT ; ++frame)
@@ -1652,9 +1668,10 @@ void ExecuteDispatch(
 
 	if (dc->IndirectArgs)
 	{
-		// TODO: implement indirect args
-		// ctx->DispatchIndirect(dc->IndirectArgs->GfxState, dc->IndirectArgsOffset);
-		Unimplemented();
+		TransitionResource(ec->GfxCtx, &dc->IndirectArgs->GfxState,
+						D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+		cl->ExecuteIndirect(dc->GfxState.CommandSig, 1, dc->IndirectArgs->GfxState.Resource, 
+			dc->IndirectArgsOffset, nullptr, 0);
 	}
 	else
 	{

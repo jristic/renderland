@@ -1,6 +1,6 @@
 
 RWTexture2D<float4> OutTexture : register(u0);
-RWBuffer<uint4> OutArgs : register(u1);
+RWBuffer<uint> OutArgs : register(u1);
 
 cbuffer ConstantBuffer
 {
