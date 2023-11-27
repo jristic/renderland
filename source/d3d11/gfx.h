@@ -29,4 +29,5 @@ namespace gfx {
 	typedef ID3D11DepthStencilView* DepthStencilView;
 
 	struct DispatchData {};
+	struct DrawData {};
 }

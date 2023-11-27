@@ -111,35 +111,45 @@ D3D12_TEXTURE_ADDRESS_MODE RlfToD3d(AddressMode m)
 	return modes[(u32)m];
 }
 
-/* ------TODO-----------
-
-D3D11_PRIMITIVE_TOPOLOGY RlfToD3d(Topology topo)
+D3D12_PRIMITIVE_TOPOLOGY_TYPE RlfToD3d_TopoType(Topology topo)
 {
 	Assert(topo != Topology::Invalid, "Invalid");
-	static D3D11_PRIMITIVE_TOPOLOGY topos[] = {
-		(D3D11_PRIMITIVE_TOPOLOGY)0, //invalid
-		D3D11_PRIMITIVE_TOPOLOGY_POINTLIST,
-		D3D11_PRIMITIVE_TOPOLOGY_LINELIST,
-		D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP,
-		D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-		D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+	static D3D12_PRIMITIVE_TOPOLOGY_TYPE topos[] = {
+		(D3D12_PRIMITIVE_TOPOLOGY_TYPE)0, //invalid
+		D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT,
+		D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE,
+		D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE,
+		D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+		D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
 	};
 	return topos[(u32)topo];
 }
 
-D3D11_CULL_MODE RlfToD3d(CullMode cm)
+D3D_PRIMITIVE_TOPOLOGY RlfToD3d_Topo(Topology topo)
+{
+	Assert(topo != Topology::Invalid, "Invalid");
+	static D3D_PRIMITIVE_TOPOLOGY topos[] = {
+		(D3D_PRIMITIVE_TOPOLOGY)0, //invalid
+		D3D_PRIMITIVE_TOPOLOGY_POINTLIST,
+		D3D_PRIMITIVE_TOPOLOGY_LINELIST,
+		D3D_PRIMITIVE_TOPOLOGY_LINESTRIP,
+		D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+		D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+	};
+	return topos[(u32)topo];
+}
+
+D3D12_CULL_MODE RlfToD3d(CullMode cm)
 {
 	Assert(cm != CullMode::Invalid, "Invalid");
-	static D3D11_CULL_MODE cms[] = {
-		(D3D11_CULL_MODE)0, //invalid
-		D3D11_CULL_NONE,
-		D3D11_CULL_FRONT,
-		D3D11_CULL_BACK,
+	static D3D12_CULL_MODE cms[] = {
+		(D3D12_CULL_MODE)0, //invalid
+		D3D12_CULL_MODE_NONE,
+		D3D12_CULL_MODE_FRONT,
+		D3D12_CULL_MODE_BACK,
 	};
 	return cms[(u32)cm];
 }
-
-*/
 
 D3D12_RESOURCE_FLAGS RlfToD3d(TextureFlag flags)
 {
@@ -153,45 +163,43 @@ D3D12_RESOURCE_FLAGS RlfToD3d(TextureFlag flags)
 	return f;
 }
 
-/* ------------ TODO -----------
-
-D3D11_COMPARISON_FUNC RlfToD3d(ComparisonFunc cf)
+D3D12_COMPARISON_FUNC RlfToD3d(ComparisonFunc cf)
 {
 	Assert(cf != ComparisonFunc::Invalid, "Invalid");
-	static D3D11_COMPARISON_FUNC cfs[] = {
-		(D3D11_COMPARISON_FUNC)0, //invalid
-		D3D11_COMPARISON_NEVER,
-		D3D11_COMPARISON_LESS,
-		D3D11_COMPARISON_EQUAL,
-		D3D11_COMPARISON_LESS_EQUAL,
-		D3D11_COMPARISON_GREATER,
-		D3D11_COMPARISON_NOT_EQUAL,
-		D3D11_COMPARISON_GREATER_EQUAL,
-		D3D11_COMPARISON_ALWAYS,
+	static D3D12_COMPARISON_FUNC cfs[] = {
+		(D3D12_COMPARISON_FUNC)0, //invalid
+		D3D12_COMPARISON_FUNC_NEVER,
+		D3D12_COMPARISON_FUNC_LESS,
+		D3D12_COMPARISON_FUNC_EQUAL,
+		D3D12_COMPARISON_FUNC_LESS_EQUAL,
+		D3D12_COMPARISON_FUNC_GREATER,
+		D3D12_COMPARISON_FUNC_NOT_EQUAL,
+		D3D12_COMPARISON_FUNC_GREATER_EQUAL,
+		D3D12_COMPARISON_FUNC_ALWAYS,
 	};
 	return cfs[(u32)cf];
 }
 
-D3D11_STENCIL_OP RlfToD3d(StencilOp so)
+D3D12_STENCIL_OP RlfToD3d(StencilOp so)
 {
 	Assert(so != StencilOp::Invalid, "Invalid");
-	static D3D11_STENCIL_OP sos[] = {
-		(D3D11_STENCIL_OP)0, //invalid
-		D3D11_STENCIL_OP_KEEP,
-		D3D11_STENCIL_OP_ZERO,
-		D3D11_STENCIL_OP_REPLACE,
-		D3D11_STENCIL_OP_INCR_SAT,
-		D3D11_STENCIL_OP_DECR_SAT,
-		D3D11_STENCIL_OP_INVERT,
-		D3D11_STENCIL_OP_INCR,
-		D3D11_STENCIL_OP_DECR
+	static D3D12_STENCIL_OP sos[] = {
+		(D3D12_STENCIL_OP)0, //invalid
+		D3D12_STENCIL_OP_KEEP,
+		D3D12_STENCIL_OP_ZERO,
+		D3D12_STENCIL_OP_REPLACE,
+		D3D12_STENCIL_OP_INCR_SAT,
+		D3D12_STENCIL_OP_DECR_SAT,
+		D3D12_STENCIL_OP_INVERT,
+		D3D12_STENCIL_OP_INCR,
+		D3D12_STENCIL_OP_DECR
 	};
 	return sos[(u32)so];
 }
 
-D3D11_DEPTH_STENCILOP_DESC RlfToD3d(StencilOpDesc sod)
+D3D12_DEPTH_STENCILOP_DESC RlfToD3d(StencilOpDesc sod)
 {
-	D3D11_DEPTH_STENCILOP_DESC desc = {};
+	D3D12_DEPTH_STENCILOP_DESC desc = {};
 	desc.StencilFailOp = RlfToD3d(sod.StencilFailOp);
 	desc.StencilDepthFailOp = RlfToD3d(sod.StencilDepthFailOp);
 	desc.StencilPassOp = RlfToD3d(sod.StencilPassOp);
@@ -199,47 +207,46 @@ D3D11_DEPTH_STENCILOP_DESC RlfToD3d(StencilOpDesc sod)
 	return desc;
 }
 
-D3D11_BLEND RlfToD3d(Blend b)
+D3D12_BLEND RlfToD3d(Blend b)
 {
 	Assert(b != Blend::Invalid, "Invalid");
-	static D3D11_BLEND bs[] = {
-		(D3D11_BLEND)0, //invalid
-		D3D11_BLEND_ZERO,
-		D3D11_BLEND_ONE,
-		D3D11_BLEND_SRC_COLOR,
-		D3D11_BLEND_INV_SRC_COLOR,
-		D3D11_BLEND_SRC_ALPHA,
-		D3D11_BLEND_INV_SRC_ALPHA,
-		D3D11_BLEND_DEST_ALPHA,
-		D3D11_BLEND_INV_DEST_ALPHA,
-		D3D11_BLEND_DEST_COLOR,
-		D3D11_BLEND_INV_DEST_COLOR,
-		D3D11_BLEND_SRC_ALPHA_SAT,
-		D3D11_BLEND_BLEND_FACTOR,
-		D3D11_BLEND_INV_BLEND_FACTOR,
-		D3D11_BLEND_SRC1_COLOR,
-		D3D11_BLEND_INV_SRC1_COLOR,
-		D3D11_BLEND_SRC1_ALPHA,
-		D3D11_BLEND_INV_SRC1_ALPHA,
+	static D3D12_BLEND bs[] = {
+		(D3D12_BLEND)0, //invalid
+		D3D12_BLEND_ZERO,
+		D3D12_BLEND_ONE,
+		D3D12_BLEND_SRC_COLOR,
+		D3D12_BLEND_INV_SRC_COLOR,
+		D3D12_BLEND_SRC_ALPHA,
+		D3D12_BLEND_INV_SRC_ALPHA,
+		D3D12_BLEND_DEST_ALPHA,
+		D3D12_BLEND_INV_DEST_ALPHA,
+		D3D12_BLEND_DEST_COLOR,
+		D3D12_BLEND_INV_DEST_COLOR,
+		D3D12_BLEND_SRC_ALPHA_SAT,
+		D3D12_BLEND_BLEND_FACTOR,
+		D3D12_BLEND_INV_BLEND_FACTOR,
+		D3D12_BLEND_SRC1_COLOR,
+		D3D12_BLEND_INV_SRC1_COLOR,
+		D3D12_BLEND_SRC1_ALPHA,
+		D3D12_BLEND_INV_SRC1_ALPHA,
 	};
 	return bs[(u32)b];
 }
 
-D3D11_BLEND_OP RlfToD3d(BlendOp op)
+D3D12_BLEND_OP RlfToD3d(BlendOp op)
 {
 	Assert(op != BlendOp::Invalid, "Invalid");
-	static D3D11_BLEND_OP ops[] = {
-		(D3D11_BLEND_OP)0, //invalid
-		D3D11_BLEND_OP_ADD,
-		D3D11_BLEND_OP_SUBTRACT,
-		D3D11_BLEND_OP_REV_SUBTRACT,
-		D3D11_BLEND_OP_MIN,
-		D3D11_BLEND_OP_MAX,
+	static D3D12_BLEND_OP ops[] = {
+		(D3D12_BLEND_OP)0, //invalid
+		D3D12_BLEND_OP_ADD,
+		D3D12_BLEND_OP_SUBTRACT,
+		D3D12_BLEND_OP_REV_SUBTRACT,
+		D3D12_BLEND_OP_MIN,
+		D3D12_BLEND_OP_MAX,
 	};
 	return ops[(u32)op];
 }
 
-*/
 
 ID3DBlob* CommonCompileShader(CommonShader* common, const char* dirPath, const char* profile, 
 	ErrorState* errorState)
@@ -314,26 +321,24 @@ ID3DBlob* CommonCompileShader(CommonShader* common, const char* dirPath, const c
 	return shaderBlob;
 }
 
-void CreateRootSignature(ID3D12Device* device, ComputeShader* c)
+void GatherBinds(gfx::BindInfo* bi, ID3D12ShaderReflection* reflector)
 {
-	gfx::ComputeShader* cs = &c->GfxState;
-	ID3D12ShaderReflection* reflector = c->Common.Reflector;
+	bi->NumCbvs = 0;
+	bi->NumSrvs = 0;
+	bi->NumUavs = 0;
+	bi->NumSamplers = 0;
+
+	bi->CbvMin = U32_MAX;
+	bi->CbvMax = 0;
+	bi->SrvMin = U32_MAX;
+	bi->SrvMax = 0;
+	bi->UavMin = U32_MAX;
+	bi->UavMax = 0;
+	bi->SamplerMin = U32_MAX;
+	bi->SamplerMax = 0;
+
 	D3D12_SHADER_DESC ShaderDesc = {};
 	reflector->GetDesc(&ShaderDesc);
-
-	cs->NumCbvs = 0;
-	cs->NumSrvs = 0;
-	cs->NumUavs = 0;
-	cs->NumSamplers = 0;
-
-	cs->CbvMin = U32_MAX;
-	cs->CbvMax = 0;
-	cs->SrvMin = U32_MAX;
-	cs->SrvMax = 0;
-	cs->UavMin = U32_MAX;
-	cs->UavMax = 0;
-	cs->SamplerMin = U32_MAX;
-	cs->SamplerMax = 0;
 
 	for (u32 i = 0 ; i < ShaderDesc.BoundResources ; ++i)
 	{
@@ -346,17 +351,17 @@ void CreateRootSignature(ID3D12Device* device, ComputeShader* c)
 		switch(input.Type)
 		{
 		case D3D_SIT_CBUFFER:
-			cs->CbvMin = min(cs->CbvMin, input.BindPoint);
-			cs->CbvMax = max(cs->CbvMax, input.BindPoint);
-			cs->NumCbvs = cs->CbvMax - cs->CbvMin + 1;
+			bi->CbvMin = min(bi->CbvMin, input.BindPoint);
+			bi->CbvMax = max(bi->CbvMax, input.BindPoint);
+			bi->NumCbvs = bi->CbvMax - bi->CbvMin + 1;
 			break;
 		case D3D_SIT_TBUFFER:
 		case D3D_SIT_TEXTURE:
 		case D3D_SIT_STRUCTURED:
 		case D3D_SIT_BYTEADDRESS:
-			cs->SrvMin = min(cs->SrvMin, input.BindPoint);
-			cs->SrvMax = max(cs->SrvMax, input.BindPoint);
-			cs->NumSrvs = cs->SrvMax - cs->SrvMin + 1;
+			bi->SrvMin = min(bi->SrvMin, input.BindPoint);
+			bi->SrvMax = max(bi->SrvMax, input.BindPoint);
+			bi->NumSrvs = bi->SrvMax - bi->SrvMin + 1;
 			break;
 		case D3D_SIT_UAV_RWTYPED:
 		case D3D_SIT_UAV_RWSTRUCTURED:
@@ -364,14 +369,14 @@ void CreateRootSignature(ID3D12Device* device, ComputeShader* c)
 		case D3D_SIT_UAV_APPEND_STRUCTURED:
 		case D3D_SIT_UAV_CONSUME_STRUCTURED:
 		case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
-			cs->UavMin = min(cs->UavMin, input.BindPoint);
-			cs->UavMax = max(cs->UavMax, input.BindPoint);
-			cs->NumUavs = cs->UavMax - cs->UavMin + 1;
+			bi->UavMin = min(bi->UavMin, input.BindPoint);
+			bi->UavMax = max(bi->UavMax, input.BindPoint);
+			bi->NumUavs = bi->UavMax - bi->UavMin + 1;
 			break;
 		case D3D_SIT_SAMPLER:
-			cs->SamplerMin = min(cs->SamplerMin, input.BindPoint);
-			cs->SamplerMax = max(cs->SamplerMax, input.BindPoint);
-			cs->NumSamplers = cs->SamplerMax - cs->SamplerMin + 1;
+			bi->SamplerMin = min(bi->SamplerMin, input.BindPoint);
+			bi->SamplerMax = max(bi->SamplerMax, input.BindPoint);
+			bi->NumSamplers = bi->SamplerMax - bi->SamplerMin + 1;
 			break;
 		case D3D_SIT_RTACCELERATIONSTRUCTURE:
 		case D3D_SIT_UAV_FEEDBACKTEXTURE:
@@ -379,26 +384,31 @@ void CreateRootSignature(ID3D12Device* device, ComputeShader* c)
 			Unimplemented();
 		}
 	}
+}
 
-	D3D12_DESCRIPTOR_RANGE1 ranges[4] = {};
-	u32 RangeCount = 0;
+void GenerateRangesParameters(gfx::BindInfo* bi, D3D12_SHADER_VISIBILITY visiblity,
+	D3D12_DESCRIPTOR_RANGE1 ranges[], D3D12_ROOT_PARAMETER1 params[], 
+	u32* range_count, u32* param_count)
+{
+	u32& RangeCount = *range_count;
+	u32& ParamCount = *param_count;
 	// CBVs
-	if (cs->NumCbvs)
+	if (bi->NumCbvs)
 	{
 		ranges[RangeCount].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-		ranges[RangeCount].NumDescriptors = cs->CbvMax - cs->CbvMin + 1;
-		ranges[RangeCount].BaseShaderRegister = cs->CbvMin;
+		ranges[RangeCount].NumDescriptors = bi->CbvMax - bi->CbvMin + 1;
+		ranges[RangeCount].BaseShaderRegister = bi->CbvMin;
 		ranges[RangeCount].RegisterSpace = 0;
 		ranges[RangeCount].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE;
 		ranges[RangeCount].OffsetInDescriptorsFromTableStart = 0;
 		++RangeCount;
 	}
 	// SRVs
-	if (cs->NumSrvs)
+	if (bi->NumSrvs)
 	{
 		ranges[RangeCount].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-		ranges[RangeCount].NumDescriptors = cs->SrvMax - cs->SrvMin + 1;
-		ranges[RangeCount].BaseShaderRegister = cs->SrvMin;
+		ranges[RangeCount].NumDescriptors = bi->SrvMax - bi->SrvMin + 1;
+		ranges[RangeCount].BaseShaderRegister = bi->SrvMin;
 		ranges[RangeCount].RegisterSpace = 0;
 		ranges[RangeCount].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE;
 		ranges[RangeCount].OffsetInDescriptorsFromTableStart = 
@@ -406,44 +416,58 @@ void CreateRootSignature(ID3D12Device* device, ComputeShader* c)
 		++RangeCount;
 	}
 	// UAVs
-	if (cs->NumUavs)
+	if (bi->NumUavs)
 	{
 		ranges[RangeCount].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-		ranges[RangeCount].NumDescriptors = cs->UavMax - cs->UavMin + 1;
-		ranges[RangeCount].BaseShaderRegister = cs->UavMin;
+		ranges[RangeCount].NumDescriptors = bi->UavMax - bi->UavMin + 1;
+		ranges[RangeCount].BaseShaderRegister = bi->UavMin;
 		ranges[RangeCount].RegisterSpace = 0;
 		ranges[RangeCount].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE;
 		ranges[RangeCount].OffsetInDescriptorsFromTableStart = 
 			D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 		++RangeCount;
 	}
-	D3D12_ROOT_PARAMETER1 params[2] = {};
-	u32 ParamCount = 0;
-	if (RangeCount)
+	u32 Views = bi->NumCbvs + bi->NumSrvs + bi->NumUavs;
+	if (Views)
 	{
 		params[ParamCount].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		params[ParamCount].DescriptorTable.NumDescriptorRanges = RangeCount;
-		params[ParamCount].DescriptorTable.pDescriptorRanges = &ranges[0];
-		params[ParamCount].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		params[ParamCount].DescriptorTable.NumDescriptorRanges = Views;
+		params[ParamCount].DescriptorTable.pDescriptorRanges = &ranges[RangeCount-Views];
+		params[ParamCount].ShaderVisibility = visiblity;
 		++ParamCount;
 	}
 	// Sampler
-	D3D12_DESCRIPTOR_RANGE1 SamplerRange = {};
-	if (cs->NumSamplers)
+	if (bi->NumSamplers)
 	{
-		SamplerRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
-		SamplerRange.NumDescriptors = cs->SamplerMax - cs->SamplerMin + 1;
-		SamplerRange.BaseShaderRegister = cs->SamplerMin;
-		SamplerRange.RegisterSpace = 0;
-		SamplerRange.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE;
-		SamplerRange.OffsetInDescriptorsFromTableStart = 0;
+		ranges[RangeCount].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
+		ranges[RangeCount].NumDescriptors = bi->SamplerMax - bi->SamplerMin + 1;
+		ranges[RangeCount].BaseShaderRegister = bi->SamplerMin;
+		ranges[RangeCount].RegisterSpace = 0;
+		ranges[RangeCount].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE;
+		ranges[RangeCount].OffsetInDescriptorsFromTableStart = 0;
+		++RangeCount;
 
 		params[ParamCount].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 		params[ParamCount].DescriptorTable.NumDescriptorRanges = 1;
-		params[ParamCount].DescriptorTable.pDescriptorRanges = &SamplerRange;
-		params[ParamCount].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;	
+		params[ParamCount].DescriptorTable.pDescriptorRanges = &ranges[RangeCount-1];
+		params[ParamCount].ShaderVisibility = visiblity;	
 		++ParamCount;
 	}
+}
+
+void CreateRootSignature(ID3D12Device* device, ComputeShader* c)
+{
+	gfx::ComputeShader* cs = &c->GfxState;
+	ID3D12ShaderReflection* reflector = c->Common.Reflector;
+
+	GatherBinds(&cs->BI, reflector);
+
+	D3D12_DESCRIPTOR_RANGE1 ranges[4];
+	D3D12_ROOT_PARAMETER1 params[2];
+	u32 RangeCount = 0;
+	u32 ParamCount = 0;
+	GenerateRangesParameters(&cs->BI, D3D12_SHADER_VISIBILITY_ALL, ranges, params, 
+		&RangeCount, &ParamCount);
 
 	D3D12_VERSIONED_ROOT_SIGNATURE_DESC RootSig = {};
 	RootSig.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
@@ -467,33 +491,64 @@ void CreateRootSignature(ID3D12Device* device, ComputeShader* c)
 	cs->RootSig = Sig;
 }
 
-/* ------TODO-----------
-
-void CreateInputLayout(ID3D11Device* device, VertexShader* shader, ID3DBlob* blob)
+void CreateRootSignature(ID3D12Device* device, Draw* d)
 {
-	ID3D11ShaderReflection* reflector = shader->Common.Reflector;
+	VertexShader* vs = d->VShader;
+	PixelShader* ps = d->PShader;
 
+	D3D12_DESCRIPTOR_RANGE1 ranges[8];
+	D3D12_ROOT_PARAMETER1 params[4];
+	u32 RangeCount = 0;
+	u32 ParamCount = 0;
+	GenerateRangesParameters(&vs->GfxState.BI, D3D12_SHADER_VISIBILITY_VERTEX, ranges, 
+		params, &RangeCount, &ParamCount);
+	GenerateRangesParameters(&ps->GfxState.BI, D3D12_SHADER_VISIBILITY_PIXEL, ranges, 
+		params, &RangeCount, &ParamCount);
+
+	D3D12_VERSIONED_ROOT_SIGNATURE_DESC RootSig = {};
+	RootSig.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
+	RootSig.Desc_1_1.NumParameters = ParamCount;
+	RootSig.Desc_1_1.pParameters = params;
+
+	ID3DBlob* SerializedRootSig;
+	HRESULT hr = D3D12SerializeVersionedRootSignature(&RootSig, &SerializedRootSig, nullptr); 
+	Assert(hr == S_OK, "Failed to create serialized root signature, hr=%x", hr);
+
+	ID3D12RootSignature* Sig;
+	hr = device->CreateRootSignature(0,
+		SerializedRootSig->GetBufferPointer(),
+		SerializedRootSig->GetBufferSize(),
+		__uuidof(ID3D12RootSignature),
+		(void**)&Sig);
+	Assert(hr == S_OK, "failed to create root signature, hr=%x", hr);
+
+	SerializedRootSig->Release();
+
+	d->GfxState.RootSig = Sig;
+}
+
+void CreateInputLayout(ID3D12ShaderReflection* reflector, 
+	std::vector<D3D12_INPUT_ELEMENT_DESC>& descs)
+{
 	// Get shader info
-	D3D11_SHADER_DESC shaderDesc;
+	D3D12_SHADER_DESC shaderDesc;
 	reflector->GetDesc( &shaderDesc );
 
-	// Read input layout description from shader info
-	std::vector<D3D11_INPUT_ELEMENT_DESC> inputLayoutDesc;
 	for ( u32 i = 0 ; i < shaderDesc.InputParameters ; ++i)
 	{
-		D3D11_SIGNATURE_PARAMETER_DESC paramDesc;
+		D3D12_SIGNATURE_PARAMETER_DESC paramDesc;
 		reflector->GetInputParameterDesc(i, &paramDesc );
 
 		if (paramDesc.SystemValueType != D3D_NAME_UNDEFINED)
 			continue;
 
 		// fill out input element desc
-		D3D11_INPUT_ELEMENT_DESC elementDesc;
+		D3D12_INPUT_ELEMENT_DESC elementDesc;
 		elementDesc.SemanticName = paramDesc.SemanticName;
 		elementDesc.SemanticIndex = paramDesc.SemanticIndex;
 		elementDesc.InputSlot = 0;
-		elementDesc.AlignedByteOffset = D3D11_APPEND_ALIGNED_ELEMENT;
-		elementDesc.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
+		elementDesc.AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+		elementDesc.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
 		elementDesc.InstanceDataStepRate = 0;   
 
 		// determine DXGI format
@@ -534,21 +589,183 @@ void CreateInputLayout(ID3D11Device* device, VertexShader* shader, ID3DBlob* blo
 				elementDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
 		}
 
-		//save element desc
-		inputLayoutDesc.push_back(elementDesc);
-	}
-
-	if (inputLayoutDesc.size())
-	{
-		// Try to create Input Layout
-		HRESULT hr = device->CreateInputLayout(
-			&inputLayoutDesc[0], (u32)inputLayoutDesc.size(), blob->GetBufferPointer(), 
-			blob->GetBufferSize(), &shader->LayoutGfxState);
-		Assert(hr == S_OK, "failed to create input layout, hr=%x", hr);
+		descs.push_back(elementDesc);
 	}
 }
 
-*/
+void CreatePipelineState(ID3D12Device* device, Draw* d)
+{
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
+	desc.pRootSignature = d->GfxState.RootSig;
+	desc.VS.pShaderBytecode = d->VShader->GfxState.Blob->GetBufferPointer();
+	desc.VS.BytecodeLength = d->VShader->GfxState.Blob->GetBufferSize();
+	desc.PS.pShaderBytecode = d->PShader->GfxState.Blob->GetBufferPointer();
+	desc.PS.BytecodeLength = d->PShader->GfxState.Blob->GetBufferSize();
+
+	u32 blendCount = (u32)d->BlendStates.size();
+	desc.BlendState.AlphaToCoverageEnable = false;
+	desc.BlendState.IndependentBlendEnable = blendCount > 1;
+	if (blendCount > 0)
+	{
+		InitAssert(blendCount <= 8, "Too blend states on draw, max is 8.");
+		for (u32 i = 0 ; i < blendCount ; ++i)
+		{
+			BlendState* blend = d->BlendStates[i];
+			desc.BlendState.RenderTarget[i].BlendEnable = blend->Enable;
+			desc.BlendState.RenderTarget[i].LogicOpEnable = false;
+			desc.BlendState.RenderTarget[i].SrcBlend = RlfToD3d(blend->Src);
+			desc.BlendState.RenderTarget[i].DestBlend = RlfToD3d(blend->Dest);
+			desc.BlendState.RenderTarget[i].BlendOp = RlfToD3d(blend->Op);
+			desc.BlendState.RenderTarget[i].SrcBlendAlpha = RlfToD3d(blend->SrcAlpha);
+			desc.BlendState.RenderTarget[i].DestBlendAlpha = RlfToD3d(blend->DestAlpha);
+			desc.BlendState.RenderTarget[i].BlendOpAlpha = RlfToD3d(blend->OpAlpha);
+			desc.BlendState.RenderTarget[i].LogicOp = D3D12_LOGIC_OP_NOOP;
+			desc.BlendState.RenderTarget[i].RenderTargetWriteMask = 
+				blend->RenderTargetWriteMask;
+		}
+	}
+	// set defaults to the remainder
+	for (u32 i = blendCount ; i < 8 ; ++i)
+	{
+		desc.BlendState.RenderTarget[i].BlendEnable = false;
+		desc.BlendState.RenderTarget[i].LogicOpEnable = false;
+		desc.BlendState.RenderTarget[i].SrcBlend = D3D12_BLEND_ONE;
+		desc.BlendState.RenderTarget[i].DestBlend = D3D12_BLEND_ZERO;
+		desc.BlendState.RenderTarget[i].BlendOp = D3D12_BLEND_OP_ADD;
+		desc.BlendState.RenderTarget[i].SrcBlendAlpha = D3D12_BLEND_ONE;
+		desc.BlendState.RenderTarget[i].DestBlendAlpha = D3D12_BLEND_ZERO;
+		desc.BlendState.RenderTarget[i].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+		desc.BlendState.RenderTarget[i].LogicOp = D3D12_LOGIC_OP_NOOP;
+		desc.BlendState.RenderTarget[i].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	}
+
+	desc.SampleMask = 0xffffffff;
+
+	RasterizerState* rs = d->RState;
+	if (rs)
+	{
+		desc.RasterizerState.FillMode = rs->Fill ? D3D12_FILL_MODE_SOLID : 
+			D3D12_FILL_MODE_WIREFRAME;
+		desc.RasterizerState.CullMode = RlfToD3d(rs->CullMode);
+		desc.RasterizerState.FrontCounterClockwise = rs->FrontCCW;
+		desc.RasterizerState.DepthBias = rs->DepthBias;
+		desc.RasterizerState.SlopeScaledDepthBias = rs->SlopeScaledDepthBias;
+		desc.RasterizerState.DepthBiasClamp = rs->DepthBiasClamp;
+		desc.RasterizerState.DepthClipEnable = rs->DepthClipEnable;
+		// TODO: scissor doesn't exist here in dx12, what do
+		// desc.RasterizerState.ScissorEnable = rs->ScissorEnable;
+		desc.RasterizerState.MultisampleEnable = rs->MultisampleEnable;
+		desc.RasterizerState.AntialiasedLineEnable = rs->AntialiasedLineEnable;
+	}
+	else
+	{
+		// NOTE: I am using some different defaults than d3d12 normally provides, 
+		//	because I do not like their choices. 
+		desc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;  
+		desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; 
+		desc.RasterizerState.FrontCounterClockwise = FALSE;  
+		desc.RasterizerState.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;  
+		desc.RasterizerState.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;  
+		desc.RasterizerState.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;  
+		desc.RasterizerState.DepthClipEnable = TRUE;  
+		desc.RasterizerState.MultisampleEnable = FALSE;  
+		desc.RasterizerState.AntialiasedLineEnable = FALSE;  
+		desc.RasterizerState.ForcedSampleCount = 0;  
+		desc.RasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;  
+	}
+
+	DepthStencilState* dss = d->DSState;
+	if (dss)
+	{
+		desc.DepthStencilState.DepthEnable = dss->DepthEnable;
+		desc.DepthStencilState.DepthWriteMask = dss->DepthWrite ? D3D12_DEPTH_WRITE_MASK_ALL :
+			D3D12_DEPTH_WRITE_MASK_ZERO;
+		desc.DepthStencilState.DepthFunc = RlfToD3d(dss->DepthFunc);
+		desc.DepthStencilState.StencilEnable = dss->StencilEnable;
+		desc.DepthStencilState.StencilReadMask = dss->StencilReadMask;
+		desc.DepthStencilState.StencilWriteMask = dss->StencilWriteMask;
+		desc.DepthStencilState.FrontFace = RlfToD3d(dss->FrontFace);
+		desc.DepthStencilState.BackFace = RlfToD3d(dss->BackFace);
+	}
+	else
+	{
+		desc.DepthStencilState.DepthEnable = TRUE;
+		desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+		desc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+		desc.DepthStencilState.StencilEnable = FALSE;
+		desc.DepthStencilState.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+		desc.DepthStencilState.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+		const D3D12_DEPTH_STENCILOP_DESC defaultStencilOp =  { D3D12_STENCIL_OP_KEEP,
+			D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_COMPARISON_FUNC_ALWAYS };
+		desc.DepthStencilState.FrontFace = defaultStencilOp;
+		desc.DepthStencilState.BackFace = defaultStencilOp;
+	}
+
+	std::vector<D3D12_INPUT_ELEMENT_DESC> inputLayoutDescs;
+	CreateInputLayout(d->VShader->Common.Reflector, inputLayoutDescs);
+	desc.InputLayout.pInputElementDescs = inputLayoutDescs.data();
+	desc.InputLayout.NumElements = (u32)inputLayoutDescs.size();
+
+	desc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+	desc.PrimitiveTopologyType = RlfToD3d_TopoType(d->Topology);
+
+	desc.NumRenderTargets = (u32)d->RenderTargets.size();
+	for (u32 i = 0 ; i < d->RenderTargets.size() ; ++i)
+	{
+		const TextureTarget& t = d->RenderTargets[i];
+		if (t.IsSystem)
+		{
+			Assert(t.System == SystemValue::BackBuffer, "unsupported");
+			desc.RTVFormats[i] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		}
+		else
+		{
+			Assert(t.View->Type == ViewType::RTV, "Invalid");
+			Assert(t.View->ResourceType == ResourceType::Texture, "Invalid");
+			DXGI_FORMAT fmt = D3DTextureFormat[(u32)t.View->Texture->Format];
+			desc.RTVFormats[i] = fmt;
+		}
+	}
+
+	if (d->DepthStencil.size() > 0)
+	{
+		Assert(d->DepthStencil.size() == 1, "only one supported");
+		TextureTarget t = d->DepthStencil[0];
+		if (t.IsSystem)
+		{
+			if (t.System == SystemValue::DefaultDepth)
+			{
+				desc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+			}
+			else
+				Unimplemented();
+		}
+		else
+		{
+			Assert(t.View->Type == ViewType::DSV, "Invalid");
+			Assert(t.View->ResourceType == ResourceType::Texture, "Invalid");
+			DXGI_FORMAT fmt = D3DTextureFormat[(u32)t.View->Texture->Format];
+			desc.DSVFormat = fmt;
+		}
+	}
+	else
+	{
+		desc.DSVFormat = DXGI_FORMAT_UNKNOWN;
+	}
+
+	// TODO: msaa
+	desc.SampleDesc.Count = 1;
+	desc.SampleDesc.Quality = 0;
+
+	desc.NodeMask = 0;
+
+	desc.CachedPSO.pCachedBlob = nullptr;
+	desc.CachedPSO.CachedBlobSizeInBytes = 0;
+
+	HRESULT hr = device->CreateGraphicsPipelineState(&desc, 
+		IID_PPV_ARGS(&d->GfxState.Pipeline));
+	Assert(hr == S_OK, "failed to create graphics pipeline state, hr=%x", hr);
+}
 
 void CreateTexture(ID3D12Device* device, Texture* tex)
 {
@@ -790,10 +1007,10 @@ void ResolveBind(Bind& bind, ID3D12ShaderReflection* reflector, const char* path
 }
 
 void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
-	const Dispatch* dc)
+	const gfx::BindInfo* bi, const gfx::DescriptorTable* table, 
+	const std::vector<Bind>& binds)
 {
-	const gfx::ComputeShader* cs = &dc->Shader->GfxState;
-	for (const Bind& bind : dc->Binds)
+	for (const Bind& bind : binds)
 	{
 		u32 DestSlot = 0;
 		D3D12_CPU_DESCRIPTOR_HANDLE SrcDesc = {};
@@ -806,7 +1023,7 @@ void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
 			case SystemValue::BackBuffer:
 				if (bind.IsOutput)
 				{
-					DestSlot = cs->NumCbvs + cs->NumSrvs + (bind.BindIndex - cs->UavMin);
+					DestSlot = bi->NumCbvs + bi->NumSrvs + (bind.BindIndex - bi->UavMin);
 					SrcDesc = resources->MainRtUav;
 				}
 				else
@@ -823,13 +1040,13 @@ void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
 			if (bind.IsOutput)
 			{
 				Assert(bind.ViewBind->Type == ViewType::UAV, "mismatched view");
-				DestSlot = cs->NumCbvs + cs->NumSrvs + (bind.BindIndex - cs->UavMin);
+				DestSlot = bi->NumCbvs + bi->NumSrvs + (bind.BindIndex - bi->UavMin);
 				SrcDesc = bind.ViewBind->UAVGfxState;
 			}
 			else
 			{
 				Assert(bind.ViewBind->Type == ViewType::SRV, "mismatched view");
-				DestSlot = cs->NumCbvs + (bind.BindIndex - cs->SrvMin);
+				DestSlot = bi->NumCbvs + (bind.BindIndex - bi->SrvMin);
 				SrcDesc = bind.ViewBind->SRVGfxState;
 			}
 			break;
@@ -839,7 +1056,7 @@ void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
 			for (u32 frame = 0 ; frame < gfx::Context::NUM_FRAMES_IN_FLIGHT ; ++frame)
 			{
 				D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ctx->SamplerHeap,
-					dc->GfxState.SamplerDescTableStart[frame] + bind.BindIndex - cs->SamplerMin);
+					table->SamplerDescTableStart[frame] + bind.BindIndex - bi->SamplerMin);
 				ctx->Device->CopyDescriptorsSimple(1, DestDesc, bind.SamplerBind->GfxState,
 					D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 			}
@@ -853,13 +1070,31 @@ void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
 			for (u32 frame = 0 ; frame < gfx::Context::NUM_FRAMES_IN_FLIGHT ; ++frame)
 			{
 				D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ctx->CbvSrvUavHeap,
-					dc->GfxState.CbvSrvUavDescTableStart[frame] + DestSlot);
+					table->CbvSrvUavDescTableStart[frame] + DestSlot);
 				ctx->Device->CopyDescriptorsSimple(1, DestDesc, SrcDesc,
 					D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 			}
 		}
 	}
 }
+
+void CopyConstantBufferDescriptors(gfx::Context* ctx, const gfx::DescriptorTable* table,
+	const gfx::BindInfo* bi, const std::vector<ConstantBuffer>& CBs)
+{
+	for (const ConstantBuffer& buf : CBs)
+	{
+		u32 DestSlot = buf.Slot - bi->CbvMin;
+		for (u32 frame = 0 ; frame < gfx::Context::NUM_FRAMES_IN_FLIGHT ; ++frame)
+		{
+			D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ctx->CbvSrvUavHeap, 
+				table->CbvSrvUavDescTableStart[frame] + DestSlot);
+			ctx->Device->CopyDescriptorsSimple(1, DestDesc, 
+				buf.GfxState.CbvDescriptor[frame],
+				D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		}
+	}
+}
+
 
 u32 AlignU32(u32 val, u32 align)
 {
@@ -1042,6 +1277,18 @@ void PrepareConstants(
 	}
 }
 
+void AllocateDescriptorTables(gfx::Context* ctx, gfx::DescriptorTable* table,
+	gfx::BindInfo* bi)
+{
+	for (u32 frame = 0 ; frame < gfx::Context::NUM_FRAMES_IN_FLIGHT ; ++frame)
+	{
+		table->CbvSrvUavDescTableStart[frame] = ctx->CbvSrvUavHeap.NextIndex;
+		ctx->CbvSrvUavHeap.NextIndex += (bi->NumCbvs + bi->NumSrvs + bi->NumUavs);
+		table->SamplerDescTableStart[frame] = ctx->SamplerHeap.NextIndex;
+		ctx->SamplerHeap.NextIndex += bi->NumSamplers;
+	}
+}
+
 
 void InitMain(
 	gfx::Context* ctx,
@@ -1085,6 +1332,34 @@ void InitMain(
 		Assert(hr == S_OK, "Failed to create pipeline state, hr=%x", hr);
 	}
 
+	for (VertexShader* vs : rd->VShaders)
+	{
+		ID3DBlob* shaderBlob = CommonCompileShader(&vs->Common, workingDirectory,
+			"vs_5_0", errorState);
+
+		HRESULT hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
+			IID_ID3D12ShaderReflection, (void**) &vs->Common.Reflector);
+		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
+
+		vs->GfxState.Blob = shaderBlob;
+
+		GatherBinds(&vs->GfxState.BI, vs->Common.Reflector);
+	}
+
+	for (PixelShader* ps : rd->PShaders)
+	{
+		ID3DBlob* shaderBlob = CommonCompileShader(&ps->Common, workingDirectory,
+			"ps_5_0", errorState);
+
+		HRESULT hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
+			IID_ID3D12ShaderReflection, (void**) &ps->Common.Reflector);
+		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
+
+		ps->GfxState.Blob = shaderBlob;
+		GatherBinds(&ps->GfxState.BI, ps->Common.Reflector);
+	}
+
+
 	for (Dispatch* dc : rd->Dispatches)
 	{
 		ComputeShader* cs = dc->Shader;
@@ -1095,6 +1370,32 @@ void InitMain(
 		}
 		PrepareConstants(ctx, reflector, dc->CBs, dc->Constants, cs->Common.ShaderPath);
 	}
+
+	for (Draw* draw : rd->Draws)
+	{
+		InitAssert(draw->VShader, "Null vertex shader on draw not permitted.");
+		ID3D12ShaderReflection* reflector = draw->VShader->Common.Reflector;
+		for (Bind& bind : draw->VSBinds)
+		{
+			ResolveBind(bind, reflector, draw->VShader->Common.ShaderPath);
+		}
+		PrepareConstants(ctx, reflector, draw->VSCBs, draw->VSConstants,
+			draw->VShader->Common.ShaderPath);
+		if (draw->PShader)
+		{
+			reflector = draw->PShader->Common.Reflector;
+			for (Bind& bind : draw->PSBinds)
+			{
+				ResolveBind(bind, reflector, draw->PShader->Common.ShaderPath);
+			}
+			PrepareConstants(ctx, reflector, draw->PSCBs, draw->PSConstants,
+				draw->PShader->Common.ShaderPath);
+		}
+
+		CreateRootSignature(device, draw);
+		CreatePipelineState(device, draw);
+	}
+
 
 	ast::EvaluationContext evCtx;
 	evCtx.DisplaySize = displaySize;
@@ -1194,27 +1495,11 @@ void InitMain(
 	for (Dispatch* dc : rd->Dispatches)
 	{
 		gfx::ComputeShader* cs = &dc->Shader->GfxState;
-		for (u32 frame = 0 ; frame < gfx::Context::NUM_FRAMES_IN_FLIGHT ; ++frame)
-		{
-			dc->GfxState.CbvSrvUavDescTableStart[frame] = ctx->CbvSrvUavHeap.NextIndex;
-			ctx->CbvSrvUavHeap.NextIndex += (cs->NumCbvs + cs->NumSrvs + cs->NumUavs);
-			dc->GfxState.SamplerDescTableStart[frame] = ctx->SamplerHeap.NextIndex;
-			ctx->SamplerHeap.NextIndex += cs->NumSamplers;
-		}
-		CopyBindDescriptors(ctx, resources, dc);
+		AllocateDescriptorTables(ctx, &dc->GfxState.Table, &cs->BI);
+		CopyBindDescriptors(ctx, resources, &cs->BI, &dc->GfxState.Table, dc->Binds);
 
 		// Binding of constant buffers descriptors is separate from other views
-		for (const ConstantBuffer& buf : dc->CBs)
-		{
-			u32 DestSlot = buf.Slot - cs->CbvMin;
-			for (u32 frame = 0 ; frame < gfx::Context::NUM_FRAMES_IN_FLIGHT ; ++frame)
-			{
-				D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ctx->CbvSrvUavHeap, 
-					dc->GfxState.CbvSrvUavDescTableStart[frame] + DestSlot);
-				ctx->Device->CopyDescriptorsSimple(1, DestDesc, buf.GfxState.CbvDescriptor[frame],
-					D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-			}
-		}
+		CopyConstantBufferDescriptors(ctx, &dc->GfxState.Table, &cs->BI, dc->CBs);
 
 		if (dc->IndirectArgs)
 		{
@@ -1232,120 +1517,18 @@ void InitMain(
 		}
 	}
 
-/* ------TODO-----------
-
-	for (VertexShader* vs : rd->VShaders)
+	for (Draw* d : rd->Draws)
 	{
-		ID3DBlob* shaderBlob = CommonCompileShader(&vs->Common, workingDirectory,
-			"vs_5_0", errorState);
-
-		HRESULT hr = device->CreateVertexShader(shaderBlob->GetBufferPointer(), 
-			shaderBlob->GetBufferSize(), NULL, &vs->GfxState);
-		Assert(hr == S_OK, "Failed to create shader, hr=%x", hr);
-
-		hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
-			IID_ID3D11ShaderReflection, (void**) &vs->Common.Reflector);
-		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
-
-		CreateInputLayout(device, vs, shaderBlob);
-
-		SafeRelease(shaderBlob);
+		gfx::VertexShader* vs = &d->VShader->GfxState;
+		gfx::PixelShader* ps = &d->PShader->GfxState;
+		AllocateDescriptorTables(ctx, &d->GfxState.VSTable, &vs->BI);
+		AllocateDescriptorTables(ctx, &d->GfxState.PSTable, &ps->BI);
+		CopyBindDescriptors(ctx, resources, &vs->BI, &d->GfxState.VSTable, d->VSBinds);
+		CopyBindDescriptors(ctx, resources, &ps->BI, &d->GfxState.PSTable, d->PSBinds);
+		CopyConstantBufferDescriptors(ctx, &d->GfxState.VSTable, &vs->BI, d->VSCBs);
+		CopyConstantBufferDescriptors(ctx, &d->GfxState.PSTable, &ps->BI, d->PSCBs);
 	}
 
-	for (PixelShader* ps : rd->PShaders)
-	{
-		ID3DBlob* shaderBlob = CommonCompileShader(&ps->Common, workingDirectory,
-			"ps_5_0", errorState);
-
-		HRESULT hr = device->CreatePixelShader(shaderBlob->GetBufferPointer(), 
-			shaderBlob->GetBufferSize(), NULL, &ps->GfxState);
-		Assert(hr == S_OK, "Failed to create shader, hr=%x", hr);
-
-		hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
-			IID_ID3D11ShaderReflection, (void**) &ps->Common.Reflector);
-		Assert(hr == S_OK, "Failed to create reflection, hr=%x", hr);
-
-		SafeRelease(shaderBlob);
-	}
-
-
-
-	for (Draw* draw : rd->Draws)
-	{
-		InitAssert(draw->VShader, "Null vertex shader on draw not permitted.");
-		ID3D11ShaderReflection* reflector = draw->VShader->Common.Reflector;
-		for (Bind& bind : draw->VSBinds)
-		{
-			ResolveBind(bind, reflector, draw->VShader->Common.ShaderPath);
-		}
-		PrepareConstants(ctx, reflector, draw->VSCBs, draw->VSConstants,
-			draw->VShader->Common.ShaderPath);
-		if (draw->PShader)
-		{
-			reflector = draw->PShader->Common.Reflector;
-			for (Bind& bind : draw->PSBinds)
-			{
-				ResolveBind(bind, reflector, draw->PShader->Common.ShaderPath);
-			}
-			PrepareConstants(ctx, reflector, draw->PSCBs, draw->PSConstants,
-				draw->PShader->Common.ShaderPath);
-		}
-
-		size_t blendCount = draw->BlendStates.size();
-		if (blendCount > 0)
-		{
-			InitAssert(blendCount <= 8, "Too blend states on draw, max is 8.");
-			D3D11_BLEND_DESC desc = {};
-			desc.AlphaToCoverageEnable = false;
-			desc.IndependentBlendEnable = blendCount > 1;
-			for (int i = 0 ; i < blendCount ; ++i)
-			{
-				BlendState* blend = draw->BlendStates[i];
-				desc.RenderTarget[i].BlendEnable = blend->Enable;
-				desc.RenderTarget[i].SrcBlend = RlfToD3d(blend->Src);
-				desc.RenderTarget[i].DestBlend = RlfToD3d(blend->Dest);
-				desc.RenderTarget[i].BlendOp = RlfToD3d(blend->Op);
-				desc.RenderTarget[i].SrcBlendAlpha = RlfToD3d(blend->SrcAlpha);
-				desc.RenderTarget[i].DestBlendAlpha = RlfToD3d(blend->DestAlpha);
-				desc.RenderTarget[i].BlendOpAlpha = RlfToD3d(blend->OpAlpha);
-				desc.RenderTarget[i].RenderTargetWriteMask = blend->RenderTargetWriteMask;
-			}
-			HRESULT hr = device->CreateBlendState(&desc, &draw->BlendGfxState);
-			CheckHresult(hr, "BlendState");
-		}
-	}
-
-	for (RasterizerState* rs : rd->RasterizerStates)
-	{
-		D3D11_RASTERIZER_DESC desc = {};
-		desc.FillMode = rs->Fill ? D3D11_FILL_SOLID : D3D11_FILL_WIREFRAME;
-		desc.CullMode = RlfToD3d(rs->CullMode);
-		desc.FrontCounterClockwise = rs->FrontCCW;
-		desc.DepthBias = rs->DepthBias;
-		desc.SlopeScaledDepthBias = rs->SlopeScaledDepthBias;
-		desc.DepthBiasClamp = rs->DepthBiasClamp;
-		desc.DepthClipEnable = rs->DepthClipEnable;
-		desc.ScissorEnable = rs->ScissorEnable;
-		desc.MultisampleEnable = rs->MultisampleEnable;
-		desc.AntialiasedLineEnable = rs->AntialiasedLineEnable;
-		device->CreateRasterizerState(&desc, &rs->GfxState);
-	}
-
-	for (DepthStencilState* dss : rd->DepthStencilStates)
-	{
-		D3D11_DEPTH_STENCIL_DESC desc = {};
-		desc.DepthEnable = dss->DepthEnable;
-		desc.DepthWriteMask = dss->DepthWrite ? D3D11_DEPTH_WRITE_MASK_ALL : 
-			D3D11_DEPTH_WRITE_MASK_ZERO;
-		desc.DepthFunc = RlfToD3d(dss->DepthFunc);
-		desc.StencilEnable = dss->StencilEnable;
-		desc.StencilReadMask = dss->StencilReadMask;
-		desc.StencilWriteMask = dss->StencilWriteMask;
-		desc.FrontFace = RlfToD3d(dss->FrontFace);
-		desc.BackFace = RlfToD3d(dss->BackFace);
-		device->CreateDepthStencilState(&desc, &dss->GfxState);
-	}
-*/
 }
 
 void ReleaseD3D(
@@ -1366,6 +1549,41 @@ void ReleaseD3D(
 		SafeRelease(cs->GfxState.RootSig);
 		SafeRelease(cs->Common.Reflector);
 		SafeRelease(cs->GfxState.Blob);
+	}
+
+	for (VertexShader* vs : rd->VShaders)
+	{
+		SafeRelease(vs->Common.Reflector);
+		SafeRelease(vs->GfxState.Blob);
+	}
+	for (PixelShader* ps : rd->PShaders)
+	{
+		SafeRelease(ps->Common.Reflector);
+		SafeRelease(ps->GfxState.Blob);
+	}
+
+	for (Draw* d : rd->Draws)
+	{
+		SafeRelease(d->GfxState.Pipeline);
+		SafeRelease(d->GfxState.RootSig);
+		for (ConstantBuffer& cb : d->VSCBs)
+		{
+			for (u32 frame = 0 ; frame < gfx::Context::NUM_FRAMES_IN_FLIGHT ; ++frame)
+			{
+				cb.GfxState.Resource[frame]->Unmap(0, nullptr);
+				SafeRelease(cb.GfxState.Resource[frame]);
+			}
+			free(cb.BackingMemory);
+		}
+		for (ConstantBuffer& cb : d->PSCBs)
+		{
+			for (u32 frame = 0 ; frame < gfx::Context::NUM_FRAMES_IN_FLIGHT ; ++frame)
+			{
+				cb.GfxState.Resource[frame]->Unmap(0, nullptr);
+				SafeRelease(cb.GfxState.Resource[frame]);
+			}
+			free(cb.BackingMemory);
+		}
 	}
 
 	for (Dispatch* dc : rd->Dispatches)
@@ -1391,45 +1609,6 @@ void ReleaseD3D(
 	{
 		SafeRelease(tex->GfxState.Resource);
 	}
-
-/* ------TODO-----------
-
-	for (VertexShader* vs : rd->VShaders)
-	{
-		SafeRelease(vs->GfxState);
-		SafeRelease(vs->Common.Reflector);
-		SafeRelease(vs->LayoutGfxState);
-	}
-	for (PixelShader* ps : rd->PShaders)
-	{
-		SafeRelease(ps->GfxState);
-		SafeRelease(ps->Common.Reflector);
-	}
-
-	for (RasterizerState* rs : rd->RasterizerStates)
-	{
-		SafeRelease(rs->GfxState);
-	}
-	for (DepthStencilState* dss : rd->DepthStencilStates)
-	{
-		SafeRelease(dss->GfxState);
-	}
-
-	for (Draw* d : rd->Draws)
-	{
-		SafeRelease(d->BlendGfxState);
-		for (ConstantBuffer& cb : d->VSCBs)
-		{
-			SafeRelease(cb.GfxState);
-			free(cb.BackingMemory);
-		}
-		for (ConstantBuffer& cb : d->PSCBs)
-		{
-			SafeRelease(cb.GfxState);
-			free(cb.BackingMemory);
-		}
-	}
-*/
 }
 
 void HandleTextureParametersChanged(
@@ -1524,7 +1703,15 @@ void HandleTextureParametersChanged(
 	// TODO: do draws too
 	for (Dispatch* dc : rd->Dispatches)
 	{
-		CopyBindDescriptors(ctx, &ec->Res, dc);
+		CopyBindDescriptors(ctx, &ec->Res, &dc->Shader->GfxState.BI, 
+			&dc->GfxState.Table, dc->Binds);
+	}
+	for (Draw* d : rd->Draws)
+	{
+		CopyBindDescriptors(ctx, &ec->Res, &d->VShader->GfxState.BI, 
+			&d->GfxState.VSTable, d->VSBinds);
+		CopyBindDescriptors(ctx, &ec->Res, &d->PShader->GfxState.BI, 
+			&d->GfxState.PSTable, d->PSBinds);
 	}
 }
 
@@ -1653,16 +1840,16 @@ void ExecuteDispatch(
 	cl->SetPipelineState(cs->Pipeline);
 	cl->SetComputeRootSignature(cs->RootSig);
 	u32 table_index = 0;
-	if (cs->NumCbvs + cs->NumSrvs + cs->NumUavs > 0)
+	if (cs->BI.NumCbvs + cs->BI.NumSrvs + cs->BI.NumUavs > 0)
 	{
 		D3D12_GPU_DESCRIPTOR_HANDLE cbv_srv_uav_table_handle = GetGPUDescriptor(
-			&ec->GfxCtx->CbvSrvUavHeap, dc->GfxState.CbvSrvUavDescTableStart[frame]);
+			&ec->GfxCtx->CbvSrvUavHeap, dc->GfxState.Table.CbvSrvUavDescTableStart[frame]);
 		cl->SetComputeRootDescriptorTable(table_index++, cbv_srv_uav_table_handle);
 	}
-	if (cs->NumSamplers > 0)
+	if (cs->BI.NumSamplers > 0)
 	{
 		D3D12_GPU_DESCRIPTOR_HANDLE sampler_table_handle = GetGPUDescriptor(
-			&ec->GfxCtx->SamplerHeap, dc->GfxState.SamplerDescTableStart[frame]);
+			&ec->GfxCtx->SamplerHeap, dc->GfxState.Table.SamplerDescTableStart[frame]);
 		cl->SetComputeRootDescriptorTable(table_index++, sampler_table_handle);
 	}
 
@@ -1696,65 +1883,53 @@ void ExecuteDispatch(
 	}
 }
 
-/* ------TODO-----------
 void ExecuteDraw(
 	Draw* draw,
 	ExecuteContext* ec)
 {
-	ID3D11DeviceContext* ctx = ec->GfxCtx->DeviceContext;
-	ctx->VSSetShader(draw->VShader->GfxState, nullptr, 0);
-	ctx->IASetInputLayout(draw->VShader->LayoutGfxState);
-	ctx->PSSetShader(draw->PShader ? draw->PShader->GfxState : nullptr, nullptr, 0);
+	ID3D12GraphicsCommandList* cl = ec->GfxCtx->CommandList;
 	ExecuteSetConstants(ec, draw->VSConstants, draw->VSCBs);
 	ExecuteSetConstants(ec, draw->PSConstants, draw->PSCBs);
-	for (const ConstantBuffer& buf : draw->VSCBs)
+
+	TransitionBinds(ec->GfxCtx, &ec->Res, draw->VSBinds);
+	TransitionBinds(ec->GfxCtx, &ec->Res, draw->PSBinds);
+
+	u32 frame = ec->GfxCtx->FrameIndex % gfx::Context::NUM_FRAMES_IN_FLIGHT;
+
+	cl->SetGraphicsRootSignature(draw->GfxState.RootSig);
+	cl->SetPipelineState(draw->GfxState.Pipeline);
+
+	gfx::BindInfo& vsbi = draw->VShader->GfxState.BI;
+	gfx::BindInfo& psbi = draw->PShader->GfxState.BI;
+
+	u32 table_index = 0;
+	if (vsbi.NumCbvs + vsbi.NumSrvs + vsbi.NumUavs > 0)
 	{
-		ctx->VSSetConstantBuffers(buf.Slot, 1, &buf.GfxState);
+		D3D12_GPU_DESCRIPTOR_HANDLE cbv_srv_uav_table_handle = GetGPUDescriptor(
+			&ec->GfxCtx->CbvSrvUavHeap, draw->GfxState.VSTable.CbvSrvUavDescTableStart[frame]);
+		cl->SetComputeRootDescriptorTable(table_index++, cbv_srv_uav_table_handle);
 	}
-	for (const ConstantBuffer& buf : draw->PSCBs)
+	if (vsbi.NumSamplers > 0)
 	{
-		ctx->PSSetConstantBuffers(buf.Slot, 1, &buf.GfxState);
+		D3D12_GPU_DESCRIPTOR_HANDLE sampler_table_handle = GetGPUDescriptor(
+			&ec->GfxCtx->SamplerHeap, draw->GfxState.VSTable.SamplerDescTableStart[frame]);
+		cl->SetComputeRootDescriptorTable(table_index++, sampler_table_handle);
 	}
-	for (Bind& bind : draw->VSBinds)
+	if (psbi.NumCbvs + psbi.NumSrvs + psbi.NumUavs > 0)
 	{
-		switch (bind.Type)
-		{
-		case BindType::View:
-		{
-			ExecuteAssert(bind.ViewBind->Type == ViewType::SRV, 
-				"UAVs are not supported in vertex shaders.");
-			ctx->VSSetShaderResources(bind.BindIndex, 1, &bind.ViewBind->SRVGfxState);
-			break;
-		}
-		case BindType::Sampler:
-			ctx->VSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->GfxState);
-			break;
-		case BindType::SystemValue:
-		default:
-			Assert(false, "unhandled type %d", bind.Type);
-		}
+		D3D12_GPU_DESCRIPTOR_HANDLE cbv_srv_uav_table_handle = GetGPUDescriptor(
+			&ec->GfxCtx->CbvSrvUavHeap, draw->GfxState.PSTable.CbvSrvUavDescTableStart[frame]);
+		cl->SetComputeRootDescriptorTable(table_index++, cbv_srv_uav_table_handle);
 	}
-	for (Bind& bind : draw->PSBinds)
+	if (psbi.NumSamplers > 0)
 	{
-		switch (bind.Type)
-		{
-		case BindType::View:
-		{
-			ExecuteAssert(bind.ViewBind->Type == ViewType::SRV, 
-				"UAVs are not supported in pixel shaders.");
-			ctx->PSSetShaderResources(bind.BindIndex, 1, &bind.ViewBind->SRVGfxState);
-			break;
-		}
-		case BindType::Sampler:
-			ctx->PSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->GfxState);
-			break;
-		case BindType::SystemValue:
-		default:
-			Assert(false, "unhandled type %d", bind.Type);
-		}
+		D3D12_GPU_DESCRIPTOR_HANDLE sampler_table_handle = GetGPUDescriptor(
+			&ec->GfxCtx->SamplerHeap, draw->GfxState.PSTable.SamplerDescTableStart[frame]);
+		cl->SetComputeRootDescriptorTable(table_index++, sampler_table_handle);
 	}
-	ID3D11RenderTargetView* rtViews[8] = {};
-	D3D11_VIEWPORT vp[8] = {};
+
+	D3D12_CPU_DESCRIPTOR_HANDLE rtViews[8] = {};
+	D3D12_VIEWPORT vp[8] = {};
 	u32 rtCount = 0;
 	for (TextureTarget target : draw->RenderTargets)
 	{
@@ -1762,7 +1937,7 @@ void ExecuteDraw(
 		{
 			if (target.System == SystemValue::BackBuffer)
 			{
-				rtViews[rtCount] = ec->MainRtv;
+				rtViews[rtCount] = ec->Res.MainRtv;
 				vp[rtCount].Width = (float)ec->EvCtx.DisplaySize.x;
 				vp[rtCount].Height = (float)ec->EvCtx.DisplaySize.y;
 			}
@@ -1782,14 +1957,14 @@ void ExecuteDraw(
 		vp[rtCount].TopLeftX = vp[rtCount].TopLeftY = 0;
 		++rtCount;
 	}
-	ID3D11DepthStencilView* dsView = nullptr;
+	D3D12_CPU_DESCRIPTOR_HANDLE dsView = {};
 	for (TextureTarget target : draw->DepthStencil)
 	{
 		if (target.IsSystem)
 		{
 			if (target.System == SystemValue::DefaultDepth)
 			{
-				dsView = ec->DefaultDepthView;
+				dsView = ec->Res.DefaultDepthView;
 				vp[0].Width = (float)ec->EvCtx.DisplaySize.x;
 				vp[0].Height = (float)ec->EvCtx.DisplaySize.y;
 			}
@@ -1827,39 +2002,60 @@ void ExecuteDraw(
 			vp[i].MaxDepth = res.Value.Float2Val.y;
 		}
 	}
-	ctx->OMSetRenderTargets(8, rtViews, dsView);
-	ctx->RSSetViewports(8, vp);
-	ctx->IASetPrimitiveTopology(RlfToD3d(draw->Topology));
-	ctx->RSSetState(draw->RState ? draw->RState->GfxState : DefaultRasterizerState);
-	ctx->OMSetDepthStencilState(draw->DSState ? draw->DSState->GfxState : nullptr,
-		draw->StencilRef);
-	ctx->OMSetBlendState(draw->BlendGfxState, nullptr, 0xffffffff);
-	u32 offset = 0;
+	D3D12_RECT sr[8] = {};
+	for (u32 i = 0 ; i < rtCount ; ++i)
+	{
+		sr[i].left = (u32)vp[i].TopLeftX;
+		sr[i].top = (u32)vp[i].TopLeftY;
+		sr[i].right = (u32)(vp[i].TopLeftX + vp[i].Width);
+		sr[i].bottom = (u32)(vp[i].TopLeftY + vp[i].Height);
+	}
+	cl->OMSetRenderTargets(rtCount, rtViews, false, 
+		draw->DepthStencil.size() > 0 ? &dsView : nullptr);
+	cl->RSSetViewports(rtCount, vp);
+	cl->RSSetScissorRects(rtCount, sr);
+	cl->IASetPrimitiveTopology(RlfToD3d_Topo(draw->Topology));
+	cl->OMSetStencilRef(draw->StencilRef);
 	Buffer* vb = draw->VertexBuffer;
 	Buffer* ib = draw->IndexBuffer;
 	if (vb)
-		ctx->IASetVertexBuffers(0, 1, &vb->GfxState, &vb->ElementSize, 
-			&offset);
+	{
+		D3D12_VERTEX_BUFFER_VIEW vbv = {};
+		vbv.BufferLocation = vb->GfxState.Resource->GetGPUVirtualAddress();
+		vbv.SizeInBytes = vb->ElementCount * vb->ElementSize;
+		vbv.StrideInBytes = vb->ElementSize;
+		cl->IASetVertexBuffers(0, 1, &vbv);
+	}
 	if (ib)
-		ctx->IASetIndexBuffer(ib->GfxState, ib->ElementSize == 2 ? 
-			DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT, 0);
+	{
+		D3D12_INDEX_BUFFER_VIEW ibv = {};
+		ibv.BufferLocation = ib->GfxState.Resource->GetGPUVirtualAddress();
+		ibv.SizeInBytes = ib->ElementCount * ib->ElementSize;
+		ibv.Format = ib->ElementSize == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+		cl->IASetIndexBuffer(&ibv);
+	}
 
 	if (draw->InstancedIndirectArgs)
-		ctx->DrawInstancedIndirect(draw->InstancedIndirectArgs->GfxState,
-			draw->IndirectArgsOffset);
+	{
+		Unimplemented(); // TODO
+		// cl->DrawInstancedIndirect(draw->InstancedIndirectArgs->GfxState,
+		// 	draw->IndirectArgsOffset);
+	}
 	else if (draw->IndexedInstancedIndirectArgs)
-		ctx->DrawIndexedInstancedIndirect(draw->InstancedIndirectArgs->GfxState,
-			draw->IndirectArgsOffset);
+	{
+		Unimplemented(); // TODO
+		// cl->DrawIndexedInstancedIndirect(draw->InstancedIndirectArgs->GfxState,
+		// 	draw->IndirectArgsOffset);
+	}
 	else if (ib && draw->InstanceCount > 0)
-		ctx->DrawIndexedInstanced(ib->ElementCount, draw->InstanceCount, 0, 0, 0);
+		cl->DrawIndexedInstanced(ib->ElementCount, draw->InstanceCount, 0, 0, 0);
 	else if (ib)
-		ctx->DrawIndexed(ib->ElementCount, 0, 0);
+		cl->DrawIndexedInstanced(ib->ElementCount, 1, 0, 0, 0);
 	else if (draw->InstanceCount > 0)
-		ctx->DrawInstanced(draw->VertexCount, draw->InstanceCount, 0, 0);
+		cl->DrawInstanced(draw->VertexCount, draw->InstanceCount, 0, 0);
 	else
-		ctx->Draw(draw->VertexCount, 0);
+		cl->DrawInstanced(draw->VertexCount, 1, 0, 0);
 }
-*/
 
 void _Execute(
 	ExecuteContext* ec,
@@ -1884,7 +2080,6 @@ void _Execute(
 		{
 			ExecuteDispatch(pass.Dispatch, ec);
 		}
-		/* ------TODO-----------
 		else if (pass.Type == PassType::Draw)
 		{
 			ExecuteDraw(pass.Draw, ec);
@@ -1896,19 +2091,20 @@ void _Execute(
 			{
 				color.x, color.y, color.z, color.w
 			};
-			ctx->ClearRenderTargetView(pass.ClearColor->Target->RTVGfxState, 
-				clear_color);
+			ctx->CommandList->ClearRenderTargetView(pass.ClearColor->Target->RTVGfxState, 
+				clear_color, 0, nullptr);
 		}
 		else if (pass.Type == PassType::ClearDepth)
 		{
-			ctx->ClearDepthStencilView(pass.ClearDepth->Target->DSVGfxState, 
-				D3D11_CLEAR_DEPTH, pass.ClearDepth->Depth, 0);
+			ctx->CommandList->ClearDepthStencilView(pass.ClearDepth->Target->DSVGfxState, 
+				D3D12_CLEAR_FLAG_DEPTH, pass.ClearDepth->Depth, 0, 0, nullptr);
 		}
 		else if (pass.Type == PassType::ClearStencil)
 		{
-			ctx->ClearDepthStencilView(pass.ClearStencil->Target->DSVGfxState, 
-				D3D11_CLEAR_STENCIL, 0.f, pass.ClearStencil->Stencil);
+			ctx->CommandList->ClearDepthStencilView(pass.ClearStencil->Target->DSVGfxState, 
+				D3D12_CLEAR_FLAG_STENCIL, 0.f, pass.ClearStencil->Stencil, 0, nullptr);
 		}
+		/* ------TODO-----------
 		else if (pass.Type == PassType::Resolve)
 		{
 			ctx->ResolveSubresource(pass.Resolve->Dst->GfxState, 0, 

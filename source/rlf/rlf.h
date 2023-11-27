@@ -370,6 +370,7 @@ namespace rlf
 		std::vector<ConstantBuffer> VSCBs;
 		std::vector<ConstantBuffer> PSCBs;
 		gfx::BlendState BlendGfxState;
+		gfx::DrawData GfxState;
 	};
 	struct ClearColor
 	{

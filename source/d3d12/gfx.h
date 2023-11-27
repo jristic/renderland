@@ -64,14 +64,7 @@ namespace gfx {
 		D3D12_CPU_DESCRIPTOR_HANDLE		BackBufferDescriptor[NUM_BACK_BUFFERS] = {};
 	};
 
-	typedef void* RasterizerState;
-	typedef void* DepthStencilState;
-	typedef void* BlendState;
-	typedef ID3D12ShaderReflection* ShaderReflection;
-	struct ComputeShader {
-		ID3DBlob* Blob;
-		ID3D12PipelineState* Pipeline;
-		ID3D12RootSignature* RootSig;
+	struct BindInfo {
 		u32 NumCbvs;
 		u32 NumSrvs;
 		u32 NumUavs;
@@ -85,9 +78,26 @@ namespace gfx {
 		u32 SamplerMin;
 		u32 SamplerMax;
 	};
-	typedef void* VertexShader;
-	typedef void* InputLayout;
-	typedef void* PixelShader;
+
+	struct RasterizerState {};
+	struct DepthStencilState {};
+	struct BlendState {};
+	typedef ID3D12ShaderReflection* ShaderReflection;
+	struct ComputeShader {
+		ID3DBlob* Blob;
+		ID3D12PipelineState* Pipeline;
+		ID3D12RootSignature* RootSig;
+		BindInfo BI;
+	};
+	struct InputLayout {};
+	struct VertexShader {
+		ID3DBlob* Blob;
+		BindInfo BI;
+	};
+	struct PixelShader {
+		ID3DBlob* Blob;
+		BindInfo BI;
+	};
 	struct ConstantBuffer {
 		ID3D12Resource* Resource[Context::NUM_FRAMES_IN_FLIGHT];
 		void* MappedMem[Context::NUM_FRAMES_IN_FLIGHT];
@@ -107,10 +117,20 @@ namespace gfx {
 	typedef D3D12_CPU_DESCRIPTOR_HANDLE RenderTargetView;
 	typedef D3D12_CPU_DESCRIPTOR_HANDLE DepthStencilView;
 
-	struct DispatchData {
+	struct DescriptorTable {
 		u64 CbvSrvUavDescTableStart[Context::NUM_FRAMES_IN_FLIGHT];
 		u64 SamplerDescTableStart[Context::NUM_FRAMES_IN_FLIGHT];
+	};
+
+	struct DispatchData {
+		DescriptorTable Table;
 		ID3D12CommandSignature* CommandSig;
+	};
+	struct DrawData {
+		ID3D12RootSignature* RootSig;
+		ID3D12PipelineState* Pipeline;
+		DescriptorTable VSTable;
+		DescriptorTable PSTable;
 	};
 
 
