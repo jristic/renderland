@@ -1916,25 +1916,25 @@ void ExecuteDraw(
 	{
 		D3D12_GPU_DESCRIPTOR_HANDLE cbv_srv_uav_table_handle = GetGPUDescriptor(
 			&ec->GfxCtx->CbvSrvUavHeap, draw->GfxState.VSTable.CbvSrvUavDescTableStart[frame]);
-		cl->SetComputeRootDescriptorTable(table_index++, cbv_srv_uav_table_handle);
+		cl->SetGraphicsRootDescriptorTable(table_index++, cbv_srv_uav_table_handle);
 	}
 	if (vsbi.NumSamplers > 0)
 	{
 		D3D12_GPU_DESCRIPTOR_HANDLE sampler_table_handle = GetGPUDescriptor(
 			&ec->GfxCtx->SamplerHeap, draw->GfxState.VSTable.SamplerDescTableStart[frame]);
-		cl->SetComputeRootDescriptorTable(table_index++, sampler_table_handle);
+		cl->SetGraphicsRootDescriptorTable(table_index++, sampler_table_handle);
 	}
 	if (psbi.NumCbvs + psbi.NumSrvs + psbi.NumUavs > 0)
 	{
 		D3D12_GPU_DESCRIPTOR_HANDLE cbv_srv_uav_table_handle = GetGPUDescriptor(
 			&ec->GfxCtx->CbvSrvUavHeap, draw->GfxState.PSTable.CbvSrvUavDescTableStart[frame]);
-		cl->SetComputeRootDescriptorTable(table_index++, cbv_srv_uav_table_handle);
+		cl->SetGraphicsRootDescriptorTable(table_index++, cbv_srv_uav_table_handle);
 	}
 	if (psbi.NumSamplers > 0)
 	{
 		D3D12_GPU_DESCRIPTOR_HANDLE sampler_table_handle = GetGPUDescriptor(
 			&ec->GfxCtx->SamplerHeap, draw->GfxState.PSTable.SamplerDescTableStart[frame]);
-		cl->SetComputeRootDescriptorTable(table_index++, sampler_table_handle);
+		cl->SetGraphicsRootDescriptorTable(table_index++, sampler_table_handle);
 	}
 
 	D3D12_CPU_DESCRIPTOR_HANDLE rtViews[8] = {};
@@ -1942,10 +1942,12 @@ void ExecuteDraw(
 	u32 rtCount = 0;
 	for (TextureTarget target : draw->RenderTargets)
 	{
+		gfx::Texture* resource;
 		if (target.IsSystem)
 		{
 			if (target.System == SystemValue::BackBuffer)
 			{
+				resource = resources->MainRtTex;
 				rtViews[rtCount] = ec->Res.MainRtv;
 				vp[rtCount].Width = (float)ec->EvCtx.DisplaySize.x;
 				vp[rtCount].Height = (float)ec->EvCtx.DisplaySize.y;
@@ -1957,6 +1959,7 @@ void ExecuteDraw(
 		{
 			Assert(target.View->Type == ViewType::RTV, "Invalid");
 			Assert(target.View->ResourceType == ResourceType::Texture, "Invalid");
+			resource = &target.View->Texture->GfxState;
 			rtViews[rtCount] = target.View->RTVGfxState;
 			vp[rtCount].Width = (float)target.View->Texture->Size.x;
 			vp[rtCount].Height = (float)target.View->Texture->Size.y;
@@ -1965,14 +1968,18 @@ void ExecuteDraw(
 		vp[rtCount].MaxDepth = 1.0f;
 		vp[rtCount].TopLeftX = vp[rtCount].TopLeftY = 0;
 		++rtCount;
+
+		TransitionResource(ctx, resource, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	}
 	D3D12_CPU_DESCRIPTOR_HANDLE dsView = {};
 	for (TextureTarget target : draw->DepthStencil)
 	{
+		gfx::Texture* resource;
 		if (target.IsSystem)
 		{
 			if (target.System == SystemValue::DefaultDepth)
 			{
+				resource = ec->Res.DefaultDepthTex;
 				dsView = ec->Res.DefaultDepthView;
 				vp[0].Width = (float)ec->EvCtx.DisplaySize.x;
 				vp[0].Height = (float)ec->EvCtx.DisplaySize.y;
@@ -1984,12 +1991,16 @@ void ExecuteDraw(
 		{
 			Assert(target.View->Type == ViewType::DSV, "Invalid");
 			Assert(target.View->ResourceType == ResourceType::Texture, "Invalid");
+			resource = &target.View->Texture->GfxState;
 			dsView = target.View->DSVGfxState;
 			vp[0].Width = (float)target.View->Texture->Size.x;
 			vp[0].Height = (float)target.View->Texture->Size.y;
 		}
 		vp[0].MinDepth = 0.0f;
 		vp[0].MaxDepth = 1.0f;
+
+		TransitionResource(ctx, resource, D3D12_RESOURCE_STATE_DEPTH_READ | 
+			D3D12_RESOURCE_STATE_DEPTH_WRITE);
 	}
 	for (int i = 0 ; i < draw->Viewports.size() ; ++i)
 	{
