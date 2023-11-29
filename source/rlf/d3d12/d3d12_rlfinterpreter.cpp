@@ -473,6 +473,7 @@ void CreateRootSignature(ID3D12Device* device, ComputeShader* c)
 	RootSig.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
 	RootSig.Desc_1_1.NumParameters = ParamCount;
 	RootSig.Desc_1_1.pParameters = params;
+	RootSig.Desc_1_1.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
 
 	ID3DBlob* SerializedRootSig;
 	HRESULT hr = D3D12SerializeVersionedRootSignature(&RootSig, &SerializedRootSig, nullptr); 
@@ -509,6 +510,14 @@ void CreateRootSignature(ID3D12Device* device, Draw* d)
 	RootSig.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
 	RootSig.Desc_1_1.NumParameters = ParamCount;
 	RootSig.Desc_1_1.pParameters = params;
+	RootSig.Desc_1_1.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+
+	{
+		D3D12_SHADER_DESC shaderDesc;
+		vs->Common.Reflector->GetDesc( &shaderDesc );
+		if (shaderDesc.InputParameters > 0)
+			RootSig.Desc_1_1.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+	}
 
 	ID3DBlob* SerializedRootSig;
 	HRESULT hr = D3D12SerializeVersionedRootSignature(&RootSig, &SerializedRootSig, nullptr); 
@@ -677,7 +686,7 @@ void CreatePipelineState(ID3D12Device* device, Draw* d)
 	DepthStencilState* dss = d->DSState;
 	if (dss)
 	{
-		desc.DepthStencilState.DepthEnable = dss->DepthEnable;
+		desc.DepthStencilState.DepthEnable = dss->DepthEnable && d->DepthStencil.size() > 0;
 		desc.DepthStencilState.DepthWriteMask = dss->DepthWrite ? D3D12_DEPTH_WRITE_MASK_ALL :
 			D3D12_DEPTH_WRITE_MASK_ZERO;
 		desc.DepthStencilState.DepthFunc = RlfToD3d(dss->DepthFunc);
@@ -689,7 +698,7 @@ void CreatePipelineState(ID3D12Device* device, Draw* d)
 	}
 	else
 	{
-		desc.DepthStencilState.DepthEnable = TRUE;
+		desc.DepthStencilState.DepthEnable = d->DepthStencil.size() > 0;
 		desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
 		desc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
 		desc.DepthStencilState.StencilEnable = FALSE;
