@@ -411,6 +411,41 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		}
 
 		SetupBackBuffer(&Gfx);
+
+		// upload buffer / command list
+		{
+			D3D12_RESOURCE_DESC bufferDesc;
+			bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+			bufferDesc.Alignment = 0;
+			bufferDesc.Width = gfx::Context::UPLOAD_BUFFER_SIZE;
+			bufferDesc.Height = 1;
+			bufferDesc.DepthOrArraySize = 1;
+			bufferDesc.MipLevels = 1;
+			bufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+			bufferDesc.SampleDesc.Count = 1;
+			bufferDesc.SampleDesc.Quality = 0;
+			bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+			bufferDesc.Flags = D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+		 
+			D3D12_HEAP_PROPERTIES uploadHeapProperties;
+			uploadHeapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
+			uploadHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+			uploadHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+			uploadHeapProperties.CreationNodeMask = 0;
+			uploadHeapProperties.VisibleNodeMask = 0;
+
+			hr = Gfx.Device->CreateCommittedResource(&uploadHeapProperties, 
+				D3D12_HEAP_FLAG_NONE, &bufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, 
+				NULL, IID_PPV_ARGS(&Gfx.UploadBufferResource));
+			CheckHresult(hr, "upload buffer");
+			Gfx.UploadBufferResource->Map(0, nullptr, &Gfx.UploadBufferMem);
+
+			hr = Gfx.Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, 
+				Gfx.FrameContexts[0].CommandAllocator, nullptr, 
+				IID_PPV_ARGS(&Gfx.UploadCommandList));
+			CheckHresult(hr, "command list");
+			Gfx.UploadCommandList->Close();
+		}
 	}
 
 	State.GfxCtx = &Gfx;
@@ -587,6 +622,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		SafeRelease(Gfx.FrameContexts[i].CommandAllocator);
 	SafeRelease(Gfx.CommandQueue);
 	SafeRelease(Gfx.CommandList);
+	SafeRelease(Gfx.UploadCommandList);
+	Gfx.UploadBufferResource->Unmap(0, nullptr); Gfx.UploadBufferMem = nullptr;
+	SafeRelease(Gfx.UploadBufferResource);
 	SafeRelease(Gfx.SamplerHeap.Object);
 	SafeRelease(Gfx.SamplerCreationHeap.Object);
 	SafeRelease(Gfx.CbvSrvUavHeap.Object);

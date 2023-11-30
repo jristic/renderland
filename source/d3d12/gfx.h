@@ -62,6 +62,11 @@ namespace gfx {
 		HANDLE							SwapChainWaitableObject = nullptr;
 		ID3D12Resource*					BackBufferResource[NUM_BACK_BUFFERS] = {};
 		D3D12_CPU_DESCRIPTOR_HANDLE		BackBufferDescriptor[NUM_BACK_BUFFERS] = {};
+
+		static u32 const 				UPLOAD_BUFFER_SIZE = 100*1024*1024;
+		ID3D12Resource*					UploadBufferResource = nullptr;
+		void* 							UploadBufferMem = nullptr;
+		ID3D12GraphicsCommandList*		UploadCommandList = nullptr;
 	};
 
 	struct BindInfo {

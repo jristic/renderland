@@ -808,22 +808,12 @@ void CreateTexture(ID3D12Device* device, Texture* tex)
 	tex->GfxState.State = D3D12_RESOURCE_STATE_GENERIC_READ;
 }
 
-void CreateBuffer(ID3D12Device* device, Buffer* buf)
+void CreateBuffer(gfx::Context* ctx, Buffer* buf)
 {
+	ID3D12Device* device = ctx->Device;
 	Assert(buf->GfxState.Resource == nullptr, "Leaking object");
 
 	u32 bufSize = buf->ElementSize * buf->ElementCount;
-
-	/* TODO: init data
-	void* initData = malloc(bufSize);
-	if (buf->InitToZero)
-		ZeroMemory(initData, bufSize);
-	else if (buf->InitDataSize > 0)
-	{
-		Assert(buf->InitData, "No data but size is set");
-		memcpy(initData, buf->InitData, buf->InitDataSize);
-	}
-	*/
 
 	D3D12_RESOURCE_DESC bufferDesc;
 	bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -838,19 +828,56 @@ void CreateBuffer(ID3D12Device* device, Buffer* buf)
 	bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 	bufferDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
  
-	D3D12_HEAP_PROPERTIES uploadHeapProperties;
-	uploadHeapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
-	uploadHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-	uploadHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-	uploadHeapProperties.CreationNodeMask = 0;
-	uploadHeapProperties.VisibleNodeMask = 0;
+	D3D12_HEAP_PROPERTIES heapProperties;
+	heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+	heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+	heapProperties.CreationNodeMask = 0;
+	heapProperties.VisibleNodeMask = 0;
 
-	HRESULT hr = device->CreateCommittedResource(&uploadHeapProperties, 
-		D3D12_HEAP_FLAG_NONE, &bufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, 
+	bool needs_upload = buf->InitToZero || buf->InitDataSize > 0;
+	D3D12_RESOURCE_STATES start_state = needs_upload ? D3D12_RESOURCE_STATE_COPY_DEST : 
+		D3D12_RESOURCE_STATE_GENERIC_READ;
+
+	HRESULT hr = device->CreateCommittedResource(&heapProperties, 
+		D3D12_HEAP_FLAG_NONE, &bufferDesc, start_state,
 		NULL, IID_PPV_ARGS(&buf->GfxState.Resource));
 	CheckHresult(hr, "buffer");
 
-	buf->GfxState.State = D3D12_RESOURCE_STATE_GENERIC_READ;
+	buf->GfxState.State = start_state;
+
+	if (!needs_upload)
+		return;
+
+	Assert(bufSize < gfx::Context::UPLOAD_BUFFER_SIZE, "upload data too large.");
+
+	gfx::Context::Frame* frameCtx = 
+		&ctx->FrameContexts[ctx->FrameIndex % gfx::Context::NUM_FRAMES_IN_FLIGHT];
+	ctx->UploadCommandList->Reset(frameCtx->CommandAllocator, nullptr);
+
+	if (buf->InitToZero)
+	{
+		ZeroMemory(ctx->UploadBufferMem, bufSize);
+	}
+	else if (buf->InitDataSize > 0)
+	{
+		Assert(buf->InitData, "No data but size is set");
+		memcpy(ctx->UploadBufferMem, buf->InitData, buf->InitDataSize);
+	}
+
+	ctx->UploadCommandList->CopyBufferRegion(buf->GfxState.Resource, 0, 
+		ctx->UploadBufferResource, 0, bufSize);
+	ctx->UploadCommandList->Close();
+	ctx->CommandQueue->ExecuteCommandLists(1, 
+		(ID3D12CommandList* const*)&ctx->UploadCommandList);
+
+	u64 fenceValue = ctx->FenceLastSignaledValue + 1;
+	ctx->CommandQueue->Signal(ctx->Fence, fenceValue);
+	ctx->FenceLastSignaledValue = fenceValue;
+
+	frameCtx->FenceValue = 0;
+	ctx->Fence->SetEventOnCompletion(fenceValue, ctx->FenceEvent);
+	WaitForSingleObject(ctx->FenceEvent, INFINITE);
 }
 
 void CreateView(gfx::Context* ctx, View* v, bool allocate_descriptor)
@@ -1428,7 +1455,7 @@ void InitMain(
 			buf->ElementCount = res.Value.UintVal;
 		}
 
-		CreateBuffer(device, buf);
+		CreateBuffer(ctx, buf);
 	}
 
 	for (Texture* tex : rd->Textures)
@@ -1689,7 +1716,7 @@ void HandleTextureParametersChanged(
 
 				SafeRelease(buf->GfxState.Resource);
 				
-				CreateBuffer(device, buf);
+				CreateBuffer(ctx, buf);
 
 				// Find any views that use this buffer and recreate them. 
 				for (View* view : buf->Views)
@@ -1942,12 +1969,12 @@ void ExecuteDraw(
 	u32 rtCount = 0;
 	for (TextureTarget target : draw->RenderTargets)
 	{
-		gfx::Texture* resource;
+		gfx::Texture* resource = nullptr;
 		if (target.IsSystem)
 		{
 			if (target.System == SystemValue::BackBuffer)
 			{
-				resource = resources->MainRtTex;
+				resource = ec->Res.MainRtTex;
 				rtViews[rtCount] = ec->Res.MainRtv;
 				vp[rtCount].Width = (float)ec->EvCtx.DisplaySize.x;
 				vp[rtCount].Height = (float)ec->EvCtx.DisplaySize.y;
@@ -1969,12 +1996,12 @@ void ExecuteDraw(
 		vp[rtCount].TopLeftX = vp[rtCount].TopLeftY = 0;
 		++rtCount;
 
-		TransitionResource(ctx, resource, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		TransitionResource(ec->GfxCtx, resource, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	}
 	D3D12_CPU_DESCRIPTOR_HANDLE dsView = {};
 	for (TextureTarget target : draw->DepthStencil)
 	{
-		gfx::Texture* resource;
+		gfx::Texture* resource = nullptr;
 		if (target.IsSystem)
 		{
 			if (target.System == SystemValue::DefaultDepth)
@@ -1999,8 +2026,8 @@ void ExecuteDraw(
 		vp[0].MinDepth = 0.0f;
 		vp[0].MaxDepth = 1.0f;
 
-		TransitionResource(ctx, resource, D3D12_RESOURCE_STATE_DEPTH_READ | 
-			D3D12_RESOURCE_STATE_DEPTH_WRITE);
+		// TODO: read-only state should be set based on usage
+		TransitionResource(ec->GfxCtx, resource, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 	}
 	for (int i = 0 ; i < draw->Viewports.size() ; ++i)
 	{
@@ -2040,6 +2067,9 @@ void ExecuteDraw(
 	Buffer* ib = draw->IndexBuffer;
 	if (vb)
 	{
+		TransitionResource(ec->GfxCtx, &vb->GfxState, 
+			D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+
 		D3D12_VERTEX_BUFFER_VIEW vbv = {};
 		vbv.BufferLocation = vb->GfxState.Resource->GetGPUVirtualAddress();
 		vbv.SizeInBytes = vb->ElementCount * vb->ElementSize;
@@ -2048,6 +2078,9 @@ void ExecuteDraw(
 	}
 	if (ib)
 	{
+		TransitionResource(ec->GfxCtx, &ib->GfxState, 
+			D3D12_RESOURCE_STATE_INDEX_BUFFER);
+
 		D3D12_INDEX_BUFFER_VIEW ibv = {};
 		ibv.BufferLocation = ib->GfxState.Resource->GetGPUVirtualAddress();
 		ibv.SizeInBytes = ib->ElementCount * ib->ElementSize;
