@@ -443,7 +443,7 @@ void CreateBuffer(ID3D11Device* device, Buffer* buf)
 	}
 
 	D3D11_SUBRESOURCE_DATA subRes = {};
-	subRes.pSysMem = buf->InitData;
+	subRes.pSysMem = initData;
 
 	D3D11_BUFFER_DESC desc;
 	desc.ByteWidth = bufSize;

@@ -2434,6 +2434,7 @@ Buffer* ConsumeBufferDef(
 			buf->ElementSize = obj->U16 ? 2 : 4;
 			buf->ElementCount = obj->IndexCount;
 		}
+		buf->InitDataSize = buf->ElementSize * buf->ElementCount;
 	}
 	else
 	{
