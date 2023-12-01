@@ -392,6 +392,7 @@ void GenerateRangesParameters(gfx::BindInfo* bi, D3D12_SHADER_VISIBILITY visibli
 {
 	u32& RangeCount = *range_count;
 	u32& ParamCount = *param_count;
+	u32 range_start = RangeCount;
 	// CBVs
 	if (bi->NumCbvs)
 	{
@@ -427,12 +428,11 @@ void GenerateRangesParameters(gfx::BindInfo* bi, D3D12_SHADER_VISIBILITY visibli
 			D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 		++RangeCount;
 	}
-	u32 Views = bi->NumCbvs + bi->NumSrvs + bi->NumUavs;
-	if (Views)
+	if (bi->NumCbvs + bi->NumSrvs + bi->NumUavs)
 	{
 		params[ParamCount].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		params[ParamCount].DescriptorTable.NumDescriptorRanges = Views;
-		params[ParamCount].DescriptorTable.pDescriptorRanges = &ranges[RangeCount-Views];
+		params[ParamCount].DescriptorTable.NumDescriptorRanges = RangeCount-range_start;
+		params[ParamCount].DescriptorTable.pDescriptorRanges = &ranges[range_start];
 		params[ParamCount].ShaderVisibility = visiblity;
 		++ParamCount;
 	}
@@ -503,8 +503,9 @@ void CreateRootSignature(ID3D12Device* device, Draw* d)
 	u32 ParamCount = 0;
 	GenerateRangesParameters(&vs->GfxState.BI, D3D12_SHADER_VISIBILITY_VERTEX, ranges, 
 		params, &RangeCount, &ParamCount);
-	GenerateRangesParameters(&ps->GfxState.BI, D3D12_SHADER_VISIBILITY_PIXEL, ranges, 
-		params, &RangeCount, &ParamCount);
+	if (ps)
+		GenerateRangesParameters(&ps->GfxState.BI, D3D12_SHADER_VISIBILITY_PIXEL, ranges, 
+			params, &RangeCount, &ParamCount);
 
 	D3D12_VERSIONED_ROOT_SIGNATURE_DESC RootSig = {};
 	RootSig.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
@@ -608,8 +609,11 @@ void CreatePipelineState(ID3D12Device* device, Draw* d)
 	desc.pRootSignature = d->GfxState.RootSig;
 	desc.VS.pShaderBytecode = d->VShader->GfxState.Blob->GetBufferPointer();
 	desc.VS.BytecodeLength = d->VShader->GfxState.Blob->GetBufferSize();
-	desc.PS.pShaderBytecode = d->PShader->GfxState.Blob->GetBufferPointer();
-	desc.PS.BytecodeLength = d->PShader->GfxState.Blob->GetBufferSize();
+	if (d->PShader)
+	{
+		desc.PS.pShaderBytecode = d->PShader->GfxState.Blob->GetBufferPointer();
+		desc.PS.BytecodeLength = d->PShader->GfxState.Blob->GetBufferSize();
+	}
 
 	u32 blendCount = (u32)d->BlendStates.size();
 	desc.BlendState.AlphaToCoverageEnable = false;
@@ -731,7 +735,9 @@ void CreatePipelineState(ID3D12Device* device, Draw* d)
 		{
 			Assert(t.View->Type == ViewType::RTV, "Invalid");
 			Assert(t.View->ResourceType == ResourceType::Texture, "Invalid");
-			DXGI_FORMAT fmt = D3DTextureFormat[(u32)t.View->Texture->Format];
+			DXGI_FORMAT fmt = t.View->Format != rlf::TextureFormat::Invalid ?
+				D3DTextureFormat[(u32)t.View->Format] :
+				D3DTextureFormat[(u32)t.View->Texture->Format];
 			desc.RTVFormats[i] = fmt;
 		}
 	}
@@ -753,7 +759,9 @@ void CreatePipelineState(ID3D12Device* device, Draw* d)
 		{
 			Assert(t.View->Type == ViewType::DSV, "Invalid");
 			Assert(t.View->ResourceType == ResourceType::Texture, "Invalid");
-			DXGI_FORMAT fmt = D3DTextureFormat[(u32)t.View->Texture->Format];
+			DXGI_FORMAT fmt = t.View->Format != rlf::TextureFormat::Invalid ?
+				D3DTextureFormat[(u32)t.View->Format] :
+				D3DTextureFormat[(u32)t.View->Texture->Format];
 			desc.DSVFormat = fmt;
 		}
 	}
@@ -1507,6 +1515,7 @@ void InitMain(
 				&desc, D3D12_RESOURCE_STATE_COPY_DEST, NULL, 
 				IID_PPV_ARGS(&tex->GfxState.Resource));
 			Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
+			tex->GfxState.State = D3D12_RESOURCE_STATE_COPY_DEST;
 
 			static u32 const MAX_TEXTURE_SUBRESOURCE_COUNT = 16;
 
@@ -1655,13 +1664,16 @@ void InitMain(
 	for (Draw* d : rd->Draws)
 	{
 		gfx::VertexShader* vs = &d->VShader->GfxState;
-		gfx::PixelShader* ps = &d->PShader->GfxState;
 		AllocateDescriptorTables(ctx, &d->GfxState.VSTable, &vs->BI);
-		AllocateDescriptorTables(ctx, &d->GfxState.PSTable, &ps->BI);
 		CopyBindDescriptors(ctx, resources, &vs->BI, &d->GfxState.VSTable, d->VSBinds);
-		CopyBindDescriptors(ctx, resources, &ps->BI, &d->GfxState.PSTable, d->PSBinds);
 		CopyConstantBufferDescriptors(ctx, &d->GfxState.VSTable, &vs->BI, d->VSCBs);
-		CopyConstantBufferDescriptors(ctx, &d->GfxState.PSTable, &ps->BI, d->PSCBs);
+		if (d->PShader)
+		{
+			gfx::PixelShader* ps = &d->PShader->GfxState;
+			AllocateDescriptorTables(ctx, &d->GfxState.PSTable, &ps->BI);
+			CopyBindDescriptors(ctx, resources, &ps->BI, &d->GfxState.PSTable, d->PSBinds);
+			CopyConstantBufferDescriptors(ctx, &d->GfxState.PSTable, &ps->BI, d->PSCBs);
+		}
 	}
 
 }
@@ -1845,8 +1857,9 @@ void HandleTextureParametersChanged(
 	{
 		CopyBindDescriptors(ctx, &ec->Res, &d->VShader->GfxState.BI, 
 			&d->GfxState.VSTable, d->VSBinds);
-		CopyBindDescriptors(ctx, &ec->Res, &d->PShader->GfxState.BI, 
-			&d->GfxState.PSTable, d->PSBinds);
+		if (d->PShader)
+			CopyBindDescriptors(ctx, &ec->Res, &d->PShader->GfxState.BI, 
+				&d->GfxState.PSTable, d->PSBinds);
 	}
 }
 
@@ -2035,7 +2048,6 @@ void ExecuteDraw(
 	cl->SetPipelineState(draw->GfxState.Pipeline);
 
 	gfx::BindInfo& vsbi = draw->VShader->GfxState.BI;
-	gfx::BindInfo& psbi = draw->PShader->GfxState.BI;
 
 	u32 table_index = 0;
 	if (vsbi.NumCbvs + vsbi.NumSrvs + vsbi.NumUavs > 0)
@@ -2050,17 +2062,21 @@ void ExecuteDraw(
 			&ec->GfxCtx->SamplerHeap, draw->GfxState.VSTable.SamplerDescTableStart[frame]);
 		cl->SetGraphicsRootDescriptorTable(table_index++, sampler_table_handle);
 	}
-	if (psbi.NumCbvs + psbi.NumSrvs + psbi.NumUavs > 0)
+	if (draw->PShader)
 	{
-		D3D12_GPU_DESCRIPTOR_HANDLE cbv_srv_uav_table_handle = GetGPUDescriptor(
-			&ec->GfxCtx->CbvSrvUavHeap, draw->GfxState.PSTable.CbvSrvUavDescTableStart[frame]);
-		cl->SetGraphicsRootDescriptorTable(table_index++, cbv_srv_uav_table_handle);
-	}
-	if (psbi.NumSamplers > 0)
-	{
-		D3D12_GPU_DESCRIPTOR_HANDLE sampler_table_handle = GetGPUDescriptor(
-			&ec->GfxCtx->SamplerHeap, draw->GfxState.PSTable.SamplerDescTableStart[frame]);
-		cl->SetGraphicsRootDescriptorTable(table_index++, sampler_table_handle);
+		gfx::BindInfo& psbi = draw->PShader->GfxState.BI;
+		if (psbi.NumCbvs + psbi.NumSrvs + psbi.NumUavs > 0)
+		{
+			D3D12_GPU_DESCRIPTOR_HANDLE cbv_srv_uav_table_handle = GetGPUDescriptor(
+				&ec->GfxCtx->CbvSrvUavHeap, draw->GfxState.PSTable.CbvSrvUavDescTableStart[frame]);
+			cl->SetGraphicsRootDescriptorTable(table_index++, cbv_srv_uav_table_handle);
+		}
+		if (psbi.NumSamplers > 0)
+		{
+			D3D12_GPU_DESCRIPTOR_HANDLE sampler_table_handle = GetGPUDescriptor(
+				&ec->GfxCtx->SamplerHeap, draw->GfxState.PSTable.SamplerDescTableStart[frame]);
+			cl->SetGraphicsRootDescriptorTable(table_index++, sampler_table_handle);
+		}
 	}
 
 	D3D12_CPU_DESCRIPTOR_HANDLE rtViews[8] = {};
@@ -2238,6 +2254,8 @@ void _Execute(
 		}
 		else if (pass.Type == PassType::ClearColor)
 		{
+			TransitionResource(ctx, &pass.ClearColor->Target->Texture->GfxState,
+				D3D12_RESOURCE_STATE_RENDER_TARGET);
 			float4& color = pass.ClearColor->Color;
 			const float clear_color[4] =
 			{
@@ -2248,11 +2266,15 @@ void _Execute(
 		}
 		else if (pass.Type == PassType::ClearDepth)
 		{
+			TransitionResource(ctx, &pass.ClearDepth->Target->Texture->GfxState,
+				D3D12_RESOURCE_STATE_DEPTH_WRITE);
 			ctx->CommandList->ClearDepthStencilView(pass.ClearDepth->Target->DSVGfxState, 
 				D3D12_CLEAR_FLAG_DEPTH, pass.ClearDepth->Depth, 0, 0, nullptr);
 		}
 		else if (pass.Type == PassType::ClearStencil)
 		{
+			TransitionResource(ctx, &pass.ClearStencil->Target->Texture->GfxState,
+				D3D12_RESOURCE_STATE_DEPTH_WRITE);
 			ctx->CommandList->ClearDepthStencilView(pass.ClearStencil->Target->DSVGfxState, 
 				D3D12_CLEAR_FLAG_STENCIL, 0.f, pass.ClearStencil->Stencil, 0, nullptr);
 		}
