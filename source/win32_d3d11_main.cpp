@@ -160,7 +160,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, hInstance, 
 		NULL, NULL, NULL, NULL, "renderland", NULL };
 	::RegisterClassEx(&wc);
-	HWND hwnd = ::CreateWindow(wc.lpszClassName, "RenderLand", WS_OVERLAPPEDWINDOW, 
+	HWND hwnd = ::CreateWindow(wc.lpszClassName, "RenderLand (DX11)", WS_OVERLAPPEDWINDOW, 
 		State.Cfg.WindowPosX, State.Cfg.WindowPosY, State.Cfg.WindowWidth, 
 		State.Cfg.WindowHeight, NULL, NULL, wc.hInstance, NULL);
 

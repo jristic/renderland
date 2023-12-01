@@ -1462,8 +1462,6 @@ void InitMain(
 	{
 		if (tex->DDSPath)
 		{
-			Unimplemented();
-	/* TODO
 			std::string ddsPath = dirPath + tex->DDSPath;
 			HANDLE dds = fileio::OpenFileOptional(ddsPath.c_str(), GENERIC_READ);
 			InitAssert(dds != INVALID_HANDLE_VALUE, "Couldn't find DDS file: %s", 
@@ -1481,16 +1479,117 @@ void InitMain(
 			DirectX::ScratchImage scratch;
 			DirectX::LoadFromDDSMemory(ddsBuffer, ddsSize, DirectX::DDS_FLAGS_NONE, 
 				&meta, scratch);
-			ID3D11Resource* res;
-			free(ddsBuffer);
-			HRESULT hr = DirectX::CreateTextureEx(device, scratch.GetImages(),
-				scratch.GetImageCount(), meta, D3D11_USAGE_IMMUTABLE, 
-				D3D11_BIND_SHADER_RESOURCE, 0, 0, false, &res);
-			Assert(hr == S_OK, "Failed to create texture from DDS, hr=%x", hr);
-			hr = res->QueryInterface(IID_ID3D11Texture2D, (void**)&tex->GfxState);
-			SafeRelease(res);
-			Assert(hr == S_OK, "Failed to query texture object, hr=%x", hr);
-	*/
+			DXGI_FORMAT format = meta.format;
+			tex->Size.x = (u32)meta.width;
+			tex->Size.y = (u32)meta.height;
+			Assert(meta.dimension == DirectX::TEX_DIMENSION_TEXTURE2D, "unsupported");
+			D3D12_RESOURCE_DESC desc = {};
+			desc.Format = format;
+			desc.Width = (u32)meta.width;
+			desc.Height = (u32)meta.height;
+			desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+			desc.DepthOrArraySize = 1;
+			desc.MipLevels = (u16)meta.mipLevels;
+			desc.SampleDesc.Count = 1;
+			desc.SampleDesc.Quality = 0;
+			desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+			desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+			desc.Alignment = 0;
+
+			D3D12_HEAP_PROPERTIES heap;
+			heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+			heap.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+			heap.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+			heap.CreationNodeMask = 0;
+			heap.VisibleNodeMask = 0;
+
+			HRESULT hr = ctx->Device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, 
+				&desc, D3D12_RESOURCE_STATE_COPY_DEST, NULL, 
+				IID_PPV_ARGS(&tex->GfxState.Resource));
+			Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
+
+			static u32 const MAX_TEXTURE_SUBRESOURCE_COUNT = 16;
+
+			u64 textureMemorySize = 0;
+			UINT numRows[MAX_TEXTURE_SUBRESOURCE_COUNT];
+			UINT64 rowSizesInBytes[MAX_TEXTURE_SUBRESOURCE_COUNT];
+			D3D12_PLACED_SUBRESOURCE_FOOTPRINT layouts[MAX_TEXTURE_SUBRESOURCE_COUNT];
+			const u64 numSubResources = meta.mipLevels * meta.arraySize;
+			Assert(numSubResources <= MAX_TEXTURE_SUBRESOURCE_COUNT, 
+				"too many subresources.");
+			 
+			ctx->Device->GetCopyableFootprints(&desc, 0, (u32)numSubResources, 0, 
+				layouts, numRows, rowSizesInBytes, &textureMemorySize);
+
+			Assert(textureMemorySize < gfx::Context::UPLOAD_BUFFER_SIZE, 
+				"upload data too large.");
+
+			u8* uploadMemory = (u8*)ctx->UploadBufferMem;
+
+			for (u64 arrayIndex = 0; arrayIndex < meta.arraySize; arrayIndex++)
+			{
+				for (u64 mipIndex = 0; mipIndex < meta.mipLevels; mipIndex++)
+				{
+					u64 sri = mipIndex + (arrayIndex * meta.mipLevels);
+			 
+					D3D12_PLACED_SUBRESOURCE_FOOTPRINT& subResourceLayout = layouts[sri];
+					u64 subResourceHeight = numRows[sri];
+					u64 subResourcePitch = AlignU32(subResourceLayout.Footprint.RowPitch, 
+						D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+					u64 subResourceDepth = subResourceLayout.Footprint.Depth;
+					u8* destinationSubResourceMemory = uploadMemory + subResourceLayout.Offset;
+			 
+					for (u64 sliceIndex = 0; sliceIndex < subResourceDepth; sliceIndex++)
+					{
+						const DirectX::Image* subImage = scratch.GetImage(mipIndex, 
+							arrayIndex, sliceIndex);
+						u8* sourceSubResourceMemory = subImage->pixels;
+			 
+						for (u64 height = 0; height < subResourceHeight; height++)
+						{
+							memcpy(destinationSubResourceMemory, sourceSubResourceMemory, 
+								min(subResourcePitch, subImage->rowPitch));
+							destinationSubResourceMemory += subResourcePitch;
+							sourceSubResourceMemory += subImage->rowPitch;
+						}
+					}
+				}
+			}
+
+			free(ddsBuffer); ddsBuffer = nullptr;
+
+			gfx::Context::Frame* frameCtx = 
+				&ctx->FrameContexts[ctx->FrameIndex % gfx::Context::NUM_FRAMES_IN_FLIGHT];
+			ctx->UploadCommandList->Reset(frameCtx->CommandAllocator, nullptr);
+
+			for (u64 sri = 0; sri < numSubResources; sri++)
+			{
+				D3D12_TEXTURE_COPY_LOCATION destination = {};
+				destination.pResource = tex->GfxState.Resource;
+				destination.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+				destination.SubresourceIndex = (u8)sri;
+			 
+				D3D12_TEXTURE_COPY_LOCATION source = {};
+				source.pResource = ctx->UploadBufferResource;
+				source.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+				source.PlacedFootprint = layouts[sri];
+				source.PlacedFootprint.Offset = 0;
+			 
+				ctx->UploadCommandList->CopyTextureRegion(&destination, 0, 0, 0,
+					&source, nullptr);
+			}
+
+			ctx->UploadCommandList->Close();
+			ctx->CommandQueue->ExecuteCommandLists(1, 
+				(ID3D12CommandList* const*)&ctx->UploadCommandList);
+
+			u64 fenceValue = ctx->FenceLastSignaledValue + 1;
+			ctx->CommandQueue->Signal(ctx->Fence, fenceValue);
+			ctx->FenceLastSignaledValue = fenceValue;
+
+			frameCtx->FenceValue = 0;
+			ctx->Fence->SetEventOnCompletion(fenceValue, ctx->FenceEvent);
+			WaitForSingleObject(ctx->FenceEvent, INFINITE);
 		}
 		else
 		{
