@@ -735,7 +735,7 @@ void CreatePipelineState(ID3D12Device* device, Draw* d)
 		{
 			Assert(t.View->Type == ViewType::RTV, "Invalid");
 			Assert(t.View->ResourceType == ResourceType::Texture, "Invalid");
-			DXGI_FORMAT fmt = t.View->Format != rlf::TextureFormat::Invalid ?
+			DXGI_FORMAT fmt = t.View->Format != TextureFormat::Invalid ?
 				D3DTextureFormat[(u32)t.View->Format] :
 				D3DTextureFormat[(u32)t.View->Texture->Format];
 			desc.RTVFormats[i] = fmt;
@@ -888,6 +888,17 @@ void CreateBuffer(gfx::Context* ctx, Buffer* buf)
 	WaitForSingleObject(ctx->FenceEvent, INFINITE);
 }
 
+u32 GetPlaneSlice(TextureFormat fmt)
+{
+	switch (fmt)
+	{
+	case TextureFormat::X24_TYPELESS_G8_UINT:
+		return 1;
+	default:
+		return 0;
+	}
+}
+
 void CreateView(gfx::Context* ctx, View* v, bool allocate_descriptor)
 {
 	ID3D12Device* device = ctx->Device;
@@ -931,7 +942,7 @@ void CreateView(gfx::Context* ctx, View* v, bool allocate_descriptor)
 				D3D12_SRV_DIMENSION_TEXTURE2DMS : D3D12_SRV_DIMENSION_TEXTURE2D;
 			vd.Texture2D.MostDetailedMip = 0;
 			vd.Texture2D.MipLevels = (u32)-1;
-			vd.Texture2D.PlaneSlice = 0;
+			vd.Texture2D.PlaneSlice = GetPlaneSlice(v->Format);
 			vd.Texture2D.ResourceMinLODClamp = 0.f;
 		}
 		else 
@@ -960,7 +971,7 @@ void CreateView(gfx::Context* ctx, View* v, bool allocate_descriptor)
 		{
 			vd.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
 			vd.Texture2D.MipSlice = 0;
-			vd.Texture2D.PlaneSlice = 0;
+			vd.Texture2D.PlaneSlice = GetPlaneSlice(v->Format);
 		}
 		else 
 			Unimplemented();
@@ -978,7 +989,7 @@ void CreateView(gfx::Context* ctx, View* v, bool allocate_descriptor)
 		// NOTE: technically there is a separate field Texture2DMS that should be
 		//	filled for that dimension but it has no fields so I'm not bothering.
 		vd.Texture2D.MipSlice = 0;
-		vd.Texture2D.PlaneSlice = 0;
+		vd.Texture2D.PlaneSlice = GetPlaneSlice(v->Format);
 		if (allocate_descriptor)
 			v->RTVGfxState = AllocateDescriptor(&ctx->RtvHeap);
 		device->CreateRenderTargetView(res, &vd, v->RTVGfxState);
@@ -2164,8 +2175,10 @@ void ExecuteDraw(
 			vp[i].MaxDepth = res.Value.Float2Val.y;
 		}
 	}
+	u32 vpCount = draw->DepthStencil.size() > 0 ? 1 : 0;
+	vpCount = max(vpCount, rtCount);
 	D3D12_RECT sr[8] = {};
-	for (u32 i = 0 ; i < rtCount ; ++i)
+	for (u32 i = 0 ; i < vpCount ; ++i)
 	{
 		sr[i].left = (u32)vp[i].TopLeftX;
 		sr[i].top = (u32)vp[i].TopLeftY;
@@ -2174,8 +2187,8 @@ void ExecuteDraw(
 	}
 	cl->OMSetRenderTargets(rtCount, rtViews, false, 
 		draw->DepthStencil.size() > 0 ? &dsView : nullptr);
-	cl->RSSetViewports(rtCount, vp);
-	cl->RSSetScissorRects(rtCount, sr);
+	cl->RSSetViewports(vpCount, vp);
+	cl->RSSetScissorRects(vpCount, sr);
 	cl->IASetPrimitiveTopology(RlfToD3d_Topo(draw->Topology));
 	cl->OMSetStencilRef(draw->StencilRef);
 	Buffer* vb = draw->VertexBuffer;
