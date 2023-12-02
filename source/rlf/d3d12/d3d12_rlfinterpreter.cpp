@@ -722,6 +722,8 @@ void CreatePipelineState(ID3D12Device* device, Draw* d)
 	desc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
 	desc.PrimitiveTopologyType = RlfToD3d_TopoType(d->Topology);
 
+	u32 sample_count = 1;
+
 	desc.NumRenderTargets = (u32)d->RenderTargets.size();
 	for (u32 i = 0 ; i < d->RenderTargets.size() ; ++i)
 	{
@@ -739,6 +741,7 @@ void CreatePipelineState(ID3D12Device* device, Draw* d)
 				D3DTextureFormat[(u32)t.View->Format] :
 				D3DTextureFormat[(u32)t.View->Texture->Format];
 			desc.RTVFormats[i] = fmt;
+			sample_count = t.View->Texture->SampleCount;
 		}
 	}
 
@@ -763,6 +766,7 @@ void CreatePipelineState(ID3D12Device* device, Draw* d)
 				D3DTextureFormat[(u32)t.View->Format] :
 				D3DTextureFormat[(u32)t.View->Texture->Format];
 			desc.DSVFormat = fmt;
+			sample_count = t.View->Texture->SampleCount;
 		}
 	}
 	else
@@ -770,8 +774,7 @@ void CreatePipelineState(ID3D12Device* device, Draw* d)
 		desc.DSVFormat = DXGI_FORMAT_UNKNOWN;
 	}
 
-	// TODO: msaa
-	desc.SampleDesc.Count = 1;
+	desc.SampleDesc.Count = sample_count;
 	desc.SampleDesc.Quality = 0;
 
 	desc.NodeMask = 0;
@@ -1858,7 +1861,6 @@ void HandleTextureParametersChanged(
 		errorState->Info = ie;
 	}
 
-	// TODO: do draws too
 	for (Dispatch* dc : rd->Dispatches)
 	{
 		CopyBindDescriptors(ctx, &ec->Res, &dc->Shader->GfxState.BI, 
@@ -2291,14 +2293,16 @@ void _Execute(
 			ctx->CommandList->ClearDepthStencilView(pass.ClearStencil->Target->DSVGfxState, 
 				D3D12_CLEAR_FLAG_STENCIL, 0.f, pass.ClearStencil->Stencil, 0, nullptr);
 		}
-		/* ------TODO-----------
 		else if (pass.Type == PassType::Resolve)
 		{
-			ctx->ResolveSubresource(pass.Resolve->Dst->GfxState, 0, 
-				pass.Resolve->Src->GfxState, 0, 
+			TransitionResource(ctx, &pass.Resolve->Src->GfxState,
+				D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
+			TransitionResource(ctx, &pass.Resolve->Dst->GfxState,
+				D3D12_RESOURCE_STATE_RESOLVE_DEST);
+			ctx->CommandList->ResolveSubresource(pass.Resolve->Dst->GfxState.Resource, 0, 
+				pass.Resolve->Src->GfxState.Resource, 0, 
 				D3DTextureFormat[(u32)pass.Resolve->Dst->Format]);
 		}
-		*/
 		else
 		{
 			Unimplemented();
