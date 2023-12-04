@@ -136,6 +136,7 @@ namespace gfx {
 		ID3D12PipelineState* Pipeline;
 		DescriptorTable VSTable;
 		DescriptorTable PSTable;
+		ID3D12CommandSignature* CommandSig;
 	};
 
 

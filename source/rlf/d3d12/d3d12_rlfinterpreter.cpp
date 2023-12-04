@@ -1665,7 +1665,7 @@ void InitMain(
 			arg.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
 
 			D3D12_COMMAND_SIGNATURE_DESC desc = {};
-			desc.ByteStride = 12;
+			desc.ByteStride = sizeof(D3D12_DISPATCH_ARGUMENTS);
 			desc.NumArgumentDescs = 1;
 			desc.pArgumentDescs = &arg;
 			desc.NodeMask = 0;
@@ -1687,6 +1687,28 @@ void InitMain(
 			AllocateDescriptorTables(ctx, &d->GfxState.PSTable, &ps->BI);
 			CopyBindDescriptors(ctx, resources, &ps->BI, &d->GfxState.PSTable, d->PSBinds);
 			CopyConstantBufferDescriptors(ctx, &d->GfxState.PSTable, &ps->BI, d->PSCBs);
+		}
+
+		Buffer* indirect_args = d->InstancedIndirectArgs ? d->InstancedIndirectArgs : 
+			d->IndexedInstancedIndirectArgs;
+		u32 indirec_args_size = d->InstancedIndirectArgs ? 
+			sizeof(D3D12_DRAW_ARGUMENTS) : sizeof(D3D12_DRAW_INDEXED_ARGUMENTS);
+		D3D12_INDIRECT_ARGUMENT_TYPE type = d->InstancedIndirectArgs ?
+			D3D12_INDIRECT_ARGUMENT_TYPE_DRAW : D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
+
+		if (indirect_args)
+		{
+			D3D12_INDIRECT_ARGUMENT_DESC arg = {};
+			arg.Type = type;
+
+			D3D12_COMMAND_SIGNATURE_DESC desc = {};
+			desc.ByteStride = indirec_args_size;
+			desc.NumArgumentDescs = 1;
+			desc.pArgumentDescs = &arg;
+			desc.NodeMask = 0;
+			HRESULT hr = ctx->Device->CreateCommandSignature(&desc, nullptr,
+				IID_PPV_ARGS(&d->GfxState.CommandSig));
+			Assert(hr == S_OK, "Failed to create command signature, hr=%x", hr);
 		}
 	}
 
@@ -1725,6 +1747,7 @@ void ReleaseD3D(
 
 	for (Draw* d : rd->Draws)
 	{
+		SafeRelease(d->GfxState.CommandSig);
 		SafeRelease(d->GfxState.Pipeline);
 		SafeRelease(d->GfxState.RootSig);
 		for (ConstantBuffer& cb : d->VSCBs)
@@ -2220,15 +2243,19 @@ void ExecuteDraw(
 
 	if (draw->InstancedIndirectArgs)
 	{
-		Unimplemented(); // TODO
-		// cl->DrawInstancedIndirect(draw->InstancedIndirectArgs->GfxState,
-		// 	draw->IndirectArgsOffset);
+		TransitionResource(ec->GfxCtx, &draw->InstancedIndirectArgs->GfxState,
+			D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+		cl->ExecuteIndirect(draw->GfxState.CommandSig, 1, 
+			draw->InstancedIndirectArgs->GfxState.Resource, 
+			draw->IndirectArgsOffset, nullptr, 0);
 	}
 	else if (draw->IndexedInstancedIndirectArgs)
 	{
-		Unimplemented(); // TODO
-		// cl->DrawIndexedInstancedIndirect(draw->InstancedIndirectArgs->GfxState,
-		// 	draw->IndirectArgsOffset);
+		TransitionResource(ec->GfxCtx, &draw->IndexedInstancedIndirectArgs->GfxState,
+			D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+		cl->ExecuteIndirect(draw->GfxState.CommandSig, 1, 
+			draw->IndexedInstancedIndirectArgs->GfxState.Resource, 
+			draw->IndirectArgsOffset, nullptr, 0);
 	}
 	else if (ib && draw->InstanceCount > 0)
 		cl->DrawIndexedInstanced(ib->ElementCount, draw->InstanceCount, 0, 0, 0);

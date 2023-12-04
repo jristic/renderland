@@ -1466,7 +1466,7 @@ void ExecuteDraw(
 		ctx->DrawInstancedIndirect(draw->InstancedIndirectArgs->GfxState,
 			draw->IndirectArgsOffset);
 	else if (draw->IndexedInstancedIndirectArgs)
-		ctx->DrawIndexedInstancedIndirect(draw->InstancedIndirectArgs->GfxState,
+		ctx->DrawIndexedInstancedIndirect(draw->IndexedInstancedIndirectArgs->GfxState,
 			draw->IndirectArgsOffset);
 	else if (ib && draw->InstanceCount > 0)
 		ctx->DrawIndexedInstanced(ib->ElementCount, draw->InstanceCount, 0, 0, 0);
