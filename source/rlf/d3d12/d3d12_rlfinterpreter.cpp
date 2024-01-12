@@ -620,7 +620,7 @@ void CreatePipelineState(ID3D12Device* device, Draw* d)
 	desc.BlendState.IndependentBlendEnable = blendCount > 1;
 	if (blendCount > 0)
 	{
-		InitAssert(blendCount <= 8, "Too blend states on draw, max is 8.");
+		InitAssert(blendCount <= 8, "Too many blend states on draw, max is 8.");
 		for (u32 i = 0 ; i < blendCount ; ++i)
 		{
 			BlendState* blend = d->BlendStates[i];
