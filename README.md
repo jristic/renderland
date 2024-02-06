@@ -1,6 +1,6 @@
 # RenderLand
 
-RenderLand is a Windows program for specifying D3D11/HLSL routines via a description format (RLF) that is live-editable. 
+RenderLand is a Windows program for specifying D3D/HLSL routines via a description format (RLF) that is live-editable. 
 
 RenderLand's goal is to allow one to experiment and prototype graphics techniques without having to write all the associated code to glue the shaders together. It ingests normal HLSL shader files with the instructions specified in the RLF file on how to use them.
 
@@ -20,6 +20,9 @@ See the plan.txt for more detail.
 
 ## Usage
 See the samples in `samples/`.
+
+## Backends
+Currently both D3D11 and D3D12 backends exist. The D3D11 backend is currently recommended as it is better tested and handles errors more gracefully. The backend can be selected by changing the value of `GfxApi` in `project.bat` and recompiling.
 
 ## Prerequisites for building
 1. A Visual Studio 2017 installation (Community edition will work).

@@ -265,8 +265,6 @@ bool DoUpdate(State* s)
 
 	if (ImGui::Begin("Compile Output"))
 	{
-		static float f = 0.0f;
-
 		if (!s->RlfCompileSuccess)
 		{
 			ImVec4 color = ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
