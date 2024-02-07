@@ -1192,237 +1192,266 @@ CommonShader* LookupShader(const char* name, ParseState& ps)
 	return nullptr;
 }
 
-ast::Node* ConsumeAstRecurse(TokenIter& t, ParseState& ps)
+enum OpPrecedence
 {
-	ast::Node* ast = nullptr;
-	while (true)
+	OpPrecedence_MultiplyDivide = 2,
+	OpPrecedence_AddSubtract = 1,
+	OpPrecedence_Start = 0,
+};
+
+ast::Node* ConsumeAstRecurse(TokenIter& t, ParseState& ps, OpPrecedence min_prec);
+
+ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
+{
+	ast::Node* ast = nullptr;	
+	TokenType tok = PeekNextToken(t);
+	if (tok == TokenType::Identifier)
 	{
-		TokenType tok = PeekNextToken(t);
-		if (tok == TokenType::Comma || tok == TokenType::RParen || 
-			tok == TokenType::Semicolon || tok == TokenType::RBrace)
+		const char* loc = t.next->Location;
+		const char* id = ConsumeIdentifier(t);
+		if (TryConsumeToken(TokenType::LParen, t))
 		{
-			break;
-		}
-		else if (tok == TokenType::Identifier)
-		{
-			ParserAssert(!ast, "expected op");
-			const char* loc = t.next->Location;
-			const char* id = ConsumeIdentifier(t);
-			if (TryConsumeToken(TokenType::LParen, t))
+			if (LookupKeyword(id) == Keyword::SizeOf)
 			{
-				if (LookupKeyword(id) == Keyword::SizeOf)
+				const char* shaderName = ConsumeIdentifier(t);
+				CommonShader* shader = LookupShader(shaderName, ps);
+				ConsumeToken(TokenType::Comma, t);
+				const char* structName = ConsumeString(t);
+				ast::SizeOf* sizeOf = AllocateAst<ast::SizeOf>(ps.rd);
+				sizeOf->StructName = structName;
+				sizeOf->Size = 0;
+				shader->SizeRequests.push_back(sizeOf);
+				ConsumeToken(TokenType::RParen, t);
+				ast = sizeOf;
+			}
+			else
+			{
+				ast::Function* func = AllocateAst<ast::Function>(ps.rd);
+				func->Name = std::string(id);
+				if (!TryConsumeToken(TokenType::RParen, t))
 				{
-					const char* shaderName = ConsumeIdentifier(t);
-					CommonShader* shader = LookupShader(shaderName, ps);
-					ConsumeToken(TokenType::Comma, t);
-					const char* structName = ConsumeString(t);
-					ast::SizeOf* sizeOf = AllocateAst<ast::SizeOf>(ps.rd);
-					sizeOf->StructName = structName;
-					sizeOf->Size = 0;
-					shader->SizeRequests.push_back(sizeOf);
-					ConsumeToken(TokenType::RParen, t);
-					ast = sizeOf;
-				}
-				else
-				{
-					ast::Function* func = AllocateAst<ast::Function>(ps.rd);
-					func->Name = std::string(id);
-					if (!TryConsumeToken(TokenType::RParen, t))
+					while (true)
 					{
-						while (true)
-						{
-							ast::Node* arg = ConsumeAstRecurse(t, ps);
-							func->Args.push_back(arg);
-							if (!TryConsumeToken(TokenType::Comma, t))
-								break;
-						}
-						ConsumeToken(TokenType::RParen, t);
+						ast::Node* arg = ConsumeAstRecurse(t, ps, OpPrecedence_Start);
+						func->Args.push_back(arg);
+						if (!TryConsumeToken(TokenType::Comma, t))
+							break;
 					}
-					ast = func;
+					ConsumeToken(TokenType::RParen, t);
 				}
-			}
-			else
-			{
-				ParserAssert(ps.varMap.count(id) == 1, "Variable %s not defined.", id);
-				ParseState::Var& v = ps.varMap[id];
-				ast::VariableRef* vr = AllocateAst<ast::VariableRef>(ps.rd);
-				vr->isTuneable = v.tuneable;
-				vr->M = v.m;
-				ast = vr;
-			}
-			ast->Location = loc;
-		}
-		else if (tok == TokenType::Period)
-		{
-			ParserAssert(ast, "expected value")
-			ConsumeToken(TokenType::Period, t);
-			ast::Subscript* sub = AllocateAst<ast::Subscript>(ps.rd);
-			sub->Subject = ast;
-			sub->Location = t.next->Location;
-			const char* ss = ConsumeIdentifier(t);
-			size_t slen = strlen(ss);
-			for (u32 i = 0 ; i < slen ; ++i)
-			{
-				char s = ss[i];
-				if (s == 'x' || s == 'r')
-					sub->Index[i] = 0;
-				else if (s == 'y' || s == 'g')
-					sub->Index[i] = 1;
-				else if (s == 'z' || s == 'b')
-					sub->Index[i] = 2;
-				else if (s == 'w' || s == 'a')
-					sub->Index[i] = 3;
-				else
-					ParserError("Unexpected subscript: %s", ss);
-			}
-			ast = sub;
-		}
-		else if (ast && (tok == TokenType::Plus || tok == TokenType::Minus || 
-			tok == TokenType::Asterisk || tok == TokenType::ForwardSlash))
-		{
-			const char* loc = t.next->Location;
-			ConsumeToken(tok, t);
-			ast::Node* arg2 = ConsumeAstRecurse(t,ps);
-			ast::BinaryOp::Type op;
-			switch (tok)
-			{
-			case TokenType::Plus:
-				op = ast::BinaryOp::Type::Add; break;
-			case TokenType::Minus:
-				op = ast::BinaryOp::Type::Subtract; break;
-			case TokenType::Asterisk:
-				op = ast::BinaryOp::Type::Multiply; break;
-			case TokenType::ForwardSlash:
-				op = ast::BinaryOp::Type::Divide; break;
-			default:
-				Unimplemented();
-			}
-			if (arg2->Spec == ast::Node::Special::Operator)
-			{
-				ast::BinaryOp* bop = static_cast<ast::BinaryOp*>(arg2);
-				bop->Args.push_back(ast);
-				bop->Ops.push_back(op);
-				bop->Location = loc; // TODO: location per operator
-				ast = bop;	
-			}
-			else if (arg2->Spec == ast::Node::Special::None)
-			{
-				ast::BinaryOp* bop = AllocateAst<ast::BinaryOp>(ps.rd);
-				bop->Args.push_back(arg2);
-				bop->Args.push_back(ast);
-				bop->Ops.push_back(op);
-				bop->Location = loc; // TODO: location per operator
-				bop->Spec = ast::Node::Special::Operator;
-				ast = bop;
-			}
-			else
-				Unimplemented();
-		}
-		else if (!ast && tok == TokenType::Minus)
-		{
-			const char* loc = t.next->Location;
-			TokenType tok2 = PeekNextToken(t);
-			if (tok2 == TokenType::IntegerLiteral)
-			{
-				i32 i = ConsumeIntLiteral(t);
-				ast::IntLiteral* il = AllocateAst<ast::IntLiteral>(ps.rd);
-				il->Val = i;
-				il->Location = loc;
-				ast = il;
-			}
-			else if (tok2 == TokenType::FloatLiteral)
-			{
-				float f = ConsumeFloatLiteral(t);
-				ast::FloatLiteral* fl = AllocateAst<ast::FloatLiteral>(ps.rd);
-				fl->Val = f;
-				fl->Location = loc;
-				ast = fl;
-			}
-			else
-			{
-				ConsumeToken(TokenType::Minus, t);
-				ast::IntLiteral* nl = AllocateAst<ast::IntLiteral>(ps.rd);
-				nl->Val = -1;
-				nl->Location = loc;
-				ast::Node* arg = ConsumeAstRecurse(t,ps);
-				if (arg->Spec == ast::Node::Special::Operator)
-				{
-					ast::BinaryOp* bop = static_cast<ast::BinaryOp*>(arg);
-					bop->Args.push_back(nl);
-					bop->Ops.push_back(ast::BinaryOp::Type::Multiply);
-					bop->Location = loc; // TODO: location per operator
-					ast = bop;	
-				}
-				else if (arg->Spec == ast::Node::Special::None)
-				{
-					ast::BinaryOp* bop = AllocateAst<ast::BinaryOp>(ps.rd);
-					bop->Args.push_back(arg);
-					bop->Args.push_back(nl);
-					bop->Ops.push_back(ast::BinaryOp::Type::Multiply);
-					bop->Location = loc; // TODO: location per operator
-					bop->Spec = ast::Node::Special::Operator;
-					ast = bop;
-				}
-				else
-					Unimplemented();
+				ast = func;
 			}
 		}
-		else if (tok == TokenType::IntegerLiteral)
+		else
 		{
-			ParserAssert(!ast, "expected op");
-			const char* loc = t.next->Location;
-			u32 u = ConsumeUintLiteral(t);
-			ast::UintLiteral* ul = AllocateAst<ast::UintLiteral>(ps.rd);
-			ul->Val = u;
-			ul->Location = loc;
-			ast = ul;
+			ParserAssert(ps.varMap.count(id) == 1, "Variable %s not defined.", id);
+			ParseState::Var& v = ps.varMap[id];
+			ast::VariableRef* vr = AllocateAst<ast::VariableRef>(ps.rd);
+			vr->isTuneable = v.tuneable;
+			vr->M = v.m;
+			ast = vr;
 		}
-		else if (tok == TokenType::FloatLiteral)
+		ast->Location = loc;
+	}
+	else if (tok == TokenType::Minus)
+	{
+		const char* loc = t.next->Location;
+		TokenType tok2 = PeekNextToken(t);
+		if (tok2 == TokenType::IntegerLiteral)
 		{
-			ParserAssert(!ast, "expected op");
-			const char* loc = t.next->Location;
+			// Note that the Minus is consumed inside the literal prodedure
+			i32 i = ConsumeIntLiteral(t);
+			ast::IntLiteral* il = AllocateAst<ast::IntLiteral>(ps.rd);
+			il->Val = i;
+			il->Location = loc;
+			ast = il;
+		}
+		else if (tok2 == TokenType::FloatLiteral)
+		{
+			// Note that the Minus is consumed inside the literal prodedure
 			float f = ConsumeFloatLiteral(t);
 			ast::FloatLiteral* fl = AllocateAst<ast::FloatLiteral>(ps.rd);
 			fl->Val = f;
 			fl->Location = loc;
 			ast = fl;
 		}
-		else if (tok == TokenType::LParen)
-		{
-			ParserAssert(!ast, "expected op")
-			ConsumeToken(TokenType::LParen, t);
-			ast::Group* grp = AllocateAst<ast::Group>(ps.rd);
-			grp->Sub = ConsumeAstRecurse(t, ps);
-			ast = grp;
-			ConsumeToken(TokenType::RParen, t);
-		}
-		else if (tok == TokenType::LBrace)
-		{
-			ParserAssert(!ast, "expected op");
-			const char* loc = t.next->Location;
-			ConsumeToken(TokenType::LBrace, t);
-			ast::Join* join = AllocateAst<ast::Join>(ps.rd);
-			while (true)
-			{
-				ast::Node* arg = ConsumeAstRecurse(t, ps);
-				join->Comps.push_back(arg);
-				if (!TryConsumeToken(TokenType::Comma, t))
-					break;
-			}
-			join->Location = loc;
-			ast = join;
-			ConsumeToken(TokenType::RBrace, t);
-		}
 		else
-			ParserError("Unexpected token given: %s", TokenNames[(u32)tok]);
+		{
+			ast::IntLiteral* nl = AllocateAst<ast::IntLiteral>(ps.rd);
+			nl->Val = -1;
+			nl->Location = loc;
+			ConsumeToken(TokenType::Minus, t);
+			ast::Node* arg = ConsumeAstLeaf(t,ps);
+			ast::BinaryOp* bop = AllocateAst<ast::BinaryOp>(ps.rd);
+			bop->LArg = nl;
+			bop->RArg = (arg);
+			bop->Op = ast::BinaryOp::Type::Multiply;
+			bop->Location = loc;
+			ast = bop;
+		}
 	}
-	ParserAssert(ast, "No expression given.");
+	else if (tok == TokenType::IntegerLiteral)
+	{
+		const char* loc = t.next->Location;
+		u32 u = ConsumeUintLiteral(t);
+		ast::UintLiteral* ul = AllocateAst<ast::UintLiteral>(ps.rd);
+		ul->Val = u;
+		ul->Location = loc;
+		ast = ul;
+	}
+	else if (tok == TokenType::FloatLiteral)
+	{
+		const char* loc = t.next->Location;
+		float f = ConsumeFloatLiteral(t);
+		ast::FloatLiteral* fl = AllocateAst<ast::FloatLiteral>(ps.rd);
+		fl->Val = f;
+		fl->Location = loc;
+		ast = fl;
+	}
+	else if (tok == TokenType::LParen)
+	{
+		ConsumeToken(TokenType::LParen, t);
+		ast::Group* grp = AllocateAst<ast::Group>(ps.rd);
+		grp->Sub = ConsumeAstRecurse(t, ps, OpPrecedence_Start);
+		ast = grp;
+		ConsumeToken(TokenType::RParen, t);
+	}
+	else if (tok == TokenType::LBrace)
+	{
+		const char* loc = t.next->Location;
+		ConsumeToken(TokenType::LBrace, t);
+		ast::Join* join = AllocateAst<ast::Join>(ps.rd);
+		while (true)
+		{
+			ast::Node* arg = ConsumeAstRecurse(t, ps, OpPrecedence_Start);
+			join->Comps.push_back(arg);
+			if (!TryConsumeToken(TokenType::Comma, t))
+				break;
+		}
+		join->Location = loc;
+		ast = join;
+		ConsumeToken(TokenType::RBrace, t);
+	}
+	else
+	{
+		ParserError("Unexpected token when parsing leaf expression: %s");
+	}
+	
 	return ast;
+}
+
+ast::Node* ConsumeAstIncreasingPrec(TokenIter& t, ParseState& ps, ast::Node* left, 
+	OpPrecedence min_prec)
+{
+	TokenType tok = PeekNextToken(t);
+	if (tok == TokenType::Comma || tok == TokenType::RParen || 
+		tok == TokenType::Semicolon || tok == TokenType::RBrace)
+	{
+		return nullptr;
+	}
+	else if (tok == TokenType::Period)
+	{
+		ConsumeToken(TokenType::Period, t);
+		ast::Subscript* sub = AllocateAst<ast::Subscript>(ps.rd);
+		sub->Subject = left;
+		sub->Location = t.next->Location;
+		const char* ss = ConsumeIdentifier(t);
+		size_t slen = strlen(ss); 
+		for (u32 i = 0 ; i < slen ; ++i)
+		{
+			char s = ss[i];
+			if (s == 'x' || s == 'r')
+				sub->Index[i] = 0;
+			else if (s == 'y' || s == 'g')
+				sub->Index[i] = 1;
+			else if (s == 'z' || s == 'b')
+				sub->Index[i] = 2;
+			else if (s == 'w' || s == 'a')
+				sub->Index[i] = 3;
+			else
+				ParserError("Unexpected subscript: %s", ss);
+		}
+		return sub;
+	}
+	else if (tok == TokenType::Plus || tok == TokenType::Minus || 
+		tok == TokenType::Asterisk || tok == TokenType::ForwardSlash)
+	{
+		OpPrecedence next_prec = OpPrecedence_Start;
+		switch (tok)
+		{
+		case TokenType::Plus:
+		case TokenType::Minus:
+			next_prec = OpPrecedence_AddSubtract;
+			break;
+		case TokenType::Asterisk:
+		case TokenType::ForwardSlash:
+			next_prec = OpPrecedence_MultiplyDivide;
+			break;
+		default:
+			Unimplemented();
+		}
+		if (next_prec <= min_prec)
+			return nullptr;
+
+		const char* loc = t.next->Location;
+		ConsumeToken(tok, t);
+		ast::Node* arg2 = ConsumeAstRecurse(t, ps, next_prec);
+		ast::BinaryOp::Type op = ast::BinaryOp::Type::Add;
+		switch (tok)
+		{
+		case TokenType::Plus:
+			op = ast::BinaryOp::Type::Add; break;
+		case TokenType::Minus:
+			op = ast::BinaryOp::Type::Subtract; break;
+		case TokenType::Asterisk:
+			op = ast::BinaryOp::Type::Multiply; break;
+		case TokenType::ForwardSlash:
+			op = ast::BinaryOp::Type::Divide; break;
+		default:
+			Unimplemented();
+		}
+		ast::BinaryOp* bop = AllocateAst<ast::BinaryOp>(ps.rd);
+		bop->LArg = left;
+		bop->RArg = arg2;
+		bop->Op = op;
+		bop->Location = loc;
+		return bop;
+	}
+	else
+	{
+		ParserError("Unexpected token given: %s", TokenNames[(u32)tok]);
+	}
+	return nullptr;
+}
+
+ast::Node* ConsumeAstRecurse(TokenIter& t, ParseState& ps, OpPrecedence min_prec)
+{
+	ast::Node* left = ConsumeAstLeaf(t, ps);
+
+	while (true)
+	{
+		ast::Node* next = ConsumeAstIncreasingPrec(t, ps, left, min_prec);
+		if (next == nullptr)
+			break;
+		left = next;
+	}
+
+	ParserAssert(left, "No expression given.");
+	return left;
 }
 
 ast::Node* ConsumeAst(TokenIter& t, ParseState& ps)
 {
-	ast::Node* ast = ConsumeAstRecurse(t, ps);
+	// NOTE: Due to operator precedence, the way expression parsing works is rather 
+	//	complicated and somewhat unintuitive until you step through it yourself. 
+	//	The basic idea is to create a recursive subtree on the right so long as 
+	//	operator precedence is increasing, but to break out of recursion and return
+	//	to looping when the next operator's predence decreases. I learned this
+	//	method from a Jonathan Blow video titled "Discussion with Casey Muratori 
+	//	about how easy precedence is..." and it is significantly better than the
+	//	code I used to have to achieve the same effect. 
+	//	Link, for as long as that lasts: https://www.youtube.com/watch?v=fIPO4G42wYE
+	ast::Node* ast = ConsumeAstRecurse(t, ps, OpPrecedence_Start);
 	ast->GetDependency(ast->Dep);
 	return ast;
 }

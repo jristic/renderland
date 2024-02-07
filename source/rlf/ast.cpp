@@ -385,81 +385,50 @@ void Group::GetDependency(DependencyInfo& dep) const
 
 void BinaryOp::Evaluate(const EvaluationContext& ec, Result& outRes) const
 {
-	Assert(Ops.size() == Args.size() - 1, "Mismatched params");
-	std::vector<Result> results(Args.size());
-	std::vector<Type> ops(Ops.rbegin(), Ops.rend());
-	for (size_t i = 0 ; i < Args.size() ; ++i)
+	Result res, arg1Res, arg2Res;
+	LArg->Evaluate(ec, arg1Res);
+	RArg->Evaluate(ec, arg2Res);
+	if (arg1Res.Type.Fmt == VariableFormat::Float4x4 ||
+		arg2Res.Type.Fmt == VariableFormat::Float4x4)
 	{
-		Node* arg = Args[Args.size() - 1 - i];
-		arg->Evaluate(ec, results[i]);
+		AstAssert(this, Op == Type::Multiply, "Matrices can only be multiplied");
+		AstAssert(this, arg1Res.Type.Fmt == VariableFormat::Float4x4 &&
+			arg2Res.Type.Fmt == VariableFormat::Float4x4, 
+			"Matrix types can only be multiplied with other Matrix types");
+		res.Type = Float4x4Type;
+		res.Value.Float4x4Val = arg1Res.Value.Float4x4Val * arg2Res.Value.Float4x4Val;
 	}
-
-	std::pair<Type,Type> OpPhase[] = {
-		{ Type::Multiply, Type::Divide },
-		{ Type::Add, Type::Subtract },
-	};
-	
-	for (u32 p = 0 ; p < 2 ; ++p)
+	else
 	{
-		auto phase = OpPhase[p];
-		for (size_t i = 0 ; i < ops.size() ; )
+		if (Op == Type::Divide)
 		{
-			Type OpType = ops[i];
-			if (OpType != phase.first && OpType != phase.second)
-			{
-				++i;
-				continue;
-			}
-			Result res, arg1Res, arg2Res;
-			arg1Res = results[i];
-			arg2Res = results[i+1];
-			if (arg1Res.Type.Fmt == VariableFormat::Float4x4 ||
-				arg2Res.Type.Fmt == VariableFormat::Float4x4)
-			{
-				AstAssert(this, OpType == Type::Multiply, "Matrices can only be multiplied");
-				AstAssert(this, arg1Res.Type.Fmt == VariableFormat::Float4x4 &&
-					arg2Res.Type.Fmt == VariableFormat::Float4x4, 
-					"Matrix types can only be multiplied with other Matrix types");
-				res.Type = Float4x4Type;
-				res.Value.Float4x4Val = arg1Res.Value.Float4x4Val * arg2Res.Value.Float4x4Val;
-			}
-			else
-			{
-				if (OpType == Type::Divide)
-				{
-					AstAssert(this, arg1Res.Type.Fmt != VariableFormat::Bool && 
-						arg2Res.Type.Fmt != VariableFormat::Bool,
-						"Bool types not supported in divides.");
-				}
-				VariableType outType = DetermineResultType(this, arg1Res.Type, arg2Res.Type);
-				Expand(arg1Res);
-				Expand(arg2Res);
-				Convert(arg1Res, outType.Fmt);
-				Convert(arg2Res, outType.Fmt);
-				res.Type = outType;
-				if (OpType == Type::Add)
-					OperatorAdd(this, arg1Res, arg2Res, res);
-				else if (OpType == Type::Subtract)
-					OperatorSubtract(this, arg1Res, arg2Res, res);
-				else if (OpType == Type::Multiply)
-					OperatorMultiply(this, arg1Res, arg2Res, res);
-				else if (OpType == Type::Divide)
-					OperatorDivide(this, arg1Res, arg2Res, res);
-				else
-					Unimplemented();
-			}
-			results[i+1] = res;
-			results.erase(results.begin()+i);
-			ops.erase(ops.begin()+i);
+			AstAssert(this, arg1Res.Type.Fmt != VariableFormat::Bool && 
+				arg2Res.Type.Fmt != VariableFormat::Bool,
+				"Bool types not supported in divides.");
 		}
+		VariableType outType = DetermineResultType(this, arg1Res.Type, arg2Res.Type);
+		Expand(arg1Res);
+		Expand(arg2Res);
+		Convert(arg1Res, outType.Fmt);
+		Convert(arg2Res, outType.Fmt);
+		res.Type = outType;
+		if (Op == Type::Add)
+			OperatorAdd(this, arg1Res, arg2Res, res);
+		else if (Op == Type::Subtract)
+			OperatorSubtract(this, arg1Res, arg2Res, res);
+		else if (Op == Type::Multiply)
+			OperatorMultiply(this, arg1Res, arg2Res, res);
+		else if (Op == Type::Divide)
+			OperatorDivide(this, arg1Res, arg2Res, res);
+		else
+			Unimplemented();
 	}
-	Assert(results.size() == 1, "Should have been reduced to just one result");
-	outRes = results.front();
+	outRes = res;
 }
 void BinaryOp::GetDependency(DependencyInfo& dep) const
 {
-	for (Node* arg : Args)
-		arg->GetDependency(dep);
+	LArg->GetDependency(dep);
+	RArg->GetDependency(dep);
 }
 
 void Join::Evaluate(const EvaluationContext& ec, Result& outRes) const

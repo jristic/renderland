@@ -30,16 +30,12 @@ struct DependencyInfo
 
 struct Node 
 {
-	enum class Special {
-		None,
-		Operator,
-	} Spec;
 	const char* Location;
 	DependencyInfo Dep;
 	Result CachedResult;
 	bool CacheValid = false;
 
-	Node() : Spec(Special::None) {}
+	Node() {}
 	virtual ~Node() {}
 
 	virtual void Evaluate(const EvaluationContext& ec, Result& res) const = 0;
@@ -100,8 +96,9 @@ struct BinaryOp : Node
 	enum class Type {
 		Add, Subtract, Multiply, Divide
 	};
-	std::vector<Node*> Args;
-	std::vector<Type> Ops;
+	Node* LArg;
+	Node* RArg;
+	Type Op;
 };
 
 struct Join : Node

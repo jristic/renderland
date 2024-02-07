@@ -42,6 +42,10 @@
 		* file/line/location of occurence
 	* Maybe I should make the tokenizer code common between the rlf and shader parsers?
 
+*** D3D12
+	* Handle when user errors cause a device removal
+		* Can we recreate the device and continue?
+
 *** AST expressions to
 	* Add clamp, saturate
 	* Rounded up divide
