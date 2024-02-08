@@ -18,13 +18,13 @@
 	* Texture arrays, cubes, 3d textures.
 	* Append and consume buffers.
 	* Support UAVs in pixel and vertex shaders.
-	* Multiple vertex buffer and instanced buffer support. 
 
 *** Cleanup:
 	* Parser errors which happen post-consume point to the token after the one actually in question
 	* Handle various errors in specifying views/resources (mainly providing the wrong kind).
 	* Check bounds of viewport expressions are valid, throw error or warning?
 	* Texture flag cleanup -> SRV/UAV/RTV/DSV can be determined from usage. or keep it explicit?
+		* Buffer flags too, especially where in D3D12 the flags don't mean anything but in d3d11 they do
 	* Make obj parsing handle not having normals or UVs. 
 
 *** Input/output refactor

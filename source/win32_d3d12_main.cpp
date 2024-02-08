@@ -50,6 +50,7 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 void CheckHresult(HRESULT hr, const char* desc)
 {
+	(void)hr; (void)desc;
 	Assert(hr == S_OK, "Failed to create %s, hr=%x", desc, hr);
 }
 

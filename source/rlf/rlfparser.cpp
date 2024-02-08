@@ -329,6 +329,7 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(VShader) \
 	RLF_KEYWORD_ENTRY(PShader) \
 	RLF_KEYWORD_ENTRY(VertexBuffer) \
+	RLF_KEYWORD_ENTRY(VertexBuffers) \
 	RLF_KEYWORD_ENTRY(IndexBuffer) \
 	RLF_KEYWORD_ENTRY(InstancedIndirectArgs) \
 	RLF_KEYWORD_ENTRY(IndexedInstancedIndirectArgs) \
@@ -456,6 +457,17 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(RevSubtract) \
 	RLF_KEYWORD_ENTRY(Max) \
 	RLF_KEYWORD_ENTRY(SizeOf) \
+	RLF_KEYWORD_ENTRY(PerVertex) \
+	RLF_KEYWORD_ENTRY(PerInstance) \
+	RLF_KEYWORD_ENTRY(SemanticName) \
+	RLF_KEYWORD_ENTRY(SemanticIndex) \
+	RLF_KEYWORD_ENTRY(InputSlot) \
+	RLF_KEYWORD_ENTRY(AlignedByteOffset) \
+	RLF_KEYWORD_ENTRY(InputSlotClass) \
+	RLF_KEYWORD_ENTRY(InstanceDataStepRate) \
+	RLF_KEYWORD_ENTRY(InputElementDesc) \
+	RLF_KEYWORD_ENTRY(InputLayout) \
+
 
 #define RLF_KEYWORD_ENTRY(name) name,
 enum class Keyword
@@ -857,6 +869,15 @@ BlendOp ConsumeBlendOp(TokenIter& t)
 		Keyword::Max,			BlendOp::Max,
 	};
 	return ConsumeEnum(t, def, "BlendOp");
+}
+
+InputClassification ConsumeInputClassification(TokenIter& t)
+{
+	static EnumEntry<InputClassification> def[] = {
+		Keyword::PerVertex,		InputClassification::PerVertex,
+		Keyword::PerInstance,	InputClassification::PerInstance,
+	};
+	return ConsumeEnum(t, def, "InputClassification");
 }
 
 
@@ -1666,7 +1687,9 @@ enum class ConsumeType
 	TextureFlag,
 	TextureFormat,
 	Blend,
-	BlendOp
+	BlendOp,
+	InputClassification,
+	InputLayout,
 };
 struct StructEntry
 {
@@ -1678,6 +1701,7 @@ struct StructEntry
 #define StructEntryDefEx(struc, type, name, field) Keyword::name, ConsumeType::type, offsetof(struc, field)
 
 StencilOpDesc ConsumeStencilOpDesc(TokenIter& t);
+void ConsumeInputLayout(TokenIter& t, std::vector<InputElementDesc>& descs);
 
 template <typename T>
 void ConsumeField(TokenIter& t, T* s, ConsumeType type, size_t offset)
@@ -1779,6 +1803,15 @@ void ConsumeField(TokenIter& t, T* s, ConsumeType type, size_t offset)
 	case ConsumeType::BlendOp:
 		*(BlendOp*)p = ConsumeBlendOp(t);
 		break;
+	case ConsumeType::InputClassification:
+		*(InputClassification*)p = ConsumeInputClassification(t);
+		break;
+	case ConsumeType::InputLayout:
+	{
+		std::vector<InputElementDesc>& descs = *(std::vector<InputElementDesc>*)p;
+		ConsumeInputLayout(t, descs);
+		break;
+	}
 	default:
 		Unimplemented();
 	}
@@ -2037,6 +2070,50 @@ BlendState* ConsumeBlendStateRefOrDef(
 	}
 }
 
+InputElementDesc ConsumeInputElementDesc(TokenIter& t)
+{
+	InputElementDesc ied = {};
+
+	// non-zero defaults
+	ied.AlignedByteOffset = D3D11_APPEND_ALIGNED_ELEMENT;
+
+	static StructEntry def[] = {
+		StructEntryDef(InputElementDesc, String, SemanticName),
+		StructEntryDef(InputElementDesc, Uint, SemanticIndex),
+		StructEntryDef(InputElementDesc, TextureFormat, Format),
+		StructEntryDef(InputElementDesc, Uint, InputSlot),
+		StructEntryDef(InputElementDesc, Uint, AlignedByteOffset),
+		StructEntryDef(InputElementDesc, InputClassification, InputSlotClass),
+		StructEntryDef(InputElementDesc, Uint, InstanceDataStepRate),
+	};
+	constexpr TokenType Delim = TokenType::Semicolon;
+	constexpr bool TrailingRequired = true;
+	ConsumeStruct<Delim, TrailingRequired>(
+		t, &ied, def, "InputElementDesc");
+	return ied;
+}
+
+void ConsumeInputLayout(TokenIter& t, std::vector<InputElementDesc>& descs)
+{
+	ConsumeToken(TokenType::LBrace, t);
+	while (true)
+	{
+		if (TryConsumeToken(TokenType::RBrace, t))
+			break;
+
+		const char* id = ConsumeIdentifier(t);
+		Keyword key = LookupKeyword(id);
+		ParserAssert(key == Keyword::InputElementDesc, "expected InputElementDesc");
+		InputElementDesc ied = ConsumeInputElementDesc(t);
+		descs.push_back(ied);
+
+		if (TryConsumeToken(TokenType::RBrace, t))
+			break;
+		else 
+			ConsumeToken(TokenType::Comma, t);
+	}
+}
+
 ComputeShader* ConsumeComputeShaderDef(
 	TokenIter& t,
 	ParseState& ps)
@@ -2086,6 +2163,7 @@ VertexShader* ConsumeVertexShaderDef(
 	static StructEntry def[] = {
 		StructEntryDefEx(VertexShader, String, ShaderPath, Common.ShaderPath),
 		StructEntryDefEx(VertexShader, String, EntryPoint, Common.EntryPoint),
+		StructEntryDef(VertexShader, InputLayout, InputLayout),
 	};
 	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
@@ -2695,13 +2773,35 @@ Draw* ConsumeDrawDef(
 		}
 		case Keyword::VertexBuffer:
 		{
+			draw->VertexBuffers.clear();
 			ConsumeToken(TokenType::Equals, t);
 			const char* id = ConsumeIdentifier(t);
 			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %s", id);
 			ParseState::Resource& res = ps.resMap[id];
 			ParserAssert(res.type == ParseState::ResType::Buffer, 
 				"Resource (%s) must be a buffer", id);
-			draw->VertexBuffer = reinterpret_cast<Buffer*>(res.m);
+			draw->VertexBuffers.push_back(reinterpret_cast<Buffer*>(res.m));
+			break;
+		}
+		case Keyword::VertexBuffers:
+		{
+			draw->VertexBuffers.clear();
+			ConsumeToken(TokenType::Equals, t);
+			ConsumeToken(TokenType::LBrace, t);
+			while (true)
+			{
+				const char* id = ConsumeIdentifier(t);
+				ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %s", id);
+				ParseState::Resource& res = ps.resMap[id];
+				ParserAssert(res.type == ParseState::ResType::Buffer, 
+					"Resource (%s) must be a buffer", id);
+				draw->VertexBuffers.push_back(reinterpret_cast<Buffer*>(res.m));
+				if (!TryConsumeToken(TokenType::Comma, t))
+				{
+					ConsumeToken(TokenType::RBrace, t);
+					break;
+				}
+			}
 			break;
 		}
 		case Keyword::IndexBuffer:

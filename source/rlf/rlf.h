@@ -196,6 +196,22 @@ namespace rlf
 		BlendOp OpAlpha;
 		u8 RenderTargetWriteMask;
 	};
+	enum class InputClassification
+	{
+		Invalid,
+		PerVertex,
+		PerInstance,
+	};
+	struct InputElementDesc
+	{
+		char* SemanticName;
+		u32 SemanticIndex;
+		TextureFormat Format;
+		u32 InputSlot;
+		u32 AlignedByteOffset;
+		InputClassification InputSlotClass;
+		u32 InstanceDataStepRate;
+	};
 	struct CommonShader 
 	{
 		const char* ShaderPath;
@@ -212,6 +228,7 @@ namespace rlf
 	struct VertexShader
 	{
 		CommonShader Common;
+		std::vector<InputElementDesc> InputLayout;
 		gfx::VertexShader GfxState;
 		gfx::InputLayout LayoutGfxState; 
 	};
@@ -351,7 +368,7 @@ namespace rlf
 		DepthStencilState* DSState;
 		VertexShader* VShader;
 		PixelShader* PShader;
-		Buffer* VertexBuffer;
+		std::vector<Buffer*> VertexBuffers;
 		Buffer* IndexBuffer;
 		Buffer* InstancedIndirectArgs;
 		Buffer* IndexedInstancedIndirectArgs;

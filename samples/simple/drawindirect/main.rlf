@@ -1,10 +1,36 @@
 
 Buffer {
 	ElementSize = 4;
-	ElementCount = 4;
+	ElementCount = 8;
 	Flags = {IndirectArgs,Raw};
 } iargs
 
+Buffer {
+	ElementSize = 4;
+	ElementCount = 8;
+	InitData = u32{0,0,0,0,4,4,4,4};
+	Flags = {Vertex};
+} InstanceBuffer
+
+VertexShader {
+	ShaderPath = "shaders.hlsl";
+	EntryPoint = "VSMain";
+	InputLayout = {
+		InputElementDesc {
+			SemanticName = "TEXCOORD";
+			SemanticIndex = 0;
+			Format = R32_UINT;
+			InputSlot = 0;
+			InputSlotClass = PerInstance;
+			InstanceDataStepRate = 1;
+		},
+	};
+} vs
+
+PixelShader {
+	ShaderPath = "shaders.hlsl";
+	EntryPoint = "PSMain";
+} ps
 
 Passes {
 	Dispatch {
@@ -17,15 +43,20 @@ Passes {
 		setconstant Time = time();
 	},
 	Draw {
-		VShader = VertexShader {
-			ShaderPath = "shaders.hlsl";
-			EntryPoint = "VSMain";
-		};
-		PShader = PixelShader {
-			ShaderPath = "shaders.hlsl";
-			EntryPoint = "PSMain";
-		};
+		VShader = vs;
+		PShader = ps;
+		VertexBuffers = { InstanceBuffer };
 		instancedindirectargs = iargs;
+		indirectargsoffset = 0;
+		RenderTarget = @BackBuffer;
+		setconstantvs Time = time();
+	},
+	Draw {
+		VShader = vs;
+		PShader = ps;
+		VertexBuffers = { InstanceBuffer };
+		instancedindirectargs = iargs;
+		indirectargsoffset = 16;
 		RenderTarget = @BackBuffer;
 		setconstantvs Time = time();
 	}

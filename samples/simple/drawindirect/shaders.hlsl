@@ -5,9 +5,9 @@ struct VSOutput {
 	float2 tex : TEXCOORD0;
 };
 
-VSOutput VSMain(uint id : SV_VertexID, uint iid : SV_InstanceID)
+VSOutput VSMain(uint id : SV_VertexID, uint iid : SV_InstanceID, uint istart : TEXCOORD0)
 {
-	float Rads = Time + iid * 3.14 / 2;
+	float Rads = Time + ((istart+iid) * 3.14 / 4);
 	float2 InstancePos = float2(sin(Rads), cos(Rads)) * 0.5;
 
 	float2 VertexPos = float2(
@@ -41,4 +41,8 @@ void CSProducer(uint3 DTid : SV_DispatchThreadID)
 	uint start_instance = 0;
 	uint4 args = uint4(vert_count, instance_count, start_vert, start_instance);
 	OutArgs.Store4(0, args);
+
+	start_instance = 4;
+	args = uint4(vert_count, instance_count, start_vert, start_instance);
+	OutArgs.Store4(16, args);
 }
