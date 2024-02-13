@@ -1382,15 +1382,27 @@ void ExecuteDraw(
 			Assert(false, "unhandled type %d", bind.Type);
 		}
 	}
+	ID3D11UnorderedAccessView *uavs[D3D11_PS_CS_UAV_REGISTER_COUNT] = {};
+	u32 uav_min = 0xffffffff;
+	u32 uav_max = 0;
 	for (Bind& bind : draw->PSBinds)
 	{
 		switch (bind.Type)
 		{
 		case BindType::View:
 		{
-			ExecuteAssert(bind.ViewBind->Type == ViewType::SRV, 
-				"UAVs are not supported in pixel shaders.");
-			ctx->PSSetShaderResources(bind.BindIndex, 1, &bind.ViewBind->SRVGfxState);
+			if (bind.IsOutput)
+			{
+				Assert(bind.ViewBind->Type == ViewType::UAV, "Invalid");
+				uav_min = min(uav_min, bind.BindIndex);
+				uav_max = max(uav_max, bind.BindIndex);
+				uavs[bind.BindIndex] = bind.ViewBind->UAVGfxState;
+			}
+			else
+			{
+				Assert(bind.ViewBind->Type == ViewType::SRV, "Invalid");
+				ctx->PSSetShaderResources(bind.BindIndex, 1, &bind.ViewBind->SRVGfxState);
+			}
 			break;
 		}
 		case BindType::Sampler:
@@ -1475,7 +1487,8 @@ void ExecuteDraw(
 			vp[i].MaxDepth = res.Value.Float2Val.y;
 		}
 	}
-	ctx->OMSetRenderTargets(8, rtViews, dsView);
+	ctx->OMSetRenderTargetsAndUnorderedAccessViews(rtCount, rtViews, dsView, uav_min, 
+		uav_max-uav_min+1, uav_min != 0xffffffff ? uavs+uav_min : nullptr, nullptr);
 	ctx->RSSetViewports(8, vp);
 	ctx->IASetPrimitiveTopology(RlfToD3d(draw->Topology));
 	ctx->RSSetState(draw->RState ? draw->RState->GfxState : DefaultRasterizerState);
