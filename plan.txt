@@ -17,7 +17,6 @@
 **** Expand D3D feature support.
 	* Texture arrays, cubes, 3d textures.
 	* Append and consume buffers.
-	* Support UAVs in pixel and vertex shaders.
 
 *** Cleanup:
 	* Parser errors which happen post-consume point to the token after the one actually in question

@@ -1363,15 +1363,27 @@ void ExecuteDraw(
 	{
 		ctx->PSSetConstantBuffers(buf.Slot, 1, &buf.GfxState);
 	}
+	ID3D11UnorderedAccessView *uavs[D3D11_PS_CS_UAV_REGISTER_COUNT] = {};
+	u32 uav_min = 0xffffffff;
+	u32 uav_max = 0;
 	for (Bind& bind : draw->VSBinds)
 	{
 		switch (bind.Type)
 		{
 		case BindType::View:
 		{
-			ExecuteAssert(bind.ViewBind->Type == ViewType::SRV, 
-				"UAVs are not supported in vertex shaders.");
-			ctx->VSSetShaderResources(bind.BindIndex, 1, &bind.ViewBind->SRVGfxState);
+			if (bind.IsOutput)
+			{
+				Assert(bind.ViewBind->Type == ViewType::UAV, "Invalid");
+				uav_min = min(uav_min, bind.BindIndex);
+				uav_max = max(uav_max, bind.BindIndex);
+				uavs[bind.BindIndex] = bind.ViewBind->UAVGfxState;
+			}
+			else
+			{
+				Assert(bind.ViewBind->Type == ViewType::SRV, "Invalid");
+				ctx->VSSetShaderResources(bind.BindIndex, 1, &bind.ViewBind->SRVGfxState);
+			}
 			break;
 		}
 		case BindType::Sampler:
@@ -1382,9 +1394,6 @@ void ExecuteDraw(
 			Assert(false, "unhandled type %d", bind.Type);
 		}
 	}
-	ID3D11UnorderedAccessView *uavs[D3D11_PS_CS_UAV_REGISTER_COUNT] = {};
-	u32 uav_min = 0xffffffff;
-	u32 uav_max = 0;
 	for (Bind& bind : draw->PSBinds)
 	{
 		switch (bind.Type)
@@ -1487,6 +1496,9 @@ void ExecuteDraw(
 			vp[i].MaxDepth = res.Value.Float2Val.y;
 		}
 	}
+	ExecuteAssert(uav_min >= rtCount, 
+		"Shader has %d render targets, UAVs must be bound at index %d or greater "
+		"but one is bound at index %d", rtCount, rtCount, uav_min);
 	ctx->OMSetRenderTargetsAndUnorderedAccessViews(rtCount, rtViews, dsView, uav_min, 
 		uav_max-uav_min+1, uav_min != 0xffffffff ? uavs+uav_min : nullptr, nullptr);
 	ctx->RSSetViewports(8, vp);

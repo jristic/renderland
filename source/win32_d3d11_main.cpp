@@ -190,7 +190,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		UINT createDeviceFlags = 0;
 		createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 		D3D_FEATURE_LEVEL featureLevel;
-		const D3D_FEATURE_LEVEL featureLevelArray[1] = { D3D_FEATURE_LEVEL_11_0 };
+		const D3D_FEATURE_LEVEL featureLevelArray[1] = { D3D_FEATURE_LEVEL_11_1 };
 		HRESULT hr = D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 
 			createDeviceFlags, featureLevelArray, 1, D3D11_SDK_VERSION, &sd, &Gfx.SwapChain, 
 			&Gfx.Device, &featureLevel, &Gfx.DeviceContext);
