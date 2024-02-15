@@ -1499,8 +1499,11 @@ void ExecuteDraw(
 	ExecuteAssert(uav_min >= rtCount, 
 		"Shader has %d render targets, UAVs must be bound at index %d or greater "
 		"but one is bound at index %d", rtCount, rtCount, uav_min);
-	ctx->OMSetRenderTargetsAndUnorderedAccessViews(rtCount, rtViews, dsView, uav_min, 
-		uav_max-uav_min+1, uav_min != 0xffffffff ? uavs+uav_min : nullptr, nullptr);
+	if (uav_min != 0xffffffff)
+		ctx->OMSetRenderTargetsAndUnorderedAccessViews(rtCount, rtViews, dsView, 
+			uav_min, uav_max-uav_min+1, uavs+uav_min, nullptr);
+	else
+		ctx->OMSetRenderTargets(rtCount, rtViews, dsView);
 	ctx->RSSetViewports(8, vp);
 	ctx->IASetPrimitiveTopology(RlfToD3d(draw->Topology));
 	ctx->RSSetState(draw->RState ? draw->RState->GfxState : DefaultRasterizerState);
