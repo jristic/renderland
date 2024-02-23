@@ -264,7 +264,7 @@ namespace rlf
 		uint2 Size;
 		ast::Node* SizeExpr;
 		TextureFormat Format;
-		const char* DDSPath;
+		const char* FromFile;
 		TextureFlag Flags;
 		u32 SampleCount;
 		std::set<View*> Views;
@@ -386,6 +386,7 @@ namespace rlf
 		std::vector<SetConstant> PSConstants;
 		std::vector<ConstantBuffer> VSCBs;
 		std::vector<ConstantBuffer> PSCBs;
+		std::vector<Draw*> AdditionalDraws;
 		gfx::BlendState BlendGfxState;
 		gfx::DrawData GfxState;
 	};

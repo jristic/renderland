@@ -1511,12 +1511,12 @@ void InitMain(
 
 	for (Texture* tex : rd->Textures)
 	{
-		if (tex->DDSPath)
+		if (tex->FromFile)
 		{
-			std::string ddsPath = dirPath + tex->DDSPath;
-			HANDLE dds = fileio::OpenFileOptional(ddsPath.c_str(), GENERIC_READ);
+			std::string filePath = dirPath + tex->FromFile;
+			HANDLE dds = fileio::OpenFileOptional(filePath.c_str(), GENERIC_READ);
 			InitAssert(dds != INVALID_HANDLE_VALUE, "Couldn't find DDS file: %s", 
-				ddsPath.c_str());
+				filePath.c_str());
 
 			u32 ddsSize = fileio::GetFileSize(dds);
 			char* ddsBuffer = (char*)malloc(ddsSize);
@@ -1841,7 +1841,7 @@ void HandleTextureParametersChanged(
 		for (Texture* tex : rd->Textures)
 		{
 			// DDS textures are always sized based on the file. 
-			if (tex->DDSPath)
+			if (tex->FromFile)
 				continue;
 			if ((tex->SizeExpr->Dep.VariesByFlags & ec->EvCtx.ChangedThisFrameFlags) == 0)
 				continue;
@@ -2326,6 +2326,10 @@ void _Execute(
 		else if (pass.Type == PassType::Draw)
 		{
 			ExecuteDraw(pass.Draw, ec);
+			for (Draw* sub_draw : pass.Draw->AdditionalDraws)
+			{
+				ExecuteDraw(sub_draw, ec);
+			}
 		}
 		else if (pass.Type == PassType::ClearColor)
 		{
