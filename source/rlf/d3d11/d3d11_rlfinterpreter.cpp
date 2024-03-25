@@ -1580,10 +1580,6 @@ void _Execute(
 		else if (pass.Type == PassType::Draw)
 		{
 			ExecuteDraw(pass.Draw, ec);
-			for (Draw* sub_draw : pass.Draw->AdditionalDraws)
-			{
-				ExecuteDraw(sub_draw, ec);
-			}
 		}
 		else if (pass.Type == PassType::ClearColor)
 		{
@@ -1610,6 +1606,13 @@ void _Execute(
 			ctx->ResolveSubresource(pass.Resolve->Dst->GfxState, 0, 
 				pass.Resolve->Src->GfxState, 0, 
 				D3DTextureFormat[(u32)pass.Resolve->Dst->Format]);
+		}
+		else if (pass.Type == PassType::ObjDraw)
+		{
+			for (Draw* draw : pass.ObjDraw->PerMeshDraws)
+			{
+				ExecuteDraw(draw, ec);
+			}
 		}
 		else
 		{

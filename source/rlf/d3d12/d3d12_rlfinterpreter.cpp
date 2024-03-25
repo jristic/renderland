@@ -1514,22 +1514,36 @@ void InitMain(
 		if (tex->FromFile)
 		{
 			std::string filePath = dirPath + tex->FromFile;
-			HANDLE dds = fileio::OpenFileOptional(filePath.c_str(), GENERIC_READ);
-			InitAssert(dds != INVALID_HANDLE_VALUE, "Couldn't find DDS file: %s", 
+			HANDLE file = fileio::OpenFileOptional(filePath.c_str(), GENERIC_READ);
+			InitAssert(file != INVALID_HANDLE_VALUE, "Couldn't find DDS file: %s", 
 				filePath.c_str());
 
-			u32 ddsSize = fileio::GetFileSize(dds);
+			size_t extPos = filePath.rfind(".");
+			InitAssert(extPos != std::string::npos, 
+				"Could not find file extension in Texture::FromFile=%s \n"
+				"	Only .tga and .dds are supported.",
+				tex->FromFile);
+			std::string ext = filePath.substr(extPos+1, 3);
+
+			u32 ddsSize = fileio::GetFileSize(file);
 			char* ddsBuffer = (char*)malloc(ddsSize);
 			Assert(ddsBuffer != nullptr, "failed to alloc");
 
-			fileio::ReadFile(dds, ddsBuffer, ddsSize);
+			fileio::ReadFile(file, ddsBuffer, ddsSize);
 
-			CloseHandle(dds);
+			CloseHandle(file);
 
-			DirectX::TexMetadata meta;
+			DirectX::TexMetadata meta = {};
 			DirectX::ScratchImage scratch;
-			DirectX::LoadFromDDSMemory(ddsBuffer, ddsSize, DirectX::DDS_FLAGS_NONE, 
-				&meta, scratch);
+			if (ext == "dds")
+				DirectX::LoadFromDDSMemory(ddsBuffer, ddsSize, DirectX::DDS_FLAGS_NONE, 
+					&meta, scratch);
+			else if (ext == "tga")
+				DirectX::LoadFromTGAMemory(ddsBuffer, ddsSize, DirectX::TGA_FLAGS_NONE, 
+					&meta, scratch);
+			else
+				InitError("Unsupported Texture::FromFile extension (%s)", ext.c_str());
+
 			DXGI_FORMAT format = meta.format;
 			tex->Size.x = (u32)meta.width;
 			tex->Size.y = (u32)meta.height;
@@ -2326,10 +2340,6 @@ void _Execute(
 		else if (pass.Type == PassType::Draw)
 		{
 			ExecuteDraw(pass.Draw, ec);
-			for (Draw* sub_draw : pass.Draw->AdditionalDraws)
-			{
-				ExecuteDraw(sub_draw, ec);
-			}
 		}
 		else if (pass.Type == PassType::ClearColor)
 		{
@@ -2366,6 +2376,13 @@ void _Execute(
 			ctx->CommandList->ResolveSubresource(pass.Resolve->Dst->GfxState.Resource, 0, 
 				pass.Resolve->Src->GfxState.Resource, 0, 
 				D3DTextureFormat[(u32)pass.Resolve->Dst->Format]);
+		}
+		else if (pass.Type == PassType::ObjDraw)
+		{
+			for (Draw* draw : pass.ObjDraw->PerMeshDraws)
+			{
+				ExecuteDraw(draw, ec);
+			}
 		}
 		else
 		{

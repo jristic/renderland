@@ -30,7 +30,6 @@ constant float3 CamPos = {0,height,ZOffset};
 constant float3 LookPos = CamPos + {direction.x, 0, direction.y};
 
 Draw {
-	ObjPath = "sponza.obj";
 	Topology = TriList;
 	VShader = VertexShader {
 		ShaderPath = "vertex.hlsl";
@@ -49,7 +48,7 @@ Draw {
 		projection(3.14/3, DisplaySize().x / float(DisplaySize().y), 0.1, 2000)
 		* 
 		lookAt(CamPos, LookPos);
-} objDraw
+} drawTempl
 
 Dispatch {
 	Shader = ComputeShader {
@@ -66,6 +65,9 @@ Dispatch {
 Passes {
 	ClearColor{ Target=RT; Color={0,0,0,1}; },
 	ClearDepth{ Target=DS; Depth=1; },
-	objDraw,
+	ObjDraw {
+		ObjPath = "sponza.obj";
+		Template = drawTempl;
+	},
 	copy
 }

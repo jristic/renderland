@@ -50,10 +50,9 @@
 	* Rounded up divide
 
 *** Obj import expansion
-	* How do we get to a place where drawing test scenes (ie. sponza) is doable?
-	* Some way to get the textures of a material on an object?
-	* Support multi-object models?
-	* Or generate a sub-rlf that does all the busywork of making draws out of potentially many objects and materials?
+	* Generate mips on textures loaded from file. 
+	* Support material parameters from obj files.
+	* Support more of the textures provided in an obj.
 
 *** UI:
 	* Event-viewer style list of the passes in a frame. 

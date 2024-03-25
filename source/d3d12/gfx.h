@@ -31,7 +31,7 @@ namespace gfx {
 		static u32 const 				RLF_RESERVED_RTV_SLOT_INDEX = NUM_BACK_BUFFERS;
 		static u32 const 				NUM_RESERVED_RTV_SLOTS = NUM_BACK_BUFFERS + 1;
 
-		static u32 const				MAX_CBV_SRV_UAV_DESCS = 1024;
+		static u32 const				MAX_CBV_SRV_UAV_DESCS = 2048;
 		static u32 const				RLF_RESERVED_SRV_SLOT_INDEX = 0;
 		static u32 const				RLF_RESERVED_UAV_SLOT_INDEX = 1;
 		static u32 const 				NUM_RESERVED_CBV_SRV_UAV_SLOTS = 2;
@@ -162,6 +162,7 @@ namespace gfx {
 
 	D3D12_CPU_DESCRIPTOR_HANDLE AllocateDescriptor(DescriptorHeap* heap)
 	{
+		Assert(heap->NextIndex < heap->MaxSlots, "Ran out of descriptors");
 		u64 offset = heap->NextIndex * heap->DescriptorSize;
 
 		D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
@@ -175,6 +176,7 @@ namespace gfx {
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptor(DescriptorHeap* heap, u64 slot)
 	{
+		Assert(slot < heap->MaxSlots, "Invalid slot");
 		D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor = 
 			heap->Object->GetCPUDescriptorHandleForHeapStart();
 		cpu_descriptor.ptr += slot * heap->DescriptorSize;
@@ -183,6 +185,7 @@ namespace gfx {
 
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptor(DescriptorHeap* heap, u64 slot)
 	{
+		Assert(slot < heap->MaxSlots, "Invalid slot");
 		D3D12_GPU_DESCRIPTOR_HANDLE gpu_descriptor = 
 			heap->Object->GetGPUDescriptorHandleForHeapStart();
 		gpu_descriptor.ptr += slot * heap->DescriptorSize;

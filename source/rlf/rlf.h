@@ -34,6 +34,7 @@ namespace rlf
 		ClearDepth,
 		ClearStencil,
 		Resolve,
+		ObjDraw,
 	};
 	enum class SystemValue
 	{
@@ -386,7 +387,6 @@ namespace rlf
 		std::vector<SetConstant> PSConstants;
 		std::vector<ConstantBuffer> VSCBs;
 		std::vector<ConstantBuffer> PSCBs;
-		std::vector<Draw*> AdditionalDraws;
 		gfx::BlendState BlendGfxState;
 		gfx::DrawData GfxState;
 	};
@@ -410,6 +410,10 @@ namespace rlf
 		Texture* Src;
 		Texture* Dst;
 	};
+	struct ObjDraw
+	{
+		std::vector<Draw*> PerMeshDraws;
+	};
 	struct Pass
 	{
 		const char* Name;
@@ -421,6 +425,7 @@ namespace rlf
 			ClearDepth* ClearDepth;
 			ClearStencil* ClearStencil;
 			Resolve* Resolve;
+			ObjDraw* ObjDraw;
 		};
 	};
 	struct Constant
@@ -447,6 +452,7 @@ namespace rlf
 		std::vector<ClearDepth*> ClearDepths;
 		std::vector<ClearStencil*> ClearStencils;
 		std::vector<Resolve*> Resolves;
+		std::vector<ObjDraw*> ObjDraws;
 		std::vector<ComputeShader*> CShaders;
 		std::vector<VertexShader*> VShaders;
 		std::vector<PixelShader*> PShaders;
