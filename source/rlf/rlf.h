@@ -34,6 +34,7 @@ namespace rlf
 		ClearDepth,
 		ClearStencil,
 		Resolve,
+		ObjDraw,
 	};
 	enum class SystemValue
 	{
@@ -264,7 +265,7 @@ namespace rlf
 		uint2 Size;
 		ast::Node* SizeExpr;
 		TextureFormat Format;
-		const char* DDSPath;
+		const char* FromFile;
 		TextureFlag Flags;
 		u32 SampleCount;
 		std::set<View*> Views;
@@ -409,6 +410,10 @@ namespace rlf
 		Texture* Src;
 		Texture* Dst;
 	};
+	struct ObjDraw
+	{
+		std::vector<Draw*> PerMeshDraws;
+	};
 	struct Pass
 	{
 		const char* Name;
@@ -420,6 +425,7 @@ namespace rlf
 			ClearDepth* ClearDepth;
 			ClearStencil* ClearStencil;
 			Resolve* Resolve;
+			ObjDraw* ObjDraw;
 		};
 	};
 	struct Constant
@@ -446,6 +452,7 @@ namespace rlf
 		std::vector<ClearDepth*> ClearDepths;
 		std::vector<ClearStencil*> ClearStencils;
 		std::vector<Resolve*> Resolves;
+		std::vector<ObjDraw*> ObjDraws;
 		std::vector<ComputeShader*> CShaders;
 		std::vector<VertexShader*> VShaders;
 		std::vector<PixelShader*> PShaders;

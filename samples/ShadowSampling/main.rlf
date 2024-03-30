@@ -125,7 +125,7 @@ Draw {
 	SetConstantPs LightPos = LightPos;
 	bindps ShadowDepth = ShadowDSSrv;
 	bindps ShadowSampler = PointSampler;
-} objDraw
+} obj_draw
 
 Draw {
 	Topology = TriList;
@@ -169,7 +169,7 @@ Passes {
 	ClearDepth{ Target=MainDS; Depth=1; },
 	ClearDepth{ Target=ShadowDSView; Depth=1; },
 	renderShadowMap,
-	objDraw,
+	obj_draw,
 	drawFloorPlane,
 	copy
 }

@@ -71,7 +71,7 @@ Draw {
 		projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 0.1, 10)
 		* 
 		lookAt(float3(2,0,0), float3(0,0,0));
-} objDraw
+} obj_draw
 
 Dispatch {
 	Shader = ComputeShader {
@@ -92,6 +92,6 @@ Passes {
 	ClearColor{ Target=RT1; Color={0,0,0,0}; },
 	ClearColor{ Target=RT2; Color={0,0,0,0}; },
 	ClearDepth{ Target=DSView; Depth=1; },
-	objDraw,
+	obj_draw,
 	copy
 }

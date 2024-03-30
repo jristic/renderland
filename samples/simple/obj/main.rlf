@@ -27,8 +27,8 @@ Draw {
 	IndexBuffer = indices;
 	RenderTarget = @BackBuffer;
 	DepthStencil = @DefaultDepth;
-} objDraw
+} obj_draw
 
 Passes {
-	objDraw
+	obj_draw
 }

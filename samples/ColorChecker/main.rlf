@@ -5,7 +5,7 @@ Sampler {
 } PointSampler
 
 Texture {
-	DDSPath = "ColorChecker.dds";
+	FromFile = "ColorChecker.dds";
 } Tex
 
 ComputeShader {

@@ -92,6 +92,7 @@ void DisplayShaderPasses(rlf::RenderDescription* rd)
 		case rlf::PassType::ClearDepth:
 		case rlf::PassType::ClearStencil:
 		case rlf::PassType::Resolve:
+		case rlf::PassType::ObjDraw:
 			break;
 		default:
 			Unimplemented();

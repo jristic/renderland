@@ -52,7 +52,7 @@ Draw {
 		projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 0.1, 10)
 		* 
 		lookAt(float3(1.5,0,0), float3(0,0,0));
-} objDraw
+} obj_draw
 
 Draw {
 	VShader = VertexShader {
@@ -92,7 +92,7 @@ Passes {
 	ClearColor{ Target=RT; Color={0,0,0,1}; },
 	ClearDepth{ Target=DS; Depth=1; },
 	ClearStencil{ Target=DS; Stencil=0; },
-	objDraw,
+	obj_draw,
 	simpleDraw,
 	copy
 }

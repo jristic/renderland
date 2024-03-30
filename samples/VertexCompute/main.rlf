@@ -44,9 +44,9 @@ Draw {
 		projection(3.14/2, DisplaySize().x / float(DisplaySize().y), 0.1, 10)
 		* 
 		lookAt(float3(2,1,0), float3(0,0,0));
-} objDraw
+} obj_draw
 
 Passes {
 	updateVerts,
-	objDraw
+	obj_draw
 }

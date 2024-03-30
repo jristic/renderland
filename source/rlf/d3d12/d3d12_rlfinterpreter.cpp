@@ -1093,6 +1093,106 @@ void ResolveBind(Bind& bind, ID3D12ShaderReflection* reflector, const char* path
 	}
 }
 
+void ApplyNullDescriptors(gfx::Context* ctx, const gfx::BindInfo* bi, 
+	const gfx::DescriptorTable* table, ID3D12ShaderReflection* reflector)
+{
+	D3D12_SHADER_DESC ShaderDesc = {};
+	reflector->GetDesc(&ShaderDesc);
+
+	for (u32 i = 0 ; i < ShaderDesc.BoundResources ; ++i)
+	{
+		D3D12_SHADER_INPUT_BIND_DESC input = {};
+		reflector->GetResourceBindingDesc(i, &input);
+
+		// all constant buffers are handled separately from other binds, so 
+		// 	we don't try to null them here.
+		if (input.Type == D3D_SIT_CBUFFER)
+			continue;
+
+		u8 Dimension = 0;
+		switch(input.Dimension)
+		{
+		case D3D_SRV_DIMENSION_BUFFER:
+		case D3D_SRV_DIMENSION_TEXTURE1D:
+		case D3D_SRV_DIMENSION_TEXTURE1DARRAY:
+		case D3D_SRV_DIMENSION_TEXTURE2D:
+		case D3D_SRV_DIMENSION_TEXTURE2DARRAY:
+		case D3D_SRV_DIMENSION_TEXTURE2DMS:
+		case D3D_SRV_DIMENSION_TEXTURE2DMSARRAY:
+		case D3D_SRV_DIMENSION_TEXTURE3D:
+		case D3D_SRV_DIMENSION_TEXTURECUBE:
+		case D3D_SRV_DIMENSION_TEXTURECUBEARRAY:
+			Dimension = (u8)input.Dimension;
+			break;
+		case D3D_SRV_DIMENSION_UNKNOWN:
+			Assert(input.Type == D3D_SIT_SAMPLER, "unexpected conditions");
+			break;
+		case D3D_SRV_DIMENSION_BUFFEREX:
+		default:
+			Unimplemented();
+		}
+
+		switch(input.Type)
+		{
+		case D3D_SIT_TEXTURE:
+		case D3D_SIT_STRUCTURED:
+		case D3D_SIT_BYTEADDRESS:
+		{
+			D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
+			desc.Format = DXGI_FORMAT_R8_UINT;
+			desc.ViewDimension = (D3D12_SRV_DIMENSION)Dimension;
+			desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+			u32 DestSlot = bi->NumCbvs + (input.BindPoint - bi->SrvMin);
+			for (u32 frame = 0 ; frame < gfx::Context::NUM_FRAMES_IN_FLIGHT ; ++frame)
+			{
+				D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ctx->CbvSrvUavHeap,
+					table->CbvSrvUavDescTableStart[frame] + DestSlot);
+				ctx->Device->CreateShaderResourceView(nullptr, &desc, DestDesc);
+			}
+			break;
+		}
+		case D3D_SIT_UAV_RWTYPED:
+		case D3D_SIT_UAV_RWSTRUCTURED:
+		case D3D_SIT_UAV_RWBYTEADDRESS:
+		{
+			Assert(Dimension <= D3D12_UAV_DIMENSION_TEXTURE3D, "invalid UAV dimension");
+			D3D12_UNORDERED_ACCESS_VIEW_DESC desc = {};
+			desc.Format = DXGI_FORMAT_R8_UINT;
+			desc.ViewDimension = (D3D12_UAV_DIMENSION)Dimension;
+			u32 DestSlot = bi->NumCbvs + bi->NumSrvs + (input.BindPoint - bi->UavMin);
+			for (u32 frame = 0 ; frame < gfx::Context::NUM_FRAMES_IN_FLIGHT ; ++frame)
+			{
+				D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ctx->CbvSrvUavHeap,
+					table->CbvSrvUavDescTableStart[frame] + DestSlot);
+				ctx->Device->CreateUnorderedAccessView(nullptr, nullptr, &desc, DestDesc);
+			}
+			break;
+		}
+		case D3D_SIT_SAMPLER:
+		{
+			D3D12_SAMPLER_DESC desc = {};
+			desc.AddressU = desc.AddressV = desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+			for (u32 frame = 0 ; frame < gfx::Context::NUM_FRAMES_IN_FLIGHT ; ++frame)
+			{
+				D3D12_CPU_DESCRIPTOR_HANDLE DestDesc = GetCPUDescriptor(&ctx->SamplerHeap,
+					table->SamplerDescTableStart[frame] + input.BindPoint - bi->SamplerMin);
+				ctx->Device->CreateSampler(&desc, DestDesc);
+			}
+			break;
+		}
+		case D3D_SIT_CBUFFER:
+		case D3D_SIT_TBUFFER:
+		case D3D_SIT_UAV_APPEND_STRUCTURED:
+		case D3D_SIT_UAV_CONSUME_STRUCTURED:
+		case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
+		case D3D_SIT_RTACCELERATIONSTRUCTURE:
+		case D3D_SIT_UAV_FEEDBACKTEXTURE:
+		default:
+			Unimplemented();
+		}
+	}
+}
+
 void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
 	const gfx::BindInfo* bi, const gfx::DescriptorTable* table, 
 	const std::vector<Bind>& binds)
@@ -1511,25 +1611,39 @@ void InitMain(
 
 	for (Texture* tex : rd->Textures)
 	{
-		if (tex->DDSPath)
+		if (tex->FromFile)
 		{
-			std::string ddsPath = dirPath + tex->DDSPath;
-			HANDLE dds = fileio::OpenFileOptional(ddsPath.c_str(), GENERIC_READ);
-			InitAssert(dds != INVALID_HANDLE_VALUE, "Couldn't find DDS file: %s", 
-				ddsPath.c_str());
+			std::string filePath = dirPath + tex->FromFile;
+			HANDLE file = fileio::OpenFileOptional(filePath.c_str(), GENERIC_READ);
+			InitAssert(file != INVALID_HANDLE_VALUE, "Couldn't find DDS file: %s", 
+				filePath.c_str());
 
-			u32 ddsSize = fileio::GetFileSize(dds);
+			size_t extPos = filePath.rfind(".");
+			InitAssert(extPos != std::string::npos, 
+				"Could not find file extension in Texture::FromFile=%s \n"
+				"	Only .tga and .dds are supported.",
+				tex->FromFile);
+			std::string ext = filePath.substr(extPos+1, 3);
+
+			u32 ddsSize = fileio::GetFileSize(file);
 			char* ddsBuffer = (char*)malloc(ddsSize);
 			Assert(ddsBuffer != nullptr, "failed to alloc");
 
-			fileio::ReadFile(dds, ddsBuffer, ddsSize);
+			fileio::ReadFile(file, ddsBuffer, ddsSize);
 
-			CloseHandle(dds);
+			CloseHandle(file);
 
-			DirectX::TexMetadata meta;
+			DirectX::TexMetadata meta = {};
 			DirectX::ScratchImage scratch;
-			DirectX::LoadFromDDSMemory(ddsBuffer, ddsSize, DirectX::DDS_FLAGS_NONE, 
-				&meta, scratch);
+			if (ext == "dds")
+				DirectX::LoadFromDDSMemory(ddsBuffer, ddsSize, DirectX::DDS_FLAGS_NONE, 
+					&meta, scratch);
+			else if (ext == "tga")
+				DirectX::LoadFromTGAMemory(ddsBuffer, ddsSize, DirectX::TGA_FLAGS_NONE, 
+					&meta, scratch);
+			else
+				InitError("Unsupported Texture::FromFile extension (%s)", ext.c_str());
+
 			DXGI_FORMAT format = meta.format;
 			tex->Size.x = (u32)meta.width;
 			tex->Size.y = (u32)meta.height;
@@ -1683,6 +1797,7 @@ void InitMain(
 	{
 		gfx::ComputeShader* cs = &dc->Shader->GfxState;
 		AllocateDescriptorTables(ctx, &dc->GfxState.Table, &cs->BI);
+		ApplyNullDescriptors(ctx, &cs->BI, &dc->GfxState.Table, dc->Shader->Common.Reflector);
 		CopyBindDescriptors(ctx, resources, &cs->BI, &dc->GfxState.Table, dc->Binds);
 
 		// Binding of constant buffers descriptors is separate from other views
@@ -1708,12 +1823,14 @@ void InitMain(
 	{
 		gfx::VertexShader* vs = &d->VShader->GfxState;
 		AllocateDescriptorTables(ctx, &d->GfxState.VSTable, &vs->BI);
+		ApplyNullDescriptors(ctx, &vs->BI, &d->GfxState.VSTable, d->VShader->Common.Reflector);
 		CopyBindDescriptors(ctx, resources, &vs->BI, &d->GfxState.VSTable, d->VSBinds);
 		CopyConstantBufferDescriptors(ctx, &d->GfxState.VSTable, &vs->BI, d->VSCBs);
 		if (d->PShader)
 		{
 			gfx::PixelShader* ps = &d->PShader->GfxState;
 			AllocateDescriptorTables(ctx, &d->GfxState.PSTable, &ps->BI);
+			ApplyNullDescriptors(ctx, &ps->BI, &d->GfxState.PSTable, d->PShader->Common.Reflector);
 			CopyBindDescriptors(ctx, resources, &ps->BI, &d->GfxState.PSTable, d->PSBinds);
 			CopyConstantBufferDescriptors(ctx, &d->GfxState.PSTable, &ps->BI, d->PSCBs);
 		}
@@ -1841,7 +1958,7 @@ void HandleTextureParametersChanged(
 		for (Texture* tex : rd->Textures)
 		{
 			// DDS textures are always sized based on the file. 
-			if (tex->DDSPath)
+			if (tex->FromFile)
 				continue;
 			if ((tex->SizeExpr->Dep.VariesByFlags & ec->EvCtx.ChangedThisFrameFlags) == 0)
 				continue;
@@ -2362,6 +2479,13 @@ void _Execute(
 			ctx->CommandList->ResolveSubresource(pass.Resolve->Dst->GfxState.Resource, 0, 
 				pass.Resolve->Src->GfxState.Resource, 0, 
 				D3DTextureFormat[(u32)pass.Resolve->Dst->Format]);
+		}
+		else if (pass.Type == PassType::ObjDraw)
+		{
+			for (Draw* draw : pass.ObjDraw->PerMeshDraws)
+			{
+				ExecuteDraw(draw, ec);
+			}
 		}
 		else
 		{

@@ -953,25 +953,38 @@ void InitMain(
 
 	for (Texture* tex : rd->Textures)
 	{
-		if (tex->DDSPath)
+		if (tex->FromFile)
 		{
-			std::string ddsPath = dirPath + tex->DDSPath;
-			HANDLE dds = fileio::OpenFileOptional(ddsPath.c_str(), GENERIC_READ);
-			InitAssert(dds != INVALID_HANDLE_VALUE, "Couldn't find DDS file: %s", 
-				ddsPath.c_str());
+			std::string filePath = dirPath + tex->FromFile;
+			HANDLE file = fileio::OpenFileOptional(filePath.c_str(), GENERIC_READ);
+			InitAssert(file != INVALID_HANDLE_VALUE, "Couldn't find DDS file: %s", 
+				filePath.c_str());
 
-			u32 ddsSize = fileio::GetFileSize(dds);
+			size_t extPos = filePath.rfind(".");
+			InitAssert(extPos != std::string::npos, 
+				"Could not find file extension in Texture::FromFile=%s \n"
+				"	Only .tga and .dds are supported.",
+				tex->FromFile);
+			std::string ext = filePath.substr(extPos+1, 3);
+
+			u32 ddsSize = fileio::GetFileSize(file);
 			char* ddsBuffer = (char*)malloc(ddsSize);
 			Assert(ddsBuffer != nullptr, "failed to alloc");
 
-			fileio::ReadFile(dds, ddsBuffer, ddsSize);
+			fileio::ReadFile(file, ddsBuffer, ddsSize);
 
-			CloseHandle(dds);
+			CloseHandle(file);
 
 			DirectX::TexMetadata meta;
 			DirectX::ScratchImage scratch;
-			DirectX::LoadFromDDSMemory(ddsBuffer, ddsSize, DirectX::DDS_FLAGS_NONE, 
-				&meta, scratch);
+			if (ext == "dds")
+				DirectX::LoadFromDDSMemory(ddsBuffer, ddsSize, DirectX::DDS_FLAGS_NONE, 
+					&meta, scratch);
+			else if (ext == "tga")
+				DirectX::LoadFromTGAMemory(ddsBuffer, ddsSize, DirectX::TGA_FLAGS_NONE, 
+					&meta, scratch);
+			else
+				InitError("Unsupported Texture::FromFile extension (%s)", ext.c_str());
 			ID3D11Resource* res;
 			free(ddsBuffer);
 			HRESULT hr = DirectX::CreateTextureEx(device, scratch.GetImages(),
@@ -1142,7 +1155,7 @@ void HandleTextureParametersChanged(
 		for (Texture* tex : rd->Textures)
 		{
 			// DDS textures are always sized based on the file. 
-			if (tex->DDSPath)
+			if (tex->FromFile)
 				continue;
 			if ((tex->SizeExpr->Dep.VariesByFlags & ec->EvCtx.ChangedThisFrameFlags) == 0)
 				continue;
@@ -1593,6 +1606,13 @@ void _Execute(
 			ctx->ResolveSubresource(pass.Resolve->Dst->GfxState, 0, 
 				pass.Resolve->Src->GfxState, 0, 
 				D3DTextureFormat[(u32)pass.Resolve->Dst->Format]);
+		}
+		else if (pass.Type == PassType::ObjDraw)
+		{
+			for (Draw* draw : pass.ObjDraw->PerMeshDraws)
+			{
+				ExecuteDraw(draw, ec);
+			}
 		}
 		else
 		{

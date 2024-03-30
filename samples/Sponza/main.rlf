@@ -1,0 +1,73 @@
+
+Sampler {
+	Filter = { All = Point };
+	AddressMode = { UVW=Clamp };
+} PointSampler
+
+Sampler {
+	Filter = { All = Linear };
+	AddressMode = {UVW=Clamp};
+} LinearSampler
+
+Texture {
+	Format = R8G8B8A8_UNORM;
+	Size = DisplaySize();
+	Flags = { RTV, SRV };
+} RT
+
+Texture {
+	Format = D24_UNORM_S8_UINT;
+	Size = { DisplaySize() };
+	Flags = { DSV };
+} DS
+
+tuneable float height = 100;
+tuneable float ZOffset [-100,100] = 0;
+tuneable float RotationSpeed[0,1] = 0.2;
+
+constant float2 direction = {sin(RotationSpeed*time()),cos(RotationSpeed*time())};
+constant float3 CamPos = {0,height,ZOffset};
+constant float3 LookPos = CamPos + {direction.x, 0, direction.y};
+
+Draw {
+	Topology = TriList;
+	VShader = VertexShader {
+		ShaderPath = "vertex.hlsl";
+		EntryPoint = "VSMain";
+	};
+	PShader = PixelShader {
+		ShaderPath = "pixel.hlsl";
+		EntryPoint = "PSMain";
+	};
+	//VertexBuffer = verts;
+	//IndexBuffer = indices;
+	RenderTarget = RT;
+	DepthStencil = DS;
+	BindPS Sampler = LinearSampler;
+	SetConstantVs Matrix = 
+		projection(3.14/3, DisplaySize().x / float(DisplaySize().y), 0.1, 2000)
+		* 
+		lookAt(CamPos, LookPos);
+} drawTempl
+
+Dispatch {
+	Shader = ComputeShader {
+		ShaderPath = "CopyTexture.hlsl";
+		EntryPoint = "CSMain";
+	};
+	ThreadPerPixel = true; 
+	Bind OutTexture = @BackBuffer;
+	Bind InTexture = RT;
+	Bind Sampler= PointSampler;
+	setconstant TextureSize = DisplaySize();
+} copy
+
+Passes {
+	ClearColor{ Target=RT; Color={0,0,0,1}; },
+	ClearDepth{ Target=DS; Depth=1; },
+	ObjDraw {
+		ObjPath = "sponza.obj";
+		Template = drawTempl;
+	},
+	copy
+}

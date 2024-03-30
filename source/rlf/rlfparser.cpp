@@ -305,7 +305,7 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(InitData) \
 	RLF_KEYWORD_ENTRY(Size) \
 	RLF_KEYWORD_ENTRY(Format) \
-	RLF_KEYWORD_ENTRY(DDSPath) \
+	RLF_KEYWORD_ENTRY(FromFile) \
 	RLF_KEYWORD_ENTRY(SampleCount) \
 	RLF_KEYWORD_ENTRY(Filter) \
 	RLF_KEYWORD_ENTRY(AddressMode) \
@@ -467,6 +467,8 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(InstanceDataStepRate) \
 	RLF_KEYWORD_ENTRY(InputElementDesc) \
 	RLF_KEYWORD_ENTRY(InputLayout) \
+	RLF_KEYWORD_ENTRY(ObjDraw) \
+	RLF_KEYWORD_ENTRY(Template) \
 
 
 #define RLF_KEYWORD_ENTRY(name) name,
@@ -1239,7 +1241,7 @@ ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
 				ConsumeToken(TokenType::Comma, t);
 				const char* structName = ConsumeString(t);
 				ast::SizeOf* sizeOf = AllocateAst<ast::SizeOf>(ps.rd);
-				sizeOf->StructName = structName;
+				sizeOf->StructName = AddStringToDescriptionData(structName, ps.rd);
 				sizeOf->Size = 0;
 				shader->SizeRequests.push_back(sizeOf);
 				ConsumeToken(TokenType::RParen, t);
@@ -2595,7 +2597,7 @@ Texture* ConsumeTextureDef(
 		StructEntryDef(Texture, TextureFlag, Flags),
 		StructEntryDefEx(Texture, Ast, Size, SizeExpr),
 		StructEntryDef(Texture, TextureFormat, Format),
-		StructEntryDef(Texture, String, DDSPath),
+		StructEntryDef(Texture, String, FromFile),
 		StructEntryDef(Texture, Uint, SampleCount),
 	};
 	constexpr TokenType Delim = TokenType::Semicolon;
@@ -2603,7 +2605,7 @@ Texture* ConsumeTextureDef(
 	ConsumeStruct<Delim, TrailingRequired>(
 		t, tex, def, "Texture");
 
-	ParserAssert(tex->DDSPath || tex->SizeExpr, 
+	ParserAssert(tex->FromFile || tex->SizeExpr, 
 		"Texture size must be provided if not populated from DDS");
 	ParserAssert(!tex->SizeExpr || !tex->SizeExpr->VariesByTime(), 
 		"Texture size may not vary by time.");
@@ -3017,6 +3019,8 @@ Draw* ConsumeDrawDef(
 			break;
 	}
 
+
+
 	return draw;
 }
 
@@ -3208,6 +3212,234 @@ Resolve* ConsumeResolveDef(
 	return resolve;
 }
 
+Pass ConsumePassRefOrDef(TokenIter& t, ParseState& ps);
+
+ObjDraw* ConsumeObjDrawDef(
+	TokenIter& t,
+	ParseState& ps)
+{
+	RenderDescription* rd = ps.rd;
+
+	ConsumeToken(TokenType::LBrace, t);
+
+	ObjDraw* objDraw = new ObjDraw();
+	rd->ObjDraws.push_back(objDraw);
+
+	Draw* templ = nullptr;
+	const char* objPath = nullptr;
+
+	while (true)
+	{
+		const char* fieldId = ConsumeIdentifier(t);
+		ConsumeToken(TokenType::Equals, t);
+		Keyword key = LookupKeyword(fieldId);
+
+		if (key == Keyword::ObjPath)
+		{
+			objPath = AddStringToDescriptionData(ConsumeString(t), rd);
+		}
+		else if (key == Keyword::Template)
+		{
+			Pass pass = ConsumePassRefOrDef(t, ps);
+			ParserAssert(pass.Type == PassType::Draw, "Invalid Template, must be draw.");
+			templ = pass.Draw;
+		}
+		else
+		{
+			ParserError("unexpected field %s", fieldId);
+		}
+
+		ConsumeToken(TokenType::Semicolon, t);
+		if (TryConsumeToken(TokenType::RBrace, t))
+			break;
+	}
+
+	ParserAssert(templ, "Template not set");
+	ParserAssert(objPath, "ObjPath not set");
+
+	tinyobj::attrib_t attrib;
+	std::vector<tinyobj::shape_t> shapes;
+	std::vector<tinyobj::material_t> materials;
+	std::string err;
+
+	std::string path = ps.workingDirectory;
+	path += objPath;
+
+	bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, path.c_str(),
+		ps.workingDirectory, true);
+	ParserAssert(ret, "failed to load obj file: %s", err.c_str());
+
+	struct IndexEqual
+	{
+		bool operator()(const tinyobj::index_t& l, const tinyobj::index_t& r) const
+		{
+			if (l.vertex_index != r.vertex_index)
+				return false;
+			if (l.normal_index != r.normal_index)
+				return false;
+			if (l.texcoord_index != r.texcoord_index)
+				return false;
+			return true;
+		}
+	};
+	struct IndexHash
+	{
+		size_t operator()(const tinyobj::index_t& i) const
+		{
+			size_t h = 5381;
+			h = ((h << 5) + h) + i.vertex_index;
+			h = ((h << 5) + h) + i.normal_index;
+			h = ((h << 5) + h) + i.texcoord_index;
+			return h; 
+		}
+	};
+
+	for (size_t shape_idx = 0 ; shape_idx < shapes.size() ; ++shape_idx)
+	{
+		tinyobj::shape_t& shape = shapes[shape_idx];
+
+		Draw* sub_draw = new Draw();
+		rd->Draws.push_back(sub_draw);
+		objDraw->PerMeshDraws.push_back(sub_draw);
+		// copy state to the sub draw
+		*sub_draw = *templ;
+
+		std::unordered_map<tinyobj::index_t, size_t, IndexHash, IndexEqual> map;
+
+		struct Vertex {
+			float3 v;
+			float3 vn;
+			float2 vt;
+		};
+		std::vector<Vertex> verts;
+		std::vector<u32> idxs;
+		bool isU16 = true;
+
+		tinyobj::mesh_t& mesh = shape.mesh;
+		size_t indexOffset = 0;
+		int material_id = mesh.material_ids[0];
+		for (size_t fv : mesh.num_face_vertices)
+		{
+			ParserAssert(fv == 3, "un-triangulated faces not supported.");
+			for (size_t v = 0 ; v < fv ; ++v)
+			{
+				tinyobj::index_t idx = mesh.indices[indexOffset + v];
+
+				auto search = map.find(idx);
+				if (search != map.end())
+				{
+					idxs.push_back((u32)search->second);
+					continue;
+				}
+
+				Vertex vert = {};
+
+				tinyobj::real_t vx = attrib.vertices[3*size_t(idx.vertex_index)+0];
+				tinyobj::real_t vy = attrib.vertices[3*size_t(idx.vertex_index)+1];
+				tinyobj::real_t vz = attrib.vertices[3*size_t(idx.vertex_index)+2];
+				vert.v = {vx, vy, vz};
+
+				// Check if `normal_index` is zero or positive. negative = no normal data
+				if (idx.normal_index >= 0)
+				{
+					tinyobj::real_t nx = attrib.normals[3*size_t(idx.normal_index)+0];
+					tinyobj::real_t ny = attrib.normals[3*size_t(idx.normal_index)+1];
+					tinyobj::real_t nz = attrib.normals[3*size_t(idx.normal_index)+2];
+					vert.vn = {nx, ny, nz};
+				}
+
+				// Check if `texcoord_index` is zero or positive. negative = no texcoord data
+				if (idx.texcoord_index >= 0) {
+					tinyobj::real_t tx = attrib.texcoords[2*size_t(idx.texcoord_index)+0];
+					tinyobj::real_t ty = attrib.texcoords[2*size_t(idx.texcoord_index)+1];
+					vert.vt = {tx, ty};
+				}
+
+				size_t index = verts.size();
+				if (index > USHRT_MAX)
+					isU16 = false;
+				verts.push_back(vert);
+				idxs.push_back((u32)index);
+				map[idx] = index;
+			}
+			indexOffset += fv;
+		}
+
+		u32 vertexCount = (u32)verts.size();
+		u32 indexCount = (u32)idxs.size();
+
+		size_t vertsSize = sizeof(Vertex) * vertexCount;
+		void* vertices = malloc(vertsSize);
+		AddMemToDescriptionData(vertices, rd);
+		memcpy(vertices, verts.data(), vertsSize);
+
+		size_t indicesSize = (isU16 ? 2 : 4) * indexCount;
+		void* indices = malloc(indicesSize);
+		AddMemToDescriptionData(indices, rd);
+		if (isU16)
+		{
+			u16* shorts = (u16*)indices;
+			for (size_t i = 0 ; i < indexCount ; ++i)
+			{
+				u32 val = idxs[i];
+				Assert(val <= USHRT_MAX, "mismatch in expected size");
+				shorts[i] = (u16)val;
+			}
+		}
+		else
+		{
+			memcpy(indices, idxs.data(), indicesSize);
+		}
+
+		Buffer* vbuf = new Buffer();
+		rd->Buffers.push_back(vbuf);
+		vbuf->InitData = vertices;
+		vbuf->ElementSize = sizeof(Vertex);
+		vbuf->ElementCount = vertexCount;
+		vbuf->InitDataSize = vbuf->ElementSize * vbuf->ElementCount;
+		vbuf->Flags = BufferFlag_Vertex;
+
+		Buffer* ibuf = new Buffer();
+		rd->Buffers.push_back(ibuf);
+		ibuf->InitData = indices;
+		ibuf->ElementSize = isU16 ? 2 : 4;
+		ibuf->ElementCount = indexCount;
+		ibuf->InitDataSize = ibuf->ElementSize * ibuf->ElementCount;
+		ibuf->Flags = BufferFlag_Index;
+
+		sub_draw->VertexBuffers.clear();
+		sub_draw->VertexBuffers.push_back(vbuf);
+		sub_draw->IndexBuffer = ibuf;
+
+		tinyobj::material_t& material = materials[material_id];
+		if (!material.ambient_texname.empty())
+		{
+			Texture* alb_tex = new Texture();
+			rd->Textures.push_back(alb_tex);
+			alb_tex->FromFile = AddStringToDescriptionData(
+				material.ambient_texname.c_str(), rd);
+
+			View* alb_view = new View();
+			rd->Views.push_back(alb_view);
+			alb_view->Type = ViewType::SRV;
+			alb_view->ResourceType = ResourceType::Texture;
+			alb_view->Texture = alb_tex;
+			alb_view->Format = TextureFormat::Invalid;
+
+			alb_tex->Views.insert(alb_view);
+
+			Bind bind;
+			bind.BindTarget = AddStringToDescriptionData("map_Ka", rd);
+			bind.Type = BindType::View;
+			bind.ViewBind = alb_view;
+
+			sub_draw->PSBinds.push_back(bind);
+		}
+	}
+
+	return objDraw;
+}
+
 Pass ConsumePassRefOrDef(
 	TokenIter& t,
 	ParseState& ps)
@@ -3246,6 +3478,11 @@ Pass ConsumePassRefOrDef(
 		pass.Type = PassType::Resolve;
 		pass.Resolve = ConsumeResolveDef(t, ps);
 	}
+	else if (key == Keyword::ObjDraw)
+	{
+		pass.Type = PassType::ObjDraw;
+		pass.ObjDraw = ConsumeObjDrawDef(t, ps);
+	}
 	else
 	{
 		ParserAssert(ps.passMap.count(id) != 0, "couldn't find pass %s", id);
@@ -3264,6 +3501,7 @@ void CheckPassName(const char* name)
 		case Keyword::ClearDepth:
 		case Keyword::ClearStencil:
 		case Keyword::Resolve:
+		case Keyword::ObjDraw:
 			ParserError("Pass types may not be used as identifiers: %s", name);
 			break;
 		default:
@@ -3499,6 +3737,20 @@ void ParseMain()
 			ps.passMap[nameId] = pass;
 			break;
 		}
+		case Keyword::ObjDraw:
+		{
+			ObjDraw* objDraw = ConsumeObjDrawDef(t,ps);
+			const char* nameId = ConsumeIdentifier(t);
+			CheckPassName(nameId);
+			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined",
+				nameId);
+			Pass pass;
+			pass.Name = AddStringToDescriptionData(nameId, rd);
+			pass.Type = PassType::ObjDraw;
+			pass.ObjDraw = objDraw;
+			ps.passMap[nameId] = pass;
+			break;
+		}
 		case Keyword::Passes:
 		{
 			ConsumeToken(TokenType::LBrace, t);
@@ -3601,6 +3853,8 @@ void ReleaseData(RenderDescription* data)
 		delete clear;
 	for (Resolve* resolve : data->Resolves)
 		delete resolve;
+	for (ObjDraw* objDraw : data->ObjDraws)
+		delete objDraw;
 	for (ComputeShader* cs : data->CShaders)
 		delete cs;
 	for (VertexShader* vs : data->VShaders)
