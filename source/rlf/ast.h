@@ -120,7 +120,7 @@ struct Function : Node
 {
 	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
 	virtual void GetDependency(DependencyInfo& dep) const override;
-	std::string Name;
+	const char* Name;
 	std::vector<Node*> Args;
 };
 

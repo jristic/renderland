@@ -1250,7 +1250,7 @@ ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
 			else
 			{
 				ast::Function* func = AllocateAst<ast::Function>(ps.rd);
-				func->Name = std::string(id);
+				func->Name = AddStringToDescriptionData(id, ps.rd);
 				if (!TryConsumeToken(TokenType::RParen, t))
 				{
 					while (true)
@@ -3805,6 +3805,7 @@ RenderDescription* ParseBuffer(
 
 	ParseState ps;
 	ps.rd = new RenderDescription();
+	alloc::Init(&ps.rd->Alloc);
 	ps.workingDirectory = workingDir;
 	ParseStateInit(&ps);
 
@@ -3887,6 +3888,9 @@ void ReleaseData(RenderDescription* data)
 		free(mem);
 	for (ast::Node* ast : data->Asts)
 		delete ast;
+
+	alloc::FreeAll(&data->Alloc);
+	
 	delete data;
 }
 

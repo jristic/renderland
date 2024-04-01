@@ -445,5 +445,6 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 #include "rlf/shaderparser.cpp"
 #include "rlf/d3d11/d3d11_rlfinterpreter.cpp"
 #include "rlf/rlfinterpreter.cpp"
+#include "rlf/alloc.cpp"
 #include "gui.cpp"
 #include "main.cpp"

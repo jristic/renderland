@@ -938,17 +938,17 @@ std::unordered_map<u32, FunctionInfo> FuncMap = {
 
 void Function::Evaluate(const EvaluationContext& ec, Result& res) const
 {
-	u32 funcHash = LowerHash(Name.c_str());
+	u32 funcHash = LowerHash(Name);
 	AstAssert(this, FuncMap.count(funcHash) == 1, "No function named %s exists.",
-		Name.c_str());
+		Name);
 	FunctionEvaluate fi = FuncMap[funcHash].fn;
 	fi(this, ec, Args, res);
 }
 void Function::GetDependency(DependencyInfo& dep) const
 {
-	u32 funcHash = LowerHash(Name.c_str());
+	u32 funcHash = LowerHash(Name);
 	AstAssert(this, FuncMap.count(funcHash) == 1, "No function named %s exists.",
-		Name.c_str());
+		Name);
 
 	VariesBy vb = FuncMap[funcHash].vb;
 	dep.VariesByFlags |= vb;
