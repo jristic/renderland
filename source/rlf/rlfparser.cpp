@@ -1193,10 +1193,11 @@ Bind ConsumeBind(TokenIter& t, ParseState& ps)
 }
 
 template <typename AstType>
-AstType* AllocateAst(RenderDescription* rd)
+AstType* AllocateAst(ast::NodeType type, RenderDescription* rd)
 {
 	AstType* ast = new AstType();
-	rd->Asts.push_back(ast);
+	ast->Common.Type = type;
+	rd->Asts.push_back((ast::Node*)ast);
 	return ast;
 }
 
@@ -1240,16 +1241,17 @@ ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
 				CommonShader* shader = LookupShader(shaderName, ps);
 				ConsumeToken(TokenType::Comma, t);
 				const char* structName = ConsumeString(t);
-				ast::SizeOf* sizeOf = AllocateAst<ast::SizeOf>(ps.rd);
+				ast::SizeOf* sizeOf = AllocateAst<ast::SizeOf>(ast::NodeType::SizeOf, ps.rd);
 				sizeOf->StructName = AddStringToDescriptionData(structName, ps.rd);
 				sizeOf->Size = 0;
 				shader->SizeRequests.push_back(sizeOf);
 				ConsumeToken(TokenType::RParen, t);
-				ast = sizeOf;
+				ast = &sizeOf->Common;
 			}
 			else
 			{
-				ast::Function* func = AllocateAst<ast::Function>(ps.rd);
+				ast::Function* func = AllocateAst<ast::Function>(
+					ast::NodeType::Function, ps.rd);
 				func->Name = AddStringToDescriptionData(id, ps.rd);
 				if (!TryConsumeToken(TokenType::RParen, t))
 				{
@@ -1262,17 +1264,18 @@ ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
 					}
 					ConsumeToken(TokenType::RParen, t);
 				}
-				ast = func;
+				ast = &func->Common;
 			}
 		}
 		else
 		{
 			ParserAssert(ps.varMap.count(id) == 1, "Variable %s not defined.", id);
 			ParseState::Var& v = ps.varMap[id];
-			ast::VariableRef* vr = AllocateAst<ast::VariableRef>(ps.rd);
-			vr->isTuneable = v.tuneable;
+			ast::VariableRef* vr = AllocateAst<ast::VariableRef>(
+				ast::NodeType::VariableRef, ps.rd);
+			vr->IsTuneable = v.tuneable;
 			vr->M = v.m;
-			ast = vr;
+			ast = &vr->Common;
 		}
 		ast->Location = loc;
 	}
@@ -1284,66 +1287,69 @@ ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
 		{
 			// Note that the Minus is consumed inside the literal prodedure
 			i32 i = ConsumeIntLiteral(t);
-			ast::IntLiteral* il = AllocateAst<ast::IntLiteral>(ps.rd);
+			ast::IntLiteral* il = AllocateAst<ast::IntLiteral>(
+				ast::NodeType::IntLiteral, ps.rd);
 			il->Val = i;
-			il->Location = loc;
-			ast = il;
+			ast = &il->Common;
 		}
 		else if (tok2 == TokenType::FloatLiteral)
 		{
 			// Note that the Minus is consumed inside the literal prodedure
 			float f = ConsumeFloatLiteral(t);
-			ast::FloatLiteral* fl = AllocateAst<ast::FloatLiteral>(ps.rd);
+			ast::FloatLiteral* fl = AllocateAst<ast::FloatLiteral>(
+				ast::NodeType::FloatLiteral, ps.rd);
 			fl->Val = f;
-			fl->Location = loc;
-			ast = fl;
+			ast = &fl->Common;
 		}
 		else
 		{
-			ast::IntLiteral* nl = AllocateAst<ast::IntLiteral>(ps.rd);
+			ast::IntLiteral* nl = AllocateAst<ast::IntLiteral>(
+				ast::NodeType::IntLiteral, ps.rd);
 			nl->Val = -1;
-			nl->Location = loc;
+			nl->Common.Location = loc;
 			ConsumeToken(TokenType::Minus, t);
 			ast::Node* arg = ConsumeAstLeaf(t,ps);
-			ast::BinaryOp* bop = AllocateAst<ast::BinaryOp>(ps.rd);
-			bop->LArg = nl;
+			ast::BinaryOp* bop = AllocateAst<ast::BinaryOp>(ast::NodeType::BinaryOp, ps.rd);
+			bop->LArg = &nl->Common;
 			bop->RArg = (arg);
 			bop->Op = ast::BinaryOp::Type::Multiply;
-			bop->Location = loc;
-			ast = bop;
+			ast = &bop->Common;
 		}
+		ast->Location = loc;
 	}
 	else if (tok == TokenType::IntegerLiteral)
 	{
 		const char* loc = t.next->Location;
 		u32 u = ConsumeUintLiteral(t);
-		ast::UintLiteral* ul = AllocateAst<ast::UintLiteral>(ps.rd);
+		ast::UintLiteral* ul = AllocateAst<ast::UintLiteral>(
+			ast::NodeType::UintLiteral, ps.rd);
 		ul->Val = u;
-		ul->Location = loc;
-		ast = ul;
+		ul->Common.Location = loc;
+		ast = &ul->Common;
 	}
 	else if (tok == TokenType::FloatLiteral)
 	{
 		const char* loc = t.next->Location;
 		float f = ConsumeFloatLiteral(t);
-		ast::FloatLiteral* fl = AllocateAst<ast::FloatLiteral>(ps.rd);
+		ast::FloatLiteral* fl = AllocateAst<ast::FloatLiteral>(
+			ast::NodeType::FloatLiteral, ps.rd);
 		fl->Val = f;
-		fl->Location = loc;
-		ast = fl;
+		fl->Common.Location = loc;
+		ast = &fl->Common;
 	}
 	else if (tok == TokenType::LParen)
 	{
 		ConsumeToken(TokenType::LParen, t);
-		ast::Group* grp = AllocateAst<ast::Group>(ps.rd);
+		ast::Group* grp = AllocateAst<ast::Group>(ast::NodeType::Group, ps.rd);
 		grp->Sub = ConsumeAstRecurse(t, ps, OpPrecedence_Start);
-		ast = grp;
+		ast = &grp->Common;
 		ConsumeToken(TokenType::RParen, t);
 	}
 	else if (tok == TokenType::LBrace)
 	{
 		const char* loc = t.next->Location;
 		ConsumeToken(TokenType::LBrace, t);
-		ast::Join* join = AllocateAst<ast::Join>(ps.rd);
+		ast::Join* join = AllocateAst<ast::Join>(ast::NodeType::Join, ps.rd);
 		while (true)
 		{
 			ast::Node* arg = ConsumeAstRecurse(t, ps, OpPrecedence_Start);
@@ -1351,8 +1357,8 @@ ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
 			if (!TryConsumeToken(TokenType::Comma, t))
 				break;
 		}
-		join->Location = loc;
-		ast = join;
+		join->Common.Location = loc;
+		ast = &join->Common;
 		ConsumeToken(TokenType::RBrace, t);
 	}
 	else
@@ -1375,9 +1381,9 @@ ast::Node* ConsumeAstIncreasingPrec(TokenIter& t, ParseState& ps, ast::Node* lef
 	else if (tok == TokenType::Period)
 	{
 		ConsumeToken(TokenType::Period, t);
-		ast::Subscript* sub = AllocateAst<ast::Subscript>(ps.rd);
+		ast::Subscript* sub = AllocateAst<ast::Subscript>(ast::NodeType::Subscript, ps.rd);
 		sub->Subject = left;
-		sub->Location = t.next->Location;
+		sub->Common.Location = t.next->Location;
 		const char* ss = ConsumeIdentifier(t);
 		size_t slen = strlen(ss); 
 		for (u32 i = 0 ; i < slen ; ++i)
@@ -1394,7 +1400,7 @@ ast::Node* ConsumeAstIncreasingPrec(TokenIter& t, ParseState& ps, ast::Node* lef
 			else
 				ParserError("Unexpected subscript: %s", ss);
 		}
-		return sub;
+		return &sub->Common;
 	}
 	else if (tok == TokenType::Plus || tok == TokenType::Minus || 
 		tok == TokenType::Asterisk || tok == TokenType::ForwardSlash)
@@ -1433,12 +1439,12 @@ ast::Node* ConsumeAstIncreasingPrec(TokenIter& t, ParseState& ps, ast::Node* lef
 		default:
 			Unimplemented();
 		}
-		ast::BinaryOp* bop = AllocateAst<ast::BinaryOp>(ps.rd);
+		ast::BinaryOp* bop = AllocateAst<ast::BinaryOp>(ast::NodeType::BinaryOp, ps.rd);
 		bop->LArg = left;
 		bop->RArg = arg2;
 		bop->Op = op;
-		bop->Location = loc;
-		return bop;
+		bop->Common.Location = loc;
+		return &bop->Common;
 	}
 	else
 	{
@@ -1463,8 +1469,9 @@ ast::Node* ConsumeAstRecurse(TokenIter& t, ParseState& ps, OpPrecedence min_prec
 	return left;
 }
 
-ast::Node* ConsumeAst(TokenIter& t, ParseState& ps)
+ast::Expression ConsumeExpression(TokenIter& t, ParseState& ps)
 {
+	ast::Expression expr = {};
 	// NOTE: Due to operator precedence, the way expression parsing works is rather 
 	//	complicated and somewhat unintuitive until you step through it yourself. 
 	//	The basic idea is to create a recursive subtree on the right so long as 
@@ -1474,9 +1481,9 @@ ast::Node* ConsumeAst(TokenIter& t, ParseState& ps)
 	//	about how easy precedence is..." and it is significantly better than the
 	//	code I used to have to achieve the same effect. 
 	//	Link, for as long as that lasts: https://www.youtube.com/watch?v=fIPO4G42wYE
-	ast::Node* ast = ConsumeAstRecurse(t, ps, OpPrecedence_Start);
-	ast->GetDependency(ast->Dep);
-	return ast;
+	expr.TopNode = ConsumeAstRecurse(t, ps, OpPrecedence_Start);
+	ast::GetDependency(expr.TopNode, expr.Dep);
+	return expr;
 }
 
 SetConstant ConsumeSetConstant(TokenIter& t, ParseState& ps)
@@ -1485,7 +1492,7 @@ SetConstant ConsumeSetConstant(TokenIter& t, ParseState& ps)
 	ConsumeToken(TokenType::Equals, t);
 	SetConstant sc = {};
 	sc.VariableName = AddStringToDescriptionData(varName, ps.rd);
-	sc.Value = ConsumeAst(t, ps);
+	sc.Value = ConsumeExpression(t, ps);
 	ConsumeToken(TokenType::Semicolon, t);
 	return sc;
 }
@@ -1653,7 +1660,7 @@ Constant* ConsumeConstant(TokenIter& t, ParseState& ps)
 	ParserAssert(ps.varMap.count(nameId) == 0, "Variable %s already defined", nameId);
 
 	ConsumeToken(TokenType::Equals, t);
-	cnst->Expr = ConsumeAst(t,ps);
+	cnst->Expr = ConsumeExpression(t,ps);
 	
 	ParseState::Var v;
 	v.tuneable = false;
@@ -1761,7 +1768,7 @@ void ConsumeField(TokenIter& t, T* s, ConsumeType type, size_t offset)
 		*(AddressModeUVW*)p = ConsumeAddressModeUVW(t);
 		break;
 	case ConsumeType::Ast:
-		*(ast::Node**)p = ConsumeAst(t, *GPS);
+		*(ast::Expression*)p = ConsumeExpression(t, *GPS);
 		break;
 	case ConsumeType::ComparisonFunc:
 		*(ComparisonFunc*)p = ConsumeComparisonFunc(t);
@@ -2411,13 +2418,13 @@ Buffer* ConsumeBufferDef(
 		case Keyword::ElementSize:
 		{
 			ConsumeToken(TokenType::Equals, t);
-			buf->ElementSizeExpr = ConsumeAst(t, ps);
+			buf->ElementSizeExpr = ConsumeExpression(t, ps);
 			break;
 		}
 		case Keyword::ElementCount:
 		{
 			ConsumeToken(TokenType::Equals, t);
-			buf->ElementCountExpr = ConsumeAst(t, ps);
+			buf->ElementCountExpr = ConsumeExpression(t, ps);
 			break;
 		}
 		case Keyword::Flags:
@@ -2547,10 +2554,10 @@ Buffer* ConsumeBufferDef(
 	}
 	else
 	{
-		ParserAssert(buf->ElementSizeExpr && buf->ElementCountExpr, 
+		ParserAssert(buf->ElementSizeExpr.TopNode && buf->ElementCountExpr.TopNode, 
 			"ElementSize and ElementCount must be defined for buffer");
-		ParserAssert(!buf->ElementSizeExpr->VariesByTime() && 
-			!buf->ElementCountExpr->VariesByTime(), "Buffer size/count may not depend on time.");
+		ParserAssert(!buf->ElementSizeExpr.VariesByTime() && 
+			!buf->ElementCountExpr.VariesByTime(), "Buffer size/count may not depend on time.");
 
 		size_t bufSize = max(
 			max(
@@ -2561,7 +2568,7 @@ Buffer* ConsumeBufferDef(
 		);
 		if (bufSize > 0)
 		{
-			ParserAssert(buf->ElementSizeExpr->Constant() && buf->ElementCountExpr->Constant(),
+			ParserAssert(buf->ElementSizeExpr.Constant() && buf->ElementCountExpr.Constant(),
 				"Buffer having InitData is not compatible with non-constant buffer size/count");
 			void* data = malloc(bufSize);
 			AddMemToDescriptionData(data, rd);
@@ -2605,9 +2612,9 @@ Texture* ConsumeTextureDef(
 	ConsumeStruct<Delim, TrailingRequired>(
 		t, tex, def, "Texture");
 
-	ParserAssert(tex->FromFile || tex->SizeExpr, 
+	ParserAssert(tex->FromFile || tex->SizeExpr.IsValid(), 
 		"Texture size must be provided if not populated from DDS");
-	ParserAssert(!tex->SizeExpr || !tex->SizeExpr->VariesByTime(), 
+	ParserAssert(!tex->SizeExpr.IsValid() || !tex->SizeExpr.VariesByTime(), 
 		"Texture size may not vary by time.");
 
 	return tex;
@@ -2677,7 +2684,7 @@ Dispatch* ConsumeDispatchDef(
 		case Keyword::Groups:
 		{
 			ConsumeToken(TokenType::Equals, t);
-			dc->Groups = ConsumeAst(t, ps);
+			dc->Groups = ConsumeExpression(t, ps);
 			break;
 		}
 		case Keyword::IndirectArgs:

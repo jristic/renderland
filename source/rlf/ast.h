@@ -3,7 +3,7 @@ namespace rlf {
 namespace ast {
 
 
-struct EvaluationContext // TODO: collapse with executecontext?
+struct EvaluationContext
 {
 	uint2 DisplaySize;
 	float Time;
@@ -28,71 +28,86 @@ struct DependencyInfo
 	u32 VariesByFlags = VariesBy_None;
 };
 
-struct Node 
+#define NODE_TYPE_TUPLE \
+	NODE_TYPE_ENTRY(UintLiteral,		 UintLiteral_Evaluate, 		None_GetDependency) \
+	NODE_TYPE_ENTRY(IntLiteral,			 IntLiteral_Evaluate, 		None_GetDependency) \
+	NODE_TYPE_ENTRY(FloatLiteral,		 FloatLiteral_Evaluate, 	None_GetDependency) \
+	NODE_TYPE_ENTRY(Subscript,			 Subscript_Evaluate, 		Subscript_GetDependency) \
+	NODE_TYPE_ENTRY(Group,				 Group_Evaluate, 			Group_GetDependency) \
+	NODE_TYPE_ENTRY(BinaryOp,			 BinaryOp_Evaluate, 		BinaryOp_GetDependency) \
+	NODE_TYPE_ENTRY(Join,				 Join_Evaluate, 			Join_GetDependency) \
+	NODE_TYPE_ENTRY(VariableRef,		 VariableRef_Evaluate, 		VariableRef_GetDependency) \
+	NODE_TYPE_ENTRY(Function,			 Function_Evaluate, 		Function_GetDependency) \
+	NODE_TYPE_ENTRY(SizeOf,				 SizeOf_Evaluate, 			None_GetDependency) \
+
+#define NODE_TYPE_ENTRY(type, eval_func, dep_func) type,
+enum class NodeType
+{
+	NODE_TYPE_TUPLE
+	Count
+};
+#undef NODE_TYPE_ENTRY
+
+struct Node
 {
 	const char* Location;
-	DependencyInfo Dep;
-	Result CachedResult;
-	bool CacheValid = false;
-
-	Node() {}
-	virtual ~Node() {}
-
-	virtual void Evaluate(const EvaluationContext& ec, Result& res) const = 0;
-	virtual void GetDependency(DependencyInfo& dep) const = 0;
-
-	bool Constant() const { return Dep.VariesByFlags == VariesBy_None; }
-	bool VariesByDisplaySize() const { return Dep.VariesByFlags & VariesBy_DisplaySize; }
-	bool VariesByTuneable() const { return Dep.VariesByFlags & VariesBy_Tuneable; }
-	bool VariesByTime() const { return Dep.VariesByFlags & VariesBy_Time; }
+	NodeType Type;
 };
 
-void Evaluate(const EvaluationContext& ec, Node* ast, Result& res, ErrorState& es);
+struct Expression 
+{
+	const Node* TopNode;
+
+	DependencyInfo Dep;
+	Result CachedResult;
+	bool CacheValid;
+
+	bool IsValid() const { return TopNode != 0; }
+	bool VariesByTime() const { return Dep.VariesByFlags & VariesBy_Time; }
+	bool Constant() const { return Dep.VariesByFlags == VariesBy_None; }
+};
+
+void Evaluate(const EvaluationContext& ec, Expression& expr, Result& res, 
+	ErrorState& es);
+void GetDependency(const Node* node, DependencyInfo& dep);
 
 void Convert(Result& res, VariableFormat fmt);
 
 
-
-struct UintLiteral : Node
+struct UintLiteral
 {
-	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
-	virtual void GetDependency(DependencyInfo& dep) const override;
+	Node Common;
 	u32 Val;
 };
 
-struct IntLiteral : Node
+struct IntLiteral
 {
-	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
-	virtual void GetDependency(DependencyInfo& dep) const override;
+	Node Common;
 	i32 Val;
 };
 
-struct FloatLiteral : Node
+struct FloatLiteral
 {
-	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
-	virtual void GetDependency(DependencyInfo& dep) const override;
+	Node Common;
 	float Val;
 };
 
-struct Subscript : Node
+struct Subscript
 {
-	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
-	virtual void GetDependency(DependencyInfo& dep) const override;
+	Node Common;
 	Node* Subject;
 	i8 Index[4] = {-1,-1,-1,-1};
 };
 
-struct Group : Node
+struct Group
 {
-	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
-	virtual void GetDependency(DependencyInfo& dep) const override;
+	Node Common;
 	Node* Sub;
 };
 
-struct BinaryOp : Node
+struct BinaryOp
 {
-	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
-	virtual void GetDependency(DependencyInfo& dep) const override;
+	Node Common;
 	enum class Type {
 		Add, Subtract, Multiply, Divide
 	};
@@ -101,34 +116,30 @@ struct BinaryOp : Node
 	Type Op;
 };
 
-struct Join : Node
+struct Join
 {
-	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
-	virtual void GetDependency(DependencyInfo& dep) const override;
+	Node Common;
 	std::vector<Node*> Comps;
 };
 
-struct VariableRef : Node
+struct VariableRef
 {
-	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
-	virtual void GetDependency(DependencyInfo& dep) const override;
-	bool isTuneable;
+	Node Common;
+	bool IsTuneable;
 	void* M;
 };
 
-struct Function : Node
+struct Function
 {
-	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
-	virtual void GetDependency(DependencyInfo& dep) const override;
+	Node Common;
 	const char* Name;
 	std::vector<Node*> Args;
 };
 
-struct SizeOf : Node
+struct SizeOf
 {
-	virtual void Evaluate(const EvaluationContext& ec, Result& res) const override;
-	virtual void GetDependency(DependencyInfo& dep) const override;
-	std::string StructName;
+	Node Common;
+	const char* StructName;
 	u32 Size;
 };
 

@@ -23,10 +23,10 @@ do {												\
 	}												\
 } while (0);										\
 
-void EvaluateExpression(ast::EvaluationContext& ec, ast::Node* ast, ast::Result& res)
+void EvaluateExpression(ast::EvaluationContext& ec, ast::Expression& expr, ast::Result& res)
 {
 	ErrorState es;
-	ast::Evaluate(ec, ast, res, es);
+	ast::Evaluate(ec, expr, res, es);
 	if (!es.Success)
 	{
 		ErrorInfo ee;
@@ -36,10 +36,11 @@ void EvaluateExpression(ast::EvaluationContext& ec, ast::Node* ast, ast::Result&
 	}
 }
 
-void EvaluateExpression(ast::EvaluationContext& ec, ast::Node* ast, ast::Result& res, 
+void EvaluateExpression(ast::EvaluationContext& ec, ast::Expression& expr, ast::Result& res, 
 	VariableType expect, const char* name)
 {
-	EvaluateExpression(ec, ast, res);
+	const ast::Node* ast = expr.TopNode;
+	EvaluateExpression(ec, expr, res);
 	EvaluateAstAssert(ast,  (expect.Fmt != VariableFormat::Float4x4 && 
 		res.Type.Fmt != VariableFormat::Float4x4) || expect.Fmt == res.Type.Fmt,
 		"%s expected type (%s) is not compatible with actual type (%s)",

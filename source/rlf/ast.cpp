@@ -2,20 +2,21 @@
 namespace rlf {
 namespace ast {
 
+void Evaluate(const Node* node, const EvaluationContext& ec, Result& res);
 
-void Evaluate(const EvaluationContext& ec, Node* ast, Result& res, 
+void Evaluate(const EvaluationContext& ec, Expression& expr, Result& res, 
 	ErrorState& es)
 {
 	es.Success = true;
 
-	if ((ast->Dep.VariesByFlags & ec.ChangedThisFrameFlags) == 0 && ast->CacheValid)
+	if ((expr.Dep.VariesByFlags & ec.ChangedThisFrameFlags) == 0 && expr.CacheValid)
 	{
-		res = ast->CachedResult;
+		res = expr.CachedResult;
 		return;
 	}
 
 	try {
-		ast->Evaluate(ec, res);
+		Evaluate(expr.TopNode, ec, res);
 	}
 	catch (ErrorInfo ae)
 	{
@@ -23,8 +24,8 @@ void Evaluate(const EvaluationContext& ec, Node* ast, Result& res,
 		es.Info = ae;
 	}
 
-	ast->CachedResult = res;
-	ast->CacheValid = true;
+	expr.CachedResult = res;
+	expr.CacheValid = true;
 }
 
 void AstError(const Node* n, const char* str, ...)
@@ -317,51 +318,44 @@ void OperatorDivide(const Node* n, const Result& arg1, const Result& arg2, Resul
 // -----------------------------------------------------------------------------
 // ------------------------------ NODE EVALS -----------------------------------
 // -----------------------------------------------------------------------------
-void UintLiteral::Evaluate(const EvaluationContext&, Result& res) const
+void UintLiteral_Evaluate(const Node* n, const EvaluationContext&, Result& res)
 {
+	UintLiteral* node = (UintLiteral*)n;
 	res.Type = UintType;
-	res.Value.UintVal = Val;
-}
-void UintLiteral::GetDependency(DependencyInfo&) const
-{
-	// Add no dependecies
+	res.Value.UintVal = node->Val;
 }
 
-void IntLiteral::Evaluate(const EvaluationContext&, Result& res) const
+void IntLiteral_Evaluate(const Node* n, const EvaluationContext&, Result& res)
 {
+	IntLiteral* node = (IntLiteral*)n;
 	res.Type = IntType;
-	res.Value.IntVal = Val;
-}
-void IntLiteral::GetDependency(DependencyInfo&) const
-{
-	// Add no dependecies
+	res.Value.IntVal = node->Val;
 }
 
-void FloatLiteral::Evaluate(const EvaluationContext&, Result& res) const
+void FloatLiteral_Evaluate(const Node* n, const EvaluationContext&, Result& res)
 {
+	FloatLiteral* node = (FloatLiteral*)n;
 	res.Type = FloatType;
-	res.Value.FloatVal = Val;
-}
-void FloatLiteral::GetDependency(DependencyInfo&) const
-{
-	// Add no dependecies
+	res.Value.FloatVal = node->Val;
 }
 
-void Subscript::Evaluate(const EvaluationContext& ec, Result& res) const
+void Subscript_Evaluate(const Node* n, const EvaluationContext& ec, Result& res)
 {
+	Subscript* node = (Subscript*)n;
 	Result subjectRes;
-	Subject->Evaluate(ec, subjectRes);
-	AstAssert(this, subjectRes.Type.Fmt != VariableFormat::Float4x4,
+	Evaluate(node->Subject, ec, subjectRes);
+	AstAssert(n, subjectRes.Type.Fmt != VariableFormat::Float4x4,
 		"Subscripts aren't usable on Matrix types");
 	res.Type.Fmt = subjectRes.Type.Fmt;
 	u32 dim = 0;
 	for (int i = 0 ; i < 4 ; ++i)
 	{
-		if (Index[i] < 0)
+		if (node->Index[i] < 0)
 			break;
-		AstAssert(this, (u8)Index[i] < subjectRes.Type.Dim, "Invalid subscript for this type");
-		Assert(Index[i] < 4, "Invalid subscript");
-		u8* src = ((u8*)&subjectRes.Value) + 4*Index[i];
+		AstAssert(n, (u8)node->Index[i] < subjectRes.Type.Dim, 
+			"Invalid subscript for this type");
+		Assert(node->Index[i] < 4, "Invalid subscript");
+		u8* src = ((u8*)&subjectRes.Value) + 4*node->Index[i];
 		u8* dest = ((u8*)&res.Value) + 4*i;
 		memcpy(dest, src, 4);
 		++dim;
@@ -369,30 +363,34 @@ void Subscript::Evaluate(const EvaluationContext& ec, Result& res) const
 	Assert(dim > 0, "There must've been at least one subscript element.");
 	res.Type.Dim = dim;
 }
-void Subscript::GetDependency(DependencyInfo& dep) const
+void Subscript_GetDependency(const Node* n, DependencyInfo& dep)
 {
-	Subject->GetDependency(dep);
+	Subscript* node = (Subscript*)n;	
+	GetDependency(node->Subject, dep);
 }
 
-void Group::Evaluate(const EvaluationContext& ec, Result& res) const
+void Group_Evaluate(const Node* n, const EvaluationContext& ec, Result& res)
 {
-	Sub->Evaluate(ec, res);
+	Group* node = (Group*)n;
+	Evaluate(node->Sub, ec, res);
 }
-void Group::GetDependency(DependencyInfo& dep) const
+void Group_GetDependency(const Node* n, DependencyInfo& dep)
 {
-	Sub->GetDependency(dep);
+	Group* node = (Group*)n;
+	GetDependency(node->Sub, dep);
 }
 
-void BinaryOp::Evaluate(const EvaluationContext& ec, Result& outRes) const
+void BinaryOp_Evaluate(const Node* n, const EvaluationContext& ec, Result& outRes)
 {
+	BinaryOp* node = (BinaryOp*)n;
 	Result res, arg1Res, arg2Res;
-	LArg->Evaluate(ec, arg1Res);
-	RArg->Evaluate(ec, arg2Res);
+	Evaluate(node->LArg, ec, arg1Res);
+	Evaluate(node->RArg, ec, arg2Res);
 	if (arg1Res.Type.Fmt == VariableFormat::Float4x4 ||
 		arg2Res.Type.Fmt == VariableFormat::Float4x4)
 	{
-		AstAssert(this, Op == Type::Multiply, "Matrices can only be multiplied");
-		AstAssert(this, arg1Res.Type.Fmt == VariableFormat::Float4x4 &&
+		AstAssert(n, node->Op == BinaryOp::Type::Multiply, "Matrices can only be multiplied");
+		AstAssert(n, arg1Res.Type.Fmt == VariableFormat::Float4x4 &&
 			arg2Res.Type.Fmt == VariableFormat::Float4x4, 
 			"Matrix types can only be multiplied with other Matrix types");
 		res.Type = Float4x4Type;
@@ -400,91 +398,96 @@ void BinaryOp::Evaluate(const EvaluationContext& ec, Result& outRes) const
 	}
 	else
 	{
-		if (Op == Type::Divide)
+		if (node->Op == BinaryOp::Type::Divide)
 		{
-			AstAssert(this, arg1Res.Type.Fmt != VariableFormat::Bool && 
+			AstAssert(n, arg1Res.Type.Fmt != VariableFormat::Bool && 
 				arg2Res.Type.Fmt != VariableFormat::Bool,
 				"Bool types not supported in divides.");
 		}
-		VariableType outType = DetermineResultType(this, arg1Res.Type, arg2Res.Type);
+		VariableType outType = DetermineResultType(n, arg1Res.Type, arg2Res.Type);
 		Expand(arg1Res);
 		Expand(arg2Res);
 		Convert(arg1Res, outType.Fmt);
 		Convert(arg2Res, outType.Fmt);
 		res.Type = outType;
-		if (Op == Type::Add)
-			OperatorAdd(this, arg1Res, arg2Res, res);
-		else if (Op == Type::Subtract)
-			OperatorSubtract(this, arg1Res, arg2Res, res);
-		else if (Op == Type::Multiply)
-			OperatorMultiply(this, arg1Res, arg2Res, res);
-		else if (Op == Type::Divide)
-			OperatorDivide(this, arg1Res, arg2Res, res);
+		if (node->Op == BinaryOp::Type::Add)
+			OperatorAdd(n, arg1Res, arg2Res, res);
+		else if (node->Op == BinaryOp::Type::Subtract)
+			OperatorSubtract(n, arg1Res, arg2Res, res);
+		else if (node->Op == BinaryOp::Type::Multiply)
+			OperatorMultiply(n, arg1Res, arg2Res, res);
+		else if (node->Op == BinaryOp::Type::Divide)
+			OperatorDivide(n, arg1Res, arg2Res, res);
 		else
 			Unimplemented();
 	}
 	outRes = res;
 }
-void BinaryOp::GetDependency(DependencyInfo& dep) const
+void BinaryOp_GetDependency(const Node* n, DependencyInfo& dep)
 {
-	LArg->GetDependency(dep);
-	RArg->GetDependency(dep);
+	BinaryOp* node = (BinaryOp*)n;
+	GetDependency(node->LArg, dep);
+	GetDependency(node->RArg, dep);
 }
 
-void Join::Evaluate(const EvaluationContext& ec, Result& outRes) const
+void Join_Evaluate(const Node* n, const EvaluationContext& ec, Result& outRes)
 {
-	Assert(Comps.size() > 0, "Invalid join");
+	Join* j = (Join*)n;
+	Assert(j->Comps.size() > 0, "Invalid join");
 	Result res = {};
-	Comps[0]->Evaluate(ec, res);
-	for (size_t i = 1 ; i < Comps.size() ; ++i)
+	Evaluate(j->Comps[0], ec, res);
+	for (size_t i = 1 ; i < j->Comps.size() ; ++i)
 	{
 		Result jr;
-		Comps[i]->Evaluate(ec, jr);
+		Evaluate(j->Comps[i], ec, jr);
 		VariableFormat jf = DetermineResultFormat(res.Type.Fmt, jr.Type.Fmt);
 		u32 jd = res.Type.Dim + jr.Type.Dim;
-		AstAssert(this, jd <= 4, "Resulting vector of size %d is unsupported", jd);
+		AstAssert(n, jd <= 4, "Resulting vector of size %d is unsupported", jd);
 		Convert(res, jf);
 		Convert(jr, jf);
-		for (u32 j = res.Type.Dim, k = 0 ; j < jd ; ++j, ++k)
+		for (u32 k = res.Type.Dim, l = 0 ; k < jd ; ++k, ++l)
 		{
-			res.Value.Float4Val.m[j] = jr.Value.Float4Val.m[k];
+			res.Value.Float4Val.m[k] = jr.Value.Float4Val.m[l];
 		}
 		res.Type.Fmt = jf;
 		res.Type.Dim = jd;
 	}
 	outRes = res;
 }
-void Join::GetDependency(DependencyInfo& dep) const
+void Join_GetDependency(const Node* n, DependencyInfo& dep)
 {
-	for (Node* comp : Comps)
-		comp->GetDependency(dep);
+	Join* j = (Join*)n;
+	for (Node* comp : j->Comps)
+		GetDependency(comp, dep);
 }
 
-void VariableRef::Evaluate(const EvaluationContext&, Result& res) const
+void VariableRef_Evaluate(const Node* n, const EvaluationContext&, Result& res)
 {
-	if (isTuneable)
+	VariableRef* vr = (VariableRef*)n;
+	if (vr->IsTuneable)
 	{
-		Tuneable* tune = (Tuneable*)M;
+		Tuneable* tune = (Tuneable*)vr->M;
 		res.Type = tune->Type;
 		res.Value = tune->Value;
 	}
 	else
 	{
-		rlf::Constant* cnst = (rlf::Constant*)M;
+		rlf::Constant* cnst = (rlf::Constant*)vr->M;
 		res.Type = cnst->Type;
 		res.Value = cnst->Value;
 	}
 }
-void VariableRef::GetDependency(DependencyInfo& dep) const
+void VariableRef_GetDependency(const Node* n, DependencyInfo& dep)
 {
-	if (isTuneable)
+	VariableRef* vr = (VariableRef*)n;
+	if (vr->IsTuneable)
 	{
 		dep.VariesByFlags |= VariesBy_Tuneable;
 	}
 	else
 	{
-		rlf::Constant* cnst = (rlf::Constant*)M;
-		cnst->Expr->GetDependency(dep);
+		rlf::Constant* cnst = (rlf::Constant*)vr->M;
+		dep.VariesByFlags |= cnst->Expr.Dep.VariesByFlags;
 	}
 }
 
@@ -497,7 +500,7 @@ void EvaluateInt(const Node* n, const EvaluationContext& ec, std::vector<Node*> 
 {
 	AstAssert(n, args.size() == 1, "Int takes 1 param.");
 	Result resX;
-	args[0]->Evaluate(ec, resX);
+	Evaluate(args[0], ec, resX);
 	ExpectDim(n, 1, resX, "arg1");
 	Convert(resX, VariableFormat::Int);
 	res.Type = IntType;
@@ -509,8 +512,8 @@ void EvaluateInt2(const Node* n, const EvaluationContext& ec, std::vector<Node*>
 {
 	AstAssert(n, args.size() == 2, "Int2 takes 2 params.");
 	Result resX, resY;
-	args[0]->Evaluate(ec, resX);
-	args[1]->Evaluate(ec, resY);
+	Evaluate(args[0], ec, resX);
+	Evaluate(args[1], ec, resY);
 	ExpectDim(n, 1, resX, "arg1");
 	ExpectDim(n, 1, resY, "arg2");
 	Convert(resX, VariableFormat::Int);
@@ -525,9 +528,9 @@ void EvaluateInt3(const Node* n, const EvaluationContext& ec, std::vector<Node*>
 {
 	AstAssert(n, args.size() == 3, "Int3 takes 3 params.");
 	Result resX, resY, resZ;
-	args[0]->Evaluate(ec, resX);
-	args[1]->Evaluate(ec, resY);
-	args[2]->Evaluate(ec, resZ);
+	Evaluate(args[0], ec, resX);
+	Evaluate(args[1], ec, resY);
+	Evaluate(args[2], ec, resZ);
 	ExpectDim(n, 1, resX, "arg1");
 	ExpectDim(n, 1, resY, "arg2");
 	ExpectDim(n, 1, resZ, "arg3");
@@ -545,10 +548,10 @@ void EvaluateInt4(const Node* n, const EvaluationContext& ec, std::vector<Node*>
 {
 	AstAssert(n, args.size() == 4, "Int4 takes 4 params.");
 	Result resX, resY, resZ, resW;
-	args[0]->Evaluate(ec, resX);
-	args[1]->Evaluate(ec, resY);
-	args[2]->Evaluate(ec, resZ);
-	args[3]->Evaluate(ec, resW);
+	Evaluate(args[0], ec, resX);
+	Evaluate(args[1], ec, resY);
+	Evaluate(args[2], ec, resZ);
+	Evaluate(args[3], ec, resW);
 	ExpectDim(n, 1, resX, "arg1");
 	ExpectDim(n, 1, resY, "arg2");
 	ExpectDim(n, 1, resZ, "arg3");
@@ -569,7 +572,7 @@ void EvaluateUint(const Node* n, const EvaluationContext& ec, std::vector<Node*>
 {
 	AstAssert(n, args.size() == 1, "Uint takes 1 param.");
 	Result resX;
-	args[0]->Evaluate(ec, resX);
+	Evaluate(args[0], ec, resX);
 	ExpectDim(n, 1, resX, "arg1");
 	Convert(resX, VariableFormat::Uint);
 	res.Type = UintType;
@@ -581,8 +584,8 @@ void EvaluateUint2(const Node* n, const EvaluationContext& ec, std::vector<Node*
 {
 	AstAssert(n, args.size() == 2, "Uint2 takes 2 params.");
 	Result resX, resY;
-	args[0]->Evaluate(ec, resX);
-	args[1]->Evaluate(ec, resY);
+	Evaluate(args[0], ec, resX);
+	Evaluate(args[1], ec, resY);
 	ExpectDim(n, 1, resX, "arg1");
 	ExpectDim(n, 1, resY, "arg2");
 	Convert(resX, VariableFormat::Uint);
@@ -597,9 +600,9 @@ void EvaluateUint3(const Node* n, const EvaluationContext& ec, std::vector<Node*
 {
 	AstAssert(n, args.size() == 3, "Uint3 takes 3 params.");
 	Result resX, resY, resZ;
-	args[0]->Evaluate(ec, resX);
-	args[1]->Evaluate(ec, resY);
-	args[2]->Evaluate(ec, resZ);
+	Evaluate(args[0], ec, resX);
+	Evaluate(args[1], ec, resY);
+	Evaluate(args[2], ec, resZ);
 	ExpectDim(n, 1, resX, "arg1");
 	ExpectDim(n, 1, resY, "arg2");
 	ExpectDim(n, 1, resZ, "arg3");
@@ -617,10 +620,10 @@ void EvaluateUint4(const Node* n, const EvaluationContext& ec, std::vector<Node*
 {
 	AstAssert(n, args.size() == 4, "Uint4 takes 4 params.");
 	Result resX, resY, resZ, resW;
-	args[0]->Evaluate(ec, resX);
-	args[1]->Evaluate(ec, resY);
-	args[2]->Evaluate(ec, resZ);
-	args[3]->Evaluate(ec, resW);
+	Evaluate(args[0], ec, resX);
+	Evaluate(args[1], ec, resY);
+	Evaluate(args[2], ec, resZ);
+	Evaluate(args[3], ec, resW);
 	ExpectDim(n, 1, resX, "arg1");
 	ExpectDim(n, 1, resY, "arg2");
 	ExpectDim(n, 1, resZ, "arg3");
@@ -641,7 +644,7 @@ void EvaluateFloat(const Node* n, const EvaluationContext& ec, std::vector<Node*
 {
 	AstAssert(n, args.size() == 1, "Float takes 1 param.");
 	Result resX;
-	args[0]->Evaluate(ec, resX);
+	Evaluate(args[0], ec, resX);
 	ExpectDim(n, 1, resX, "arg1");
 	Convert(resX, VariableFormat::Float);
 	res.Type = FloatType;
@@ -653,8 +656,8 @@ void EvaluateFloat2(const Node* n, const EvaluationContext& ec, std::vector<Node
 {
 	AstAssert(n, args.size() == 2, "Float2 takes 2 params.");
 	Result resX, resY;
-	args[0]->Evaluate(ec, resX);
-	args[1]->Evaluate(ec, resY);
+	Evaluate(args[0], ec, resX);
+	Evaluate(args[1], ec, resY);
 	ExpectDim(n, 1, resX, "arg1");
 	ExpectDim(n, 1, resY, "arg2");
 	Convert(resX, VariableFormat::Float);
@@ -669,9 +672,9 @@ void EvaluateFloat3(const Node* n, const EvaluationContext& ec, std::vector<Node
 {
 	AstAssert(n, args.size() == 3, "Float3 takes 3 params.");
 	Result resX, resY, resZ;
-	args[0]->Evaluate(ec, resX);
-	args[1]->Evaluate(ec, resY);
-	args[2]->Evaluate(ec, resZ);
+	Evaluate(args[0], ec, resX);
+	Evaluate(args[1], ec, resY);
+	Evaluate(args[2], ec, resZ);
 	ExpectDim(n, 1, resX, "arg1");
 	ExpectDim(n, 1, resY, "arg2");
 	ExpectDim(n, 1, resZ, "arg3");
@@ -689,10 +692,10 @@ void EvaluateFloat4(const Node* n, const EvaluationContext& ec, std::vector<Node
 {
 	AstAssert(n, args.size() == 4, "Float4 takes 4 params.");
 	Result resX, resY, resZ, resW;
-	args[0]->Evaluate(ec, resX);
-	args[1]->Evaluate(ec, resY);
-	args[2]->Evaluate(ec, resZ);
-	args[3]->Evaluate(ec, resW);
+	Evaluate(args[0], ec, resX);
+	Evaluate(args[1], ec, resY);
+	Evaluate(args[2], ec, resZ);
+	Evaluate(args[3], ec, resW);
 	ExpectDim(n, 1, resX, "arg1");
 	ExpectDim(n, 1, resY, "arg2");
 	ExpectDim(n, 1, resZ, "arg3");
@@ -730,7 +733,7 @@ void EvaluateSin(const Node* n, const EvaluationContext& ec, std::vector<Node*> 
 {
 	AstAssert(n, args.size() == 1, "Sin takes 1 param");
 	Result argRes;
-	args[0]->Evaluate(ec, argRes);
+	Evaluate(args[0], ec, argRes);
 	Convert(argRes, VariableFormat::Float);
 	res.Type = argRes.Type;
 	for (u32 i = 0 ; i < argRes.Type.Dim ; ++i)
@@ -744,7 +747,7 @@ void EvaluateCos(const Node* n, const EvaluationContext& ec, std::vector<Node*> 
 {
 	AstAssert(n, args.size() == 1, "Cos takes 1 param");
 	Result argRes;
-	args[0]->Evaluate(ec, argRes);
+	Evaluate(args[0], ec, argRes);
 	Convert(argRes, VariableFormat::Float);
 	res.Type = argRes.Type;
 	for (u32 i = 0 ; i < argRes.Type.Dim ; ++i)
@@ -758,10 +761,10 @@ void EvaluateMin(const Node* n, const EvaluationContext& ec, std::vector<Node*> 
 {
 	AstAssert(n, args.size() == 2, "Min takes 2 params");
 	Result arg1Res;
-	args[0]->Evaluate(ec, arg1Res);
+	Evaluate(args[0], ec, arg1Res);
 	AstAssert(n, arg1Res.Type != Float4x4Type, "Min does not accept matrices (arg1)");
 	Result arg2Res;
-	args[1]->Evaluate(ec, arg2Res);
+	Evaluate(args[1], ec, arg2Res);
 	AstAssert(n, arg1Res.Type != Float4x4Type, "Min does not accept matrices (arg2)");
 
 	VariableType outType = DetermineResultType(n, arg1Res.Type, arg2Res.Type);
@@ -804,10 +807,10 @@ void EvaluateMax(const Node* n, const EvaluationContext& ec, std::vector<Node*> 
 {
 	AstAssert(n, args.size() == 2, "Max takes 2 params");
 	Result arg1Res;
-	args[0]->Evaluate(ec, arg1Res);
+	Evaluate(args[0], ec, arg1Res);
 	AstAssert(n, arg1Res.Type != Float4x4Type, "Max does not accept matrices (arg1)");
 	Result arg2Res;
-	args[1]->Evaluate(ec, arg2Res);
+	Evaluate(args[1], ec, arg2Res);
 	AstAssert(n, arg2Res.Type != Float4x4Type, "Max does not accept matrices (arg2)");
 
 	VariableType outType = DetermineResultType(n, arg1Res.Type, arg2Res.Type);
@@ -850,7 +853,7 @@ void EvaluateInverse(const Node* n, const EvaluationContext& ec, std::vector<Nod
 {
 	AstAssert(n, args.size() == 1, "Inverse takes 1 param");
 	Result argRes;
-	args[0]->Evaluate(ec, argRes);
+	Evaluate(args[0], ec, argRes);
 	ExpectFmt(n, VariableFormat::Float4x4, argRes, "arg1");
 	res.Type = Float4x4Type;
 	inverse(argRes.Value.Float4x4Val, res.Value.Float4x4Val);
@@ -861,8 +864,8 @@ void EvaluateLookAt(const Node* n, const EvaluationContext& ec, std::vector<Node
 {
 	AstAssert(n, args.size() == 2, "LookAt takes 2 params");
 	Result fromRes, toRes;
-	args[0]->Evaluate(ec, fromRes);
-	args[1]->Evaluate(ec, toRes);
+	Evaluate(args[0], ec, fromRes);
+	Evaluate(args[1], ec, toRes);
 	ExpectDim(n, 3, fromRes, "arg1 (from)");
 	ExpectDim(n, 3, toRes, "arg2 (to)");
 	Convert(fromRes, VariableFormat::Float);
@@ -876,10 +879,10 @@ void EvaluateProjection(const Node* n, const EvaluationContext& ec, std::vector<
 {
 	AstAssert(n, args.size() == 4, "Projection takes 4 params");
 	Result fovRes, aspectRes, nearRes, farRes;
-	args[0]->Evaluate(ec, fovRes);
-	args[1]->Evaluate(ec, aspectRes);
-	args[2]->Evaluate(ec, nearRes);
-	args[3]->Evaluate(ec, farRes);
+	Evaluate(args[0], ec, fovRes);
+	Evaluate(args[1], ec, aspectRes);
+	Evaluate(args[2], ec, nearRes);
+	Evaluate(args[3], ec, farRes);
 	ExpectDim(n, 1, fovRes, "arg1 (fov)");
 	ExpectDim(n, 1, aspectRes, "arg2 (aspect)");
 	ExpectDim(n, 1, nearRes, "arg3 (znear)");
@@ -936,36 +939,69 @@ std::unordered_map<u32, FunctionInfo> FuncMap = {
 	{ LowerHash("Projection"), { EvaluateProjection, VariesBy_None} },
 };
 
-void Function::Evaluate(const EvaluationContext& ec, Result& res) const
+void Function_Evaluate(const Node* n, const EvaluationContext& ec, Result& res)
 {
-	u32 funcHash = LowerHash(Name);
-	AstAssert(this, FuncMap.count(funcHash) == 1, "No function named %s exists.",
-		Name);
+	Function* f = (Function*)n;
+	u32 funcHash = LowerHash(f->Name);
+	AstAssert(n, FuncMap.count(funcHash) == 1, "No function named %s exists.",
+		f->Name);
 	FunctionEvaluate fi = FuncMap[funcHash].fn;
-	fi(this, ec, Args, res);
+	fi(n, ec, f->Args, res);
 }
-void Function::GetDependency(DependencyInfo& dep) const
+void Function_GetDependency(const Node* n, DependencyInfo& dep)
 {
-	u32 funcHash = LowerHash(Name);
-	AstAssert(this, FuncMap.count(funcHash) == 1, "No function named %s exists.",
-		Name);
+	Function* f = (Function*)n;
+	u32 funcHash = LowerHash(f->Name);
+	AstAssert(n, FuncMap.count(funcHash) == 1, "No function named %s exists.",
+		f->Name);
 
 	VariesBy vb = FuncMap[funcHash].vb;
 	dep.VariesByFlags |= vb;
 
-	for (Node* arg : Args)
-		arg->GetDependency(dep);
+	for (Node* arg : f->Args)
+		GetDependency(arg, dep);
 }
 
 
-void SizeOf::Evaluate(const EvaluationContext&, Result& res) const
+void SizeOf_Evaluate(const Node* n, const EvaluationContext&, Result& res)
 {
+	SizeOf* sz = (SizeOf*)n;
 	res.Type = 	UintType; 
-	res.Value.UintVal = Size;
+	res.Value.UintVal = sz->Size;
 }
-void SizeOf::GetDependency(DependencyInfo&) const
+
+void None_GetDependency(const Node*, DependencyInfo&)
 {
-	// Add no dependencies
+	// Intentionally add no dependency
+}
+
+
+void Evaluate(const Node* node, const EvaluationContext& ec, Result& res)
+{
+	typedef void (*EvalFunc)(const Node*, const EvaluationContext&, Result&);
+
+#define NODE_TYPE_ENTRY(type, eval_func, dep_func) eval_func,
+	static EvalFunc EvalFuncs[] = 
+	{
+		NODE_TYPE_TUPLE
+	};
+#undef NODE_TYPE_ENTRY
+	EvalFunc ef = EvalFuncs[(u32)node->Type];
+	ef(node, ec, res);
+}
+
+void GetDependency(const Node* node, DependencyInfo& dep)
+{
+	typedef void (*DepFunc)(const Node*, DependencyInfo&);
+
+#define NODE_TYPE_ENTRY(type, eval_func, dep_func) dep_func,
+	static DepFunc DepFuncs[] = 
+	{
+		NODE_TYPE_TUPLE
+	};
+#undef NODE_TYPE_ENTRY
+	DepFunc df = DepFuncs[(u32)node->Type];
+	df(node, dep);
 }
 
 

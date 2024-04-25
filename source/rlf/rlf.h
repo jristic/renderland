@@ -251,9 +251,9 @@ namespace rlf
 	struct Buffer
 	{
 		u32 ElementSize;
-		ast::Node* ElementSizeExpr;
+		ast::Expression ElementSizeExpr;
 		u32 ElementCount;
-		ast::Node* ElementCountExpr;
+		ast::Expression ElementCountExpr;
 		bool InitToZero;
 		void* InitData;
 		u32 InitDataSize;
@@ -264,7 +264,7 @@ namespace rlf
 	struct Texture
 	{
 		uint2 Size;
-		ast::Node* SizeExpr;
+		ast::Expression SizeExpr;
 		TextureFormat Format;
 		const char* FromFile;
 		TextureFlag Flags;
@@ -310,9 +310,9 @@ namespace rlf
 	};
 	struct Viewport
 	{
-		ast::Node* TopLeft;
-		ast::Node* Size;
-		ast::Node* DepthRange;
+		ast::Expression TopLeft;
+		ast::Expression Size;
+		ast::Expression DepthRange;
 	};
 	struct Bind
 	{
@@ -337,7 +337,7 @@ namespace rlf
 	struct SetConstant
 	{
 		const char* VariableName;
-		ast::Node* Value;
+		ast::Expression Value;
 		ConstantBuffer* CB;
 		u32 Offset;
 		u32 Size;
@@ -347,7 +347,7 @@ namespace rlf
 	{
 		ComputeShader* Shader;
 		bool ThreadPerPixel;
-		ast::Node* Groups;
+		ast::Expression Groups;
 		Buffer* IndirectArgs;
 		u32 IndirectArgsOffset;
 		std::vector<Bind> Binds;
@@ -432,7 +432,7 @@ namespace rlf
 	struct Constant
 	{
 		const char* Name;
-		ast::Node* Expr;
+		ast::Expression Expr;
 		VariableType Type;
 		Variable Value;
 	};
