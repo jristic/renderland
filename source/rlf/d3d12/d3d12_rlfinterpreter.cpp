@@ -321,7 +321,7 @@ ID3DBlob* CommonCompileShader(CommonShader* common, const char* dirPath, const c
 			auto search = structSizes.find(request->StructName);
 			InitAssert(search != structSizes.end(), 
 				"Failed to parse shader: %s\nNo struct named %s found for sizeof operation",
-				path, request->StructName.c_str());
+				path, request->StructName);
 			request->Size = search->second;
 		}
 	}
@@ -1595,7 +1595,7 @@ void InitMain(
 	for (Buffer* buf : rd->Buffers)
 	{
 		// Obj initialized buffers don't have expressions.
-		if (buf->ElementSizeExpr || buf->ElementCountExpr)
+		if (buf->ElementSizeExpr.IsValid() || buf->ElementCountExpr.IsValid())
 		{
 			ast::Result res;
 			EvaluateExpression(evCtx, buf->ElementSizeExpr, res, UintType, 
@@ -1960,7 +1960,7 @@ void HandleTextureParametersChanged(
 			// DDS textures are always sized based on the file. 
 			if (tex->FromFile)
 				continue;
-			if ((tex->SizeExpr->Dep.VariesByFlags & ec->EvCtx.ChangedThisFrameFlags) == 0)
+			if ((tex->SizeExpr.Dep.VariesByFlags & ec->EvCtx.ChangedThisFrameFlags) == 0)
 				continue;
 			
 			ast::Result res;
@@ -1990,11 +1990,11 @@ void HandleTextureParametersChanged(
 		for (Buffer* buf : rd->Buffers)
 		{
 			// Obj initialized buffers don't have expressions.
-			if (!buf->ElementSizeExpr && !buf->ElementCountExpr)
+			if (!buf->ElementSizeExpr.IsValid() && !buf->ElementCountExpr.IsValid())
 				continue;
 
-			if ((buf->ElementSizeExpr->Dep.VariesByFlags & ec->EvCtx.ChangedThisFrameFlags) == 0 &&
-				(buf->ElementCountExpr->Dep.VariesByFlags & ec->EvCtx.ChangedThisFrameFlags) == 0)
+			if ((buf->ElementSizeExpr.Dep.VariesByFlags & ec->EvCtx.ChangedThisFrameFlags) == 0 &&
+				(buf->ElementCountExpr.Dep.VariesByFlags & ec->EvCtx.ChangedThisFrameFlags) == 0)
 				continue;
 			
 			ast::Result res;
@@ -2076,7 +2076,7 @@ void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets,
 	std::vector<ConstantBuffer>& buffers)
 {
 	gfx::Context* ctx = ec->GfxCtx;
-	for (const SetConstant& set : sets)
+	for (SetConstant& set : sets)
 	{
 		ast::Result res;
 		EvaluateExpression(ec->EvCtx, set.Value, res, set.Type, set.VariableName);
@@ -2091,7 +2091,7 @@ void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets,
 		else
 			memcpy(set.CB->BackingMemory+set.Offset, &res.Value, typeSize);
 	}
-	for (const ConstantBuffer& buf : buffers)
+	for (ConstantBuffer& buf : buffers)
 	{
 		u32 frame = ctx->FrameIndex % gfx::Context::NUM_FRAMES_IN_FLIGHT;
 		memcpy(buf.GfxState.MappedMem[frame], buf.BackingMemory, buf.Size);
@@ -2202,7 +2202,7 @@ void ExecuteDispatch(
 			groups.y = (u32)((ec->EvCtx.DisplaySize.y - 1) / tgs.y) + 1;
 			groups.z = 1;
 		}
-		else if (dc->Groups)
+		else if (dc->Groups.IsValid())
 		{
 			ast::Result res;
 			EvaluateExpression(ec->EvCtx, dc->Groups, res, Uint3Type, "Dispatch::Groups");
@@ -2330,17 +2330,17 @@ void ExecuteDraw(
 	{
 		Viewport* v = draw->Viewports[i];
 		ast::Result res;
-		if (v->TopLeft) {
+		if (v->TopLeft.IsValid()) {
 			EvaluateExpression(ec->EvCtx, v->TopLeft, res, Float2Type, "Viewport::TopLeft");
 			vp[i].TopLeftX = res.Value.Float2Val.x;
 			vp[i].TopLeftY = res.Value.Float2Val.y;
 		}
-		if (v->Size) {
+		if (v->Size.IsValid()) {
 			EvaluateExpression(ec->EvCtx, v->Size, res, Float2Type, "Viewport::Size");
 			vp[i].Width = res.Value.Float2Val.x;
 			vp[i].Height = res.Value.Float2Val.y;
 		}
-		if (v->DepthRange) {
+		if (v->DepthRange.IsValid()) {
 			EvaluateExpression(ec->EvCtx, v->DepthRange, res, Float2Type, "Viewport::DepthRange");
 			vp[i].MinDepth = res.Value.Float2Val.x;
 			vp[i].MaxDepth = res.Value.Float2Val.y;
