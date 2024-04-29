@@ -470,7 +470,6 @@ namespace rlf
 		std::vector<Tuneable*> Tuneables;
 		std::set<std::string> Strings;
 		std::vector<void*> Mems;
-		std::vector<ast::Node*> Asts;
 
 		alloc::LinAlloc Alloc;
 	};

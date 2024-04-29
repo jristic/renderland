@@ -17,11 +17,21 @@ void FreeAll(LinAlloc* Alloc);
 template <typename T>
 T* Allocate(LinAlloc* Alloc)
 {
-	void* Mem = Allocate(Alloc, sizeof(T));
-	T* Obj = (T*)Mem;
-	ZeroMemory(Obj, sizeof(T));
-	return Obj;
+	return (T*)Allocate(Alloc, sizeof(T));
 }
+
+template <typename T>
+Array<T> MakeCopy(LinAlloc* Alloc, std::vector<T> Source)
+{
+	Array<T> Dest;
+	Assert(Source.size() < U32_MAX, "array too big");
+	Dest.Count = (u32)Source.size();
+	Dest.Data = (T*)Allocate(Alloc, Dest.Count * sizeof(T));
+	memcpy(Dest.Data, Source.data(), Dest.Count * sizeof(T));
+
+	return Dest;
+}
+
 
 }
 }

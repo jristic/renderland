@@ -348,14 +348,14 @@ void Subscript_Evaluate(const Node* n, const EvaluationContext& ec, Result& res)
 		"Subscripts aren't usable on Matrix types");
 	res.Type.Fmt = subjectRes.Type.Fmt;
 	u32 dim = 0;
-	for (int i = 0 ; i < 4 ; ++i)
+	for (u32 i = 0 ; i < 4 ; ++i)
 	{
-		if (node->Index[i] < 0)
+		if (node->Index[i] == 0)
 			break;
-		AstAssert(n, (u8)node->Index[i] < subjectRes.Type.Dim, 
+		AstAssert(n, node->Index[i] <= subjectRes.Type.Dim, 
 			"Invalid subscript for this type");
-		Assert(node->Index[i] < 4, "Invalid subscript");
-		u8* src = ((u8*)&subjectRes.Value) + 4*node->Index[i];
+		Assert(node->Index[i] <= 4, "Invalid subscript");
+		u8* src = ((u8*)&subjectRes.Value) + 4*(node->Index[i]-1);
 		u8* dest = ((u8*)&res.Value) + 4*i;
 		memcpy(dest, src, 4);
 		++dim;
@@ -433,10 +433,10 @@ void BinaryOp_GetDependency(const Node* n, DependencyInfo& dep)
 void Join_Evaluate(const Node* n, const EvaluationContext& ec, Result& outRes)
 {
 	Join* j = (Join*)n;
-	Assert(j->Comps.size() > 0, "Invalid join");
+	Assert(j->Comps.Count > 0, "Invalid join");
 	Result res = {};
 	Evaluate(j->Comps[0], ec, res);
-	for (size_t i = 1 ; i < j->Comps.size() ; ++i)
+	for (size_t i = 1 ; i < j->Comps.Count ; ++i)
 	{
 		Result jr;
 		Evaluate(j->Comps[i], ec, jr);
@@ -495,10 +495,10 @@ void VariableRef_GetDependency(const Node* n, DependencyInfo& dep)
 // -----------------------------------------------------------------------------
 // ------------------------------ FUNCTION EVALS -------------------------------
 // -----------------------------------------------------------------------------
-void EvaluateInt(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateInt(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 1, "Int takes 1 param.");
+	AstAssert(n, args.Count == 1, "Int takes 1 param.");
 	Result resX;
 	Evaluate(args[0], ec, resX);
 	ExpectDim(n, 1, resX, "arg1");
@@ -507,10 +507,10 @@ void EvaluateInt(const Node* n, const EvaluationContext& ec, std::vector<Node*> 
 	res.Value.IntVal = resX.Value.IntVal;
 }
 
-void EvaluateInt2(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateInt2(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 2, "Int2 takes 2 params.");
+	AstAssert(n, args.Count == 2, "Int2 takes 2 params.");
 	Result resX, resY;
 	Evaluate(args[0], ec, resX);
 	Evaluate(args[1], ec, resY);
@@ -523,10 +523,10 @@ void EvaluateInt2(const Node* n, const EvaluationContext& ec, std::vector<Node*>
 	res.Value.Int4Val.y = resY.Value.IntVal;
 }
 
-void EvaluateInt3(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateInt3(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 3, "Int3 takes 3 params.");
+	AstAssert(n, args.Count == 3, "Int3 takes 3 params.");
 	Result resX, resY, resZ;
 	Evaluate(args[0], ec, resX);
 	Evaluate(args[1], ec, resY);
@@ -543,10 +543,10 @@ void EvaluateInt3(const Node* n, const EvaluationContext& ec, std::vector<Node*>
 	res.Value.Int4Val.z = resZ.Value.IntVal;
 }
 
-void EvaluateInt4(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateInt4(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 4, "Int4 takes 4 params.");
+	AstAssert(n, args.Count == 4, "Int4 takes 4 params.");
 	Result resX, resY, resZ, resW;
 	Evaluate(args[0], ec, resX);
 	Evaluate(args[1], ec, resY);
@@ -567,10 +567,10 @@ void EvaluateInt4(const Node* n, const EvaluationContext& ec, std::vector<Node*>
 	res.Value.Int4Val.w = resW.Value.IntVal;
 }
 
-void EvaluateUint(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateUint(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 1, "Uint takes 1 param.");
+	AstAssert(n, args.Count == 1, "Uint takes 1 param.");
 	Result resX;
 	Evaluate(args[0], ec, resX);
 	ExpectDim(n, 1, resX, "arg1");
@@ -579,10 +579,10 @@ void EvaluateUint(const Node* n, const EvaluationContext& ec, std::vector<Node*>
 	res.Value.UintVal = resX.Value.UintVal;
 }
 
-void EvaluateUint2(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateUint2(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 2, "Uint2 takes 2 params.");
+	AstAssert(n, args.Count == 2, "Uint2 takes 2 params.");
 	Result resX, resY;
 	Evaluate(args[0], ec, resX);
 	Evaluate(args[1], ec, resY);
@@ -595,10 +595,10 @@ void EvaluateUint2(const Node* n, const EvaluationContext& ec, std::vector<Node*
 	res.Value.Uint4Val.y = resY.Value.UintVal;
 }
 
-void EvaluateUint3(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateUint3(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 3, "Uint3 takes 3 params.");
+	AstAssert(n, args.Count == 3, "Uint3 takes 3 params.");
 	Result resX, resY, resZ;
 	Evaluate(args[0], ec, resX);
 	Evaluate(args[1], ec, resY);
@@ -615,10 +615,10 @@ void EvaluateUint3(const Node* n, const EvaluationContext& ec, std::vector<Node*
 	res.Value.Uint4Val.z = resZ.Value.UintVal;
 }
 
-void EvaluateUint4(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateUint4(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 4, "Uint4 takes 4 params.");
+	AstAssert(n, args.Count == 4, "Uint4 takes 4 params.");
 	Result resX, resY, resZ, resW;
 	Evaluate(args[0], ec, resX);
 	Evaluate(args[1], ec, resY);
@@ -639,10 +639,10 @@ void EvaluateUint4(const Node* n, const EvaluationContext& ec, std::vector<Node*
 	res.Value.Uint4Val.w = resW.Value.UintVal;
 }
 
-void EvaluateFloat(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateFloat(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 1, "Float takes 1 param.");
+	AstAssert(n, args.Count == 1, "Float takes 1 param.");
 	Result resX;
 	Evaluate(args[0], ec, resX);
 	ExpectDim(n, 1, resX, "arg1");
@@ -651,10 +651,10 @@ void EvaluateFloat(const Node* n, const EvaluationContext& ec, std::vector<Node*
 	res.Value.FloatVal = resX.Value.FloatVal;
 }
 
-void EvaluateFloat2(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateFloat2(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 2, "Float2 takes 2 params.");
+	AstAssert(n, args.Count == 2, "Float2 takes 2 params.");
 	Result resX, resY;
 	Evaluate(args[0], ec, resX);
 	Evaluate(args[1], ec, resY);
@@ -667,10 +667,10 @@ void EvaluateFloat2(const Node* n, const EvaluationContext& ec, std::vector<Node
 	res.Value.Float2Val.y = resY.Value.FloatVal;
 }
 
-void EvaluateFloat3(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateFloat3(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 3, "Float3 takes 3 params.");
+	AstAssert(n, args.Count == 3, "Float3 takes 3 params.");
 	Result resX, resY, resZ;
 	Evaluate(args[0], ec, resX);
 	Evaluate(args[1], ec, resY);
@@ -687,10 +687,10 @@ void EvaluateFloat3(const Node* n, const EvaluationContext& ec, std::vector<Node
 	res.Value.Float3Val.z = resZ.Value.FloatVal;
 }
 
-void EvaluateFloat4(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateFloat4(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 4, "Float4 takes 4 params.");
+	AstAssert(n, args.Count == 4, "Float4 takes 4 params.");
 	Result resX, resY, resZ, resW;
 	Evaluate(args[0], ec, resX);
 	Evaluate(args[1], ec, resY);
@@ -711,27 +711,27 @@ void EvaluateFloat4(const Node* n, const EvaluationContext& ec, std::vector<Node
 	res.Value.Float4Val.w = resW.Value.FloatVal;
 }
 
-void EvaluateTime(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateTime(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 0, "Time does not take a param");
+	AstAssert(n, args.Count == 0, "Time does not take a param");
 	res.Type = FloatType;
 	res.Value.FloatVal = ec.Time;
 }
 
-void EvaluateDisplaySize(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateDisplaySize(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 0, "DisplaySize does not take a param");
+	AstAssert(n, args.Count == 0, "DisplaySize does not take a param");
 	res.Type = Uint2Type;
 	res.Value.Uint4Val.x = ec.DisplaySize.x;
 	res.Value.Uint4Val.y = ec.DisplaySize.y;
 }
 
-void EvaluateSin(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateSin(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 1, "Sin takes 1 param");
+	AstAssert(n, args.Count == 1, "Sin takes 1 param");
 	Result argRes;
 	Evaluate(args[0], ec, argRes);
 	Convert(argRes, VariableFormat::Float);
@@ -742,10 +742,10 @@ void EvaluateSin(const Node* n, const EvaluationContext& ec, std::vector<Node*> 
 	}
 }
 
-void EvaluateCos(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateCos(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 1, "Cos takes 1 param");
+	AstAssert(n, args.Count == 1, "Cos takes 1 param");
 	Result argRes;
 	Evaluate(args[0], ec, argRes);
 	Convert(argRes, VariableFormat::Float);
@@ -756,10 +756,10 @@ void EvaluateCos(const Node* n, const EvaluationContext& ec, std::vector<Node*> 
 	}
 }
 
-void EvaluateMin(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateMin(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 2, "Min takes 2 params");
+	AstAssert(n, args.Count == 2, "Min takes 2 params");
 	Result arg1Res;
 	Evaluate(args[0], ec, arg1Res);
 	AstAssert(n, arg1Res.Type != Float4x4Type, "Min does not accept matrices (arg1)");
@@ -802,10 +802,10 @@ void EvaluateMin(const Node* n, const EvaluationContext& ec, std::vector<Node*> 
 		Unimplemented();
 }
 
-void EvaluateMax(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateMax(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 2, "Max takes 2 params");
+	AstAssert(n, args.Count == 2, "Max takes 2 params");
 	Result arg1Res;
 	Evaluate(args[0], ec, arg1Res);
 	AstAssert(n, arg1Res.Type != Float4x4Type, "Max does not accept matrices (arg1)");
@@ -848,10 +848,10 @@ void EvaluateMax(const Node* n, const EvaluationContext& ec, std::vector<Node*> 
 		Unimplemented();
 }
 
-void EvaluateInverse(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateInverse(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 1, "Inverse takes 1 param");
+	AstAssert(n, args.Count == 1, "Inverse takes 1 param");
 	Result argRes;
 	Evaluate(args[0], ec, argRes);
 	ExpectFmt(n, VariableFormat::Float4x4, argRes, "arg1");
@@ -859,10 +859,10 @@ void EvaluateInverse(const Node* n, const EvaluationContext& ec, std::vector<Nod
 	inverse(argRes.Value.Float4x4Val, res.Value.Float4x4Val);
 }
 
-void EvaluateLookAt(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateLookAt(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 2, "LookAt takes 2 params");
+	AstAssert(n, args.Count == 2, "LookAt takes 2 params");
 	Result fromRes, toRes;
 	Evaluate(args[0], ec, fromRes);
 	Evaluate(args[1], ec, toRes);
@@ -874,10 +874,10 @@ void EvaluateLookAt(const Node* n, const EvaluationContext& ec, std::vector<Node
 	res.Value.Float4x4Val = lookAt(fromRes.Value.Float3Val, toRes.Value.Float3Val);
 }
 
-void EvaluateProjection(const Node* n, const EvaluationContext& ec, std::vector<Node*> args,
+void EvaluateProjection(const Node* n, const EvaluationContext& ec, Array<Node*> args,
 	Result& res)
 {
-	AstAssert(n, args.size() == 4, "Projection takes 4 params");
+	AstAssert(n, args.Count == 4, "Projection takes 4 params");
 	Result fovRes, aspectRes, nearRes, farRes;
 	Evaluate(args[0], ec, fovRes);
 	Evaluate(args[1], ec, aspectRes);
@@ -908,7 +908,7 @@ u32 LowerHash(const char* str)
 	return h; 
 }
 
-typedef void (*FunctionEvaluate)(const Node*, const EvaluationContext&, std::vector<Node*>,
+typedef void (*FunctionEvaluate)(const Node*, const EvaluationContext&, Array<Node*>,
 	Result&);
 struct FunctionInfo
 {

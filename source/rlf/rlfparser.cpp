@@ -540,6 +540,8 @@ struct ParseState
 	std::unordered_map<u32, Keyword> keyMap;
 
 	const char* workingDirectory;
+
+	alloc::LinAlloc* alloc;
 } *GPS;
 
 void ParserError(const char* str, ...)
@@ -725,6 +727,15 @@ const char* AddStringToDescriptionData(const char* str, RenderDescription* rd)
 void AddMemToDescriptionData(void* mem, RenderDescription* rd)
 {
 	rd->Mems.push_back(mem);
+}
+
+template <typename AstType>
+AstType* AllocateAst(ParseState& ps)
+{
+	AstType* ast = alloc::Allocate<AstType>(ps.alloc);
+	ZeroMemory(ast, sizeof(AstType));
+	ast->Common.Type = AstType::NodeType;
+	return ast;
 }
 
 // -----------------------------------------------------------------------------
@@ -1192,15 +1203,6 @@ Bind ConsumeBind(TokenIter& t, ParseState& ps)
 	return bind;
 }
 
-template <typename AstType>
-AstType* AllocateAst(ast::NodeType type, RenderDescription* rd)
-{
-	AstType* ast = new AstType();
-	ast->Common.Type = type;
-	rd->Asts.push_back((ast::Node*)ast);
-	return ast;
-}
-
 CommonShader* LookupShader(const char* name, ParseState& ps)
 {
 	auto s1 = ps.csMap.find(name);
@@ -1241,7 +1243,7 @@ ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
 				CommonShader* shader = LookupShader(shaderName, ps);
 				ConsumeToken(TokenType::Comma, t);
 				const char* structName = ConsumeString(t);
-				ast::SizeOf* sizeOf = AllocateAst<ast::SizeOf>(ast::NodeType::SizeOf, ps.rd);
+				ast::SizeOf* sizeOf = AllocateAst<ast::SizeOf>(ps);
 				sizeOf->StructName = AddStringToDescriptionData(structName, ps.rd);
 				sizeOf->Size = 0;
 				shader->SizeRequests.push_back(sizeOf);
@@ -1250,20 +1252,21 @@ ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
 			}
 			else
 			{
-				ast::Function* func = AllocateAst<ast::Function>(
-					ast::NodeType::Function, ps.rd);
+				ast::Function* func = AllocateAst<ast::Function>(ps);
 				func->Name = AddStringToDescriptionData(id, ps.rd);
+				std::vector<ast::Node*> args;
 				if (!TryConsumeToken(TokenType::RParen, t))
 				{
 					while (true)
 					{
 						ast::Node* arg = ConsumeAstRecurse(t, ps, OpPrecedence_Start);
-						func->Args.push_back(arg);
+						args.push_back(arg);
 						if (!TryConsumeToken(TokenType::Comma, t))
 							break;
 					}
 					ConsumeToken(TokenType::RParen, t);
 				}
+				func->Args = alloc::MakeCopy(ps.alloc, args);
 				ast = &func->Common;
 			}
 		}
@@ -1271,8 +1274,7 @@ ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
 		{
 			ParserAssert(ps.varMap.count(id) == 1, "Variable %s not defined.", id);
 			ParseState::Var& v = ps.varMap[id];
-			ast::VariableRef* vr = AllocateAst<ast::VariableRef>(
-				ast::NodeType::VariableRef, ps.rd);
+			ast::VariableRef* vr = AllocateAst<ast::VariableRef>(ps);
 			vr->IsTuneable = v.tuneable;
 			vr->M = v.m;
 			ast = &vr->Common;
@@ -1287,8 +1289,7 @@ ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
 		{
 			// Note that the Minus is consumed inside the literal prodedure
 			i32 i = ConsumeIntLiteral(t);
-			ast::IntLiteral* il = AllocateAst<ast::IntLiteral>(
-				ast::NodeType::IntLiteral, ps.rd);
+			ast::IntLiteral* il = AllocateAst<ast::IntLiteral>(ps);
 			il->Val = i;
 			ast = &il->Common;
 		}
@@ -1296,20 +1297,18 @@ ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
 		{
 			// Note that the Minus is consumed inside the literal prodedure
 			float f = ConsumeFloatLiteral(t);
-			ast::FloatLiteral* fl = AllocateAst<ast::FloatLiteral>(
-				ast::NodeType::FloatLiteral, ps.rd);
+			ast::FloatLiteral* fl = AllocateAst<ast::FloatLiteral>(ps);
 			fl->Val = f;
 			ast = &fl->Common;
 		}
 		else
 		{
-			ast::IntLiteral* nl = AllocateAst<ast::IntLiteral>(
-				ast::NodeType::IntLiteral, ps.rd);
+			ast::IntLiteral* nl = AllocateAst<ast::IntLiteral>(ps);
 			nl->Val = -1;
 			nl->Common.Location = loc;
 			ConsumeToken(TokenType::Minus, t);
 			ast::Node* arg = ConsumeAstLeaf(t,ps);
-			ast::BinaryOp* bop = AllocateAst<ast::BinaryOp>(ast::NodeType::BinaryOp, ps.rd);
+			ast::BinaryOp* bop = AllocateAst<ast::BinaryOp>(ps);
 			bop->LArg = &nl->Common;
 			bop->RArg = (arg);
 			bop->Op = ast::BinaryOp::Type::Multiply;
@@ -1321,8 +1320,7 @@ ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
 	{
 		const char* loc = t.next->Location;
 		u32 u = ConsumeUintLiteral(t);
-		ast::UintLiteral* ul = AllocateAst<ast::UintLiteral>(
-			ast::NodeType::UintLiteral, ps.rd);
+		ast::UintLiteral* ul = AllocateAst<ast::UintLiteral>(ps);
 		ul->Val = u;
 		ul->Common.Location = loc;
 		ast = &ul->Common;
@@ -1331,8 +1329,7 @@ ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
 	{
 		const char* loc = t.next->Location;
 		float f = ConsumeFloatLiteral(t);
-		ast::FloatLiteral* fl = AllocateAst<ast::FloatLiteral>(
-			ast::NodeType::FloatLiteral, ps.rd);
+		ast::FloatLiteral* fl = AllocateAst<ast::FloatLiteral>(ps);
 		fl->Val = f;
 		fl->Common.Location = loc;
 		ast = &fl->Common;
@@ -1340,7 +1337,7 @@ ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
 	else if (tok == TokenType::LParen)
 	{
 		ConsumeToken(TokenType::LParen, t);
-		ast::Group* grp = AllocateAst<ast::Group>(ast::NodeType::Group, ps.rd);
+		ast::Group* grp = AllocateAst<ast::Group>(ps);
 		grp->Sub = ConsumeAstRecurse(t, ps, OpPrecedence_Start);
 		ast = &grp->Common;
 		ConsumeToken(TokenType::RParen, t);
@@ -1349,15 +1346,17 @@ ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
 	{
 		const char* loc = t.next->Location;
 		ConsumeToken(TokenType::LBrace, t);
-		ast::Join* join = AllocateAst<ast::Join>(ast::NodeType::Join, ps.rd);
+		ast::Join* join = AllocateAst<ast::Join>(ps);
+		std::vector<ast::Node*> comps;
 		while (true)
 		{
 			ast::Node* arg = ConsumeAstRecurse(t, ps, OpPrecedence_Start);
-			join->Comps.push_back(arg);
+			comps.push_back(arg);
 			if (!TryConsumeToken(TokenType::Comma, t))
 				break;
 		}
 		join->Common.Location = loc;
+		join->Comps = alloc::MakeCopy(ps.alloc, comps);
 		ast = &join->Common;
 		ConsumeToken(TokenType::RBrace, t);
 	}
@@ -1381,7 +1380,7 @@ ast::Node* ConsumeAstIncreasingPrec(TokenIter& t, ParseState& ps, ast::Node* lef
 	else if (tok == TokenType::Period)
 	{
 		ConsumeToken(TokenType::Period, t);
-		ast::Subscript* sub = AllocateAst<ast::Subscript>(ast::NodeType::Subscript, ps.rd);
+		ast::Subscript* sub = AllocateAst<ast::Subscript>(ps);
 		sub->Subject = left;
 		sub->Common.Location = t.next->Location;
 		const char* ss = ConsumeIdentifier(t);
@@ -1390,13 +1389,13 @@ ast::Node* ConsumeAstIncreasingPrec(TokenIter& t, ParseState& ps, ast::Node* lef
 		{
 			char s = ss[i];
 			if (s == 'x' || s == 'r')
-				sub->Index[i] = 0;
-			else if (s == 'y' || s == 'g')
 				sub->Index[i] = 1;
-			else if (s == 'z' || s == 'b')
+			else if (s == 'y' || s == 'g')
 				sub->Index[i] = 2;
-			else if (s == 'w' || s == 'a')
+			else if (s == 'z' || s == 'b')
 				sub->Index[i] = 3;
+			else if (s == 'w' || s == 'a')
+				sub->Index[i] = 4;
 			else
 				ParserError("Unexpected subscript: %s", ss);
 		}
@@ -1439,7 +1438,7 @@ ast::Node* ConsumeAstIncreasingPrec(TokenIter& t, ParseState& ps, ast::Node* lef
 		default:
 			Unimplemented();
 		}
-		ast::BinaryOp* bop = AllocateAst<ast::BinaryOp>(ast::NodeType::BinaryOp, ps.rd);
+		ast::BinaryOp* bop = AllocateAst<ast::BinaryOp>(ps);
 		bop->LArg = left;
 		bop->RArg = arg2;
 		bop->Op = op;
@@ -3814,6 +3813,7 @@ RenderDescription* ParseBuffer(
 	ps.rd = new RenderDescription();
 	alloc::Init(&ps.rd->Alloc);
 	ps.workingDirectory = workingDir;
+	ps.alloc = &ps.rd->Alloc;
 	ParseStateInit(&ps);
 
 	GPS = &ps;
@@ -3893,8 +3893,6 @@ void ReleaseData(RenderDescription* data)
 		delete t;
 	for (void* mem : data->Mems)
 		free(mem);
-	for (ast::Node* ast : data->Asts)
-		delete ast;
 
 	alloc::FreeAll(&data->Alloc);
 	

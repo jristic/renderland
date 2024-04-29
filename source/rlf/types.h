@@ -74,4 +74,15 @@ namespace rlf
 		};
 		return names[(u32)fmt];
 	}
+
+	template <typename T>
+	struct Array
+	{
+		u32 Count;
+		T* Data;
+
+		T& operator[](size_t index) { Assert(index < Count, "invalid"); return Data[index]; }
+		T* begin() { return Data; }
+		T* end() { return Data+Count; }
+	};
 }

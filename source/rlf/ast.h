@@ -76,37 +76,43 @@ void Convert(Result& res, VariableFormat fmt);
 
 struct UintLiteral
 {
+	static constexpr NodeType NodeType = NodeType::UintLiteral;
 	Node Common;
 	u32 Val;
 };
 
 struct IntLiteral
 {
+	static constexpr NodeType NodeType = NodeType::IntLiteral;
 	Node Common;
 	i32 Val;
 };
 
 struct FloatLiteral
 {
+	static constexpr NodeType NodeType = NodeType::FloatLiteral;
 	Node Common;
 	float Val;
 };
 
 struct Subscript
 {
+	static constexpr NodeType NodeType = NodeType::Subscript;
 	Node Common;
 	Node* Subject;
-	i8 Index[4] = {-1,-1,-1,-1};
+	u8 Index[4];
 };
 
 struct Group
 {
+	static constexpr NodeType NodeType = NodeType::Group;
 	Node Common;
 	Node* Sub;
 };
 
 struct BinaryOp
 {
+	static constexpr NodeType NodeType = NodeType::BinaryOp;
 	Node Common;
 	enum class Type {
 		Add, Subtract, Multiply, Divide
@@ -118,12 +124,14 @@ struct BinaryOp
 
 struct Join
 {
+	static constexpr NodeType NodeType = NodeType::Join;
 	Node Common;
-	std::vector<Node*> Comps;
+	Array<Node*> Comps;
 };
 
 struct VariableRef
 {
+	static constexpr NodeType NodeType = NodeType::VariableRef;
 	Node Common;
 	bool IsTuneable;
 	void* M;
@@ -131,13 +139,15 @@ struct VariableRef
 
 struct Function
 {
+	static constexpr NodeType NodeType = NodeType::Function;
 	Node Common;
 	const char* Name;
-	std::vector<Node*> Args;
+	Array<Node*> Args;
 };
 
 struct SizeOf
 {
+	static constexpr NodeType NodeType = NodeType::SizeOf;
 	Node Common;
 	const char* StructName;
 	u32 Size;
