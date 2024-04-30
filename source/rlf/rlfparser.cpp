@@ -490,6 +490,17 @@ const char* KeywordString[] =
 
 #undef RLF_KEYWORD_TUPLE
 
+u32 Hash(const char* str)
+{
+	unsigned long h = 5381;
+	unsigned const char* us = (unsigned const char *) str;
+	while(*us != '\0') {
+		h = ((h << 5) + h) + *us;
+		us++;
+	}
+	return h; 
+}
+
 u32 LowerHash(const char* str)
 {
 	unsigned long h = 5381;
@@ -505,13 +516,7 @@ struct CharHasher
 {
 	size_t operator()(const char* str) const
 	{
-		unsigned long h = 5381;
-		unsigned const char* us = (unsigned const char *) str;
-		while(*us != '\0') {
-			h = ((h << 5) + h) + *us;
-			us++;
-		}
-		return h; 
+		return Hash(str);
 	}
 };
 
@@ -557,6 +562,8 @@ struct ParseState
 	};
 	std::unordered_map<const char*, Var, CharHasher, CharComparer> varMap;
 	std::unordered_map<u32, Keyword> keyMap;
+
+	std::unordered_map<u32, const char*> strStorageMap;
 
 	const char* workingDirectory;
 
@@ -737,10 +744,18 @@ float ConsumeFloatLiteral(
 	return (float)(result);
 }
 
-const char* AddStringToDescriptionData(const char* str, RenderDescription* rd)
+const char* AddStringToDescriptionData(const char* str, ParseState& ps)
 {
-	auto pair = rd->Strings.insert(std::string(str));
-	return pair.first->c_str();
+	u32 hash = Hash(str);
+	auto s = ps.strStorageMap.find(hash);
+	if (s != ps.strStorageMap.end())
+		return s->second;
+	u32 len = (u32)strlen(str) + 1;
+	char* dest = (char*)Allocate(ps.alloc, len);
+	strcpy(dest, str);
+	dest[len] = '\0';
+	ps.strStorageMap[hash] = dest;
+	return dest;
 }
 
 void AddMemToDescriptionData(void* mem, RenderDescription* rd)
@@ -1185,7 +1200,7 @@ Bind ConsumeBind(TokenIter& t, ParseState& ps)
 	const char* bindName = ConsumeIdentifier(t);
 	ConsumeToken(TokenType::Equals, t);
 	Bind bind;
-	bind.BindTarget = AddStringToDescriptionData(bindName, ps.rd);
+	bind.BindTarget = AddStringToDescriptionData(bindName, ps);
 	if (TryConsumeToken(TokenType::At, t))
 	{
 		bind.Type = BindType::SystemValue;
@@ -1263,7 +1278,7 @@ ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
 				ConsumeToken(TokenType::Comma, t);
 				const char* structName = ConsumeString(t);
 				ast::SizeOf* sizeOf = AllocateAst<ast::SizeOf>(ps);
-				sizeOf->StructName = AddStringToDescriptionData(structName, ps.rd);
+				sizeOf->StructName = AddStringToDescriptionData(structName, ps);
 				sizeOf->Size = 0;
 				shader->SizeRequests.push_back(sizeOf);
 				ConsumeToken(TokenType::RParen, t);
@@ -1272,7 +1287,7 @@ ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
 			else
 			{
 				ast::Function* func = AllocateAst<ast::Function>(ps);
-				func->Name = AddStringToDescriptionData(id, ps.rd);
+				func->Name = AddStringToDescriptionData(id, ps);
 				std::vector<ast::Node*> args;
 				if (!TryConsumeToken(TokenType::RParen, t))
 				{
@@ -1509,7 +1524,7 @@ SetConstant ConsumeSetConstant(TokenIter& t, ParseState& ps)
 	const char* varName = ConsumeIdentifier(t);
 	ConsumeToken(TokenType::Equals, t);
 	SetConstant sc = {};
-	sc.VariableName = AddStringToDescriptionData(varName, ps.rd);
+	sc.VariableName = AddStringToDescriptionData(varName, ps);
 	sc.Value = ConsumeExpression(t, ps);
 	ConsumeToken(TokenType::Semicolon, t);
 	return sc;
@@ -1604,7 +1619,7 @@ Tuneable* ConsumeTuneable(TokenIter& t, ParseState& ps)
 	tune->Type = LookupVariableType(typeId);
 
 	const char* nameId = ConsumeIdentifier(t);
-	tune->Name = AddStringToDescriptionData(nameId, ps.rd);
+	tune->Name = AddStringToDescriptionData(nameId, ps);
 	ParserAssert(ps.varMap.count(nameId) == 0, "Variable %s already defined", 
 		nameId);
 	ParseState::Var v;
@@ -1674,7 +1689,7 @@ Constant* ConsumeConstant(TokenIter& t, ParseState& ps)
 	cnst->Type = LookupVariableType(typeId);
 
 	const char* nameId = ConsumeIdentifier(t);
-	cnst->Name = AddStringToDescriptionData(nameId, ps.rd);
+	cnst->Name = AddStringToDescriptionData(nameId, ps);
 	ParserAssert(ps.varMap.count(nameId) == 0, "Variable %s already defined", nameId);
 
 	ConsumeToken(TokenType::Equals, t);
@@ -1779,7 +1794,7 @@ void ConsumeField(TokenIter& t, T* s, ConsumeType type, size_t offset)
 	case ConsumeType::String:
 	{
 		const char* str = ConsumeString(t);
-		*(const char**)p = AddStringToDescriptionData(str, GPS->rd);
+		*(const char**)p = AddStringToDescriptionData(str, *GPS);
 		break;
 	}
 	case ConsumeType::AddressModeUVW:
@@ -2398,7 +2413,7 @@ ObjImport* ConsumeObjImportDef(
 	{
 		ConsumeToken(TokenType::Equals, t);
 		const char* path = ConsumeString(t);
-		obj->ObjPath = AddStringToDescriptionData(path, rd);
+		obj->ObjPath = AddStringToDescriptionData(path, ps);
 	}
 
 	ConsumeToken(TokenType::Semicolon, t);
@@ -3261,7 +3276,7 @@ ObjDraw* ConsumeObjDrawDef(
 
 		if (key == Keyword::ObjPath)
 		{
-			objPath = AddStringToDescriptionData(ConsumeString(t), rd);
+			objPath = AddStringToDescriptionData(ConsumeString(t), ps);
 		}
 		else if (key == Keyword::Template)
 		{
@@ -3442,7 +3457,7 @@ ObjDraw* ConsumeObjDrawDef(
 			Texture* alb_tex = new Texture();
 			rd->Textures.push_back(alb_tex);
 			alb_tex->FromFile = AddStringToDescriptionData(
-				material.ambient_texname.c_str(), rd);
+				material.ambient_texname.c_str(), ps);
 
 			View* alb_view = new View();
 			rd->Views.push_back(alb_view);
@@ -3454,7 +3469,7 @@ ObjDraw* ConsumeObjDrawDef(
 			alb_tex->Views.insert(alb_view);
 
 			Bind bind;
-			bind.BindTarget = AddStringToDescriptionData("map_Ka", rd);
+			bind.BindTarget = AddStringToDescriptionData("map_Ka", ps);
 			bind.Type = BindType::View;
 			bind.ViewBind = alb_view;
 
@@ -3700,7 +3715,7 @@ void ParseMain()
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined", 
 				nameId);
 			Pass pass;
-			pass.Name = AddStringToDescriptionData(nameId, rd);
+			pass.Name = AddStringToDescriptionData(nameId, ps);
 			pass.Type = PassType::Dispatch;
 			pass.Dispatch = dc;
 			ps.passMap[nameId] = pass;
@@ -3714,7 +3729,7 @@ void ParseMain()
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined", 
 				nameId);
 			Pass pass;
-			pass.Name = AddStringToDescriptionData(nameId, rd);
+			pass.Name = AddStringToDescriptionData(nameId, ps);
 			pass.Type = PassType::Draw;
 			pass.Draw = draw;
 			ps.passMap[nameId] = pass;
@@ -3728,7 +3743,7 @@ void ParseMain()
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined", 
 				nameId);
 			Pass pass;
-			pass.Name = AddStringToDescriptionData(nameId, rd);
+			pass.Name = AddStringToDescriptionData(nameId, ps);
 			pass.Type = PassType::ClearColor;
 			pass.ClearColor = clear;
 			ps.passMap[nameId] = pass;
@@ -3742,7 +3757,7 @@ void ParseMain()
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined", 
 				nameId);
 			Pass pass;
-			pass.Name = AddStringToDescriptionData(nameId, rd);
+			pass.Name = AddStringToDescriptionData(nameId, ps);
 			pass.Type = PassType::ClearDepth;
 			pass.ClearDepth = clear;
 			ps.passMap[nameId] = pass;
@@ -3756,7 +3771,7 @@ void ParseMain()
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined", 
 				nameId);
 			Pass pass;
-			pass.Name = AddStringToDescriptionData(nameId, rd);
+			pass.Name = AddStringToDescriptionData(nameId, ps);
 			pass.Type = PassType::ClearStencil;
 			pass.ClearStencil = clear;
 			ps.passMap[nameId] = pass;
@@ -3770,7 +3785,7 @@ void ParseMain()
 			ParserAssert(ps.passMap.count(nameId) == 0, "Pass %s already defined",
 				nameId);
 			Pass pass;
-			pass.Name = AddStringToDescriptionData(nameId, rd);
+			pass.Name = AddStringToDescriptionData(nameId, ps);
 			pass.Type = PassType::ObjDraw;
 			pass.ObjDraw = objDraw;
 			ps.passMap[nameId] = pass;

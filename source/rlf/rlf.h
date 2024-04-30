@@ -468,7 +468,6 @@ namespace rlf
 		std::vector<ObjImport*> Objs;
 		std::vector<Constant*> Constants;
 		std::vector<Tuneable*> Tuneables;
-		std::set<std::string> Strings;
 		std::vector<void*> Mems;
 
 		alloc::LinAlloc Alloc;
