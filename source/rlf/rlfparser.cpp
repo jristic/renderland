@@ -501,6 +501,25 @@ u32 LowerHash(const char* str)
 	return h; 
 }
 
+struct CharHasher
+{
+	size_t operator()(const char* str) const
+	{
+		unsigned long h = 5381;
+		unsigned const char* us = (unsigned const char *) str;
+		while(*us != '\0') {
+			h = ((h << 5) + h) + *us;
+			us++;
+		}
+		return h; 
+	}
+};
+
+struct CharComparer
+{
+	bool operator()(const char* l, const char* r) const { return strcmp(l,r) == 0; }
+};
+
 struct TokenIter
 {
 	const Token* next;
@@ -511,10 +530,10 @@ struct ParseState
 {
 	TokenIter t;
 	RenderDescription* rd;
-	std::unordered_map<const char*, Pass> passMap;
-	std::unordered_map<const char*, ComputeShader*> csMap;
-	std::unordered_map<const char*, VertexShader*> vsMap;
-	std::unordered_map<const char*, PixelShader*> psMap;
+	std::unordered_map<const char*, Pass, CharHasher, CharComparer> passMap;
+	std::unordered_map<const char*, ComputeShader*, CharHasher, CharComparer> csMap;
+	std::unordered_map<const char*, VertexShader*, CharHasher, CharComparer> vsMap;
+	std::unordered_map<const char*, PixelShader*, CharHasher, CharComparer> psMap;
 	enum class ResType {
 		Sampler,
 		Buffer,
@@ -525,18 +544,18 @@ struct ParseState
 		ResType type;
 		void* m;
 	};
-	std::unordered_map<const char*, Resource> resMap;
+	std::unordered_map<const char*, Resource, CharHasher, CharComparer> resMap;
 	std::unordered_map<u32, TextureFormat> fmtMap;
-	std::unordered_map<const char*, RasterizerState*> rsMap;
-	std::unordered_map<const char*, DepthStencilState*> dssMap;
-	std::unordered_map<const char*, Viewport*> vpMap;
-	std::unordered_map<const char*, BlendState*> bsMap;
-	std::unordered_map<const char*, ObjImport*> objMap;
+	std::unordered_map<const char*, RasterizerState*, CharHasher, CharComparer> rsMap;
+	std::unordered_map<const char*, DepthStencilState*, CharHasher, CharComparer> dssMap;
+	std::unordered_map<const char*, Viewport*, CharHasher, CharComparer> vpMap;
+	std::unordered_map<const char*, BlendState*, CharHasher, CharComparer> bsMap;
+	std::unordered_map<const char*, ObjImport*, CharHasher, CharComparer> objMap;
 	struct Var {
 		bool tuneable;
 		void* m;
 	};
-	std::unordered_map<const char*, Var> varMap;
+	std::unordered_map<const char*, Var, CharHasher, CharComparer> varMap;
 	std::unordered_map<u32, Keyword> keyMap;
 
 	const char* workingDirectory;
