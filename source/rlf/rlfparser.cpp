@@ -1742,11 +1742,11 @@ struct StructEntry
 #define StructEntryDef(struc, type, field) Keyword::field, ConsumeType::type, offsetof(struc, field)
 #define StructEntryDefEx(struc, type, name, field) Keyword::name, ConsumeType::type, offsetof(struc, field)
 
-StencilOpDesc ConsumeStencilOpDesc(TokenIter& t);
-void ConsumeInputLayout(TokenIter& t, std::vector<InputElementDesc>& descs);
+StencilOpDesc ConsumeStencilOpDesc(TokenIter& t, ParseState& ps);
+void ConsumeInputLayout(TokenIter& t, ParseState& ps, Array<InputElementDesc>& outDescs);
 
 template <typename T>
-void ConsumeField(TokenIter& t, T* s, ConsumeType type, size_t offset)
+void ConsumeField(TokenIter& t, ParseState& ps, T* s, ConsumeType type, size_t offset)
 {
 	u8* p = (u8*)s;
 	p += offset;
@@ -1794,14 +1794,14 @@ void ConsumeField(TokenIter& t, T* s, ConsumeType type, size_t offset)
 	case ConsumeType::String:
 	{
 		const char* str = ConsumeString(t);
-		*(const char**)p = AddStringToDescriptionData(str, *GPS);
+		*(const char**)p = AddStringToDescriptionData(str, ps);
 		break;
 	}
 	case ConsumeType::AddressModeUVW:
 		*(AddressModeUVW*)p = ConsumeAddressModeUVW(t);
 		break;
 	case ConsumeType::Ast:
-		*(ast::Expression*)p = ConsumeExpression(t, *GPS);
+		*(ast::Expression*)p = ConsumeExpression(t, ps);
 		break;
 	case ConsumeType::ComparisonFunc:
 		*(ComparisonFunc*)p = ConsumeComparisonFunc(t);
@@ -1816,13 +1816,13 @@ void ConsumeField(TokenIter& t, T* s, ConsumeType type, size_t offset)
 		*(StencilOp*)p = ConsumeStencilOp(t);
 		break;
 	case ConsumeType::StencilOpDesc:
-		*(StencilOpDesc*)p = ConsumeStencilOpDesc(t);
+		*(StencilOpDesc*)p = ConsumeStencilOpDesc(t, ps);
 		break;
 	case ConsumeType::Texture:
 	{
 		const char* id = ConsumeIdentifier(t);
-		ParserAssert(GPS->resMap.count(id) != 0, "Couldn't find resource %s", id);
-		ParseState::Resource& res = GPS->resMap[id];
+		ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %s", id);
+		ParseState::Resource& res = ps.resMap[id];
 		ParserAssert(res.type == ParseState::ResType::Texture, "Resource must be texture");
 		*(Texture**)p = reinterpret_cast<Texture*>(res.m);
 		break;
@@ -1834,9 +1834,9 @@ void ConsumeField(TokenIter& t, T* s, ConsumeType type, size_t offset)
 	{
 		const char* formatId = ConsumeIdentifier(t);
 		u32 hash = LowerHash(formatId);
-		ParserAssert(GPS->fmtMap.count(hash) != 0, "Couldn't find format %s", 
+		ParserAssert(ps.fmtMap.count(hash) != 0, "Couldn't find format %s", 
 			formatId);
-		*(TextureFormat*)p = GPS->fmtMap[hash];
+		*(TextureFormat*)p = ps.fmtMap[hash];
 		break;
 	}
 	case ConsumeType::Blend:
@@ -1850,8 +1850,8 @@ void ConsumeField(TokenIter& t, T* s, ConsumeType type, size_t offset)
 		break;
 	case ConsumeType::InputLayout:
 	{
-		std::vector<InputElementDesc>& descs = *(std::vector<InputElementDesc>*)p;
-		ConsumeInputLayout(t, descs);
+		Array<InputElementDesc>* descs = (Array<InputElementDesc>*)p;
+		ConsumeInputLayout(t, ps, descs);
 		break;
 	}
 	default:
@@ -1859,7 +1859,8 @@ void ConsumeField(TokenIter& t, T* s, ConsumeType type, size_t offset)
 	}
 }
 template <TokenType Delim, bool TrailingRequired, typename T, size_t DefSize>
-void ConsumeStruct(TokenIter& t, T* s, StructEntry (&def)[DefSize], const char* name)
+void ConsumeStruct(TokenIter& t, ParseState& ps, T* s, StructEntry (&def)[DefSize], 
+	const char* name)
 {
 	ConsumeToken(TokenType::LBrace, t);
 
@@ -1876,7 +1877,7 @@ void ConsumeStruct(TokenIter& t, T* s, StructEntry (&def)[DefSize], const char* 
 		{
 			if (key == def[i].Key)
 			{
-				ConsumeField(t, s, def[i].Type, def[i].Offset);
+				ConsumeField(t, ps, s, def[i].Type, def[i].Offset);
 				found = true;
 				break;
 			}
@@ -1925,7 +1926,7 @@ RasterizerState* ConsumeRasterizerStateDef(
 	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		t, rs, def, "RasterizerState");
+		t, ps, rs, def, "RasterizerState");
 	return rs;
 }
 
@@ -1946,7 +1947,7 @@ RasterizerState* ConsumeRasterizerStateRefOrDef(
 	}
 }
 
-StencilOpDesc ConsumeStencilOpDesc(TokenIter& t)
+StencilOpDesc ConsumeStencilOpDesc(TokenIter& t, ParseState& ps)
 {
 	StencilOpDesc desc = {};
 	// non-zero defaults
@@ -1963,7 +1964,7 @@ StencilOpDesc ConsumeStencilOpDesc(TokenIter& t)
 	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		t, &desc, def, "StencilOpDesc");
+		t, ps, &desc, def, "StencilOpDesc");
 	return desc;
 }
 
@@ -2001,7 +2002,7 @@ DepthStencilState* ConsumeDepthStencilStateDef(
 	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		t, dss, def, "DepthStencilState");
+		t, ps, dss, def, "DepthStencilState");
 	return dss;
 }
 
@@ -2039,7 +2040,7 @@ Viewport* ConsumeViewportDef(
 	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		t, vp, def, "Viewport");
+		t, ps, vp, def, "Viewport");
 	return vp;
 }
 
@@ -2091,7 +2092,7 @@ BlendState* ConsumeBlendStateDef(
 	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		t, bs, def, "BlendState");
+		t, ps, bs, def, "BlendState");
 	return bs;
 }
 
@@ -2112,7 +2113,7 @@ BlendState* ConsumeBlendStateRefOrDef(
 	}
 }
 
-InputElementDesc ConsumeInputElementDesc(TokenIter& t)
+InputElementDesc ConsumeInputElementDesc(TokenIter& t, ParseState& ps)
 {
 	InputElementDesc ied = {};
 
@@ -2131,13 +2132,14 @@ InputElementDesc ConsumeInputElementDesc(TokenIter& t)
 	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		t, &ied, def, "InputElementDesc");
+		t, ps, &ied, def, "InputElementDesc");
 	return ied;
 }
 
-void ConsumeInputLayout(TokenIter& t, std::vector<InputElementDesc>& descs)
+void ConsumeInputLayout(TokenIter& t, ParseState& ps, Array<InputElementDesc>* outDescs)
 {
 	ConsumeToken(TokenType::LBrace, t);
+	std::vector<InputElementDesc> descs;
 	while (true)
 	{
 		if (TryConsumeToken(TokenType::RBrace, t))
@@ -2146,7 +2148,7 @@ void ConsumeInputLayout(TokenIter& t, std::vector<InputElementDesc>& descs)
 		const char* id = ConsumeIdentifier(t);
 		Keyword key = LookupKeyword(id);
 		ParserAssert(key == Keyword::InputElementDesc, "expected InputElementDesc");
-		InputElementDesc ied = ConsumeInputElementDesc(t);
+		InputElementDesc ied = ConsumeInputElementDesc(t, ps);
 		descs.push_back(ied);
 
 		if (TryConsumeToken(TokenType::RBrace, t))
@@ -2154,6 +2156,8 @@ void ConsumeInputLayout(TokenIter& t, std::vector<InputElementDesc>& descs)
 		else 
 			ConsumeToken(TokenType::Comma, t);
 	}
+
+	*outDescs = alloc::MakeCopy(ps.alloc, descs);
 }
 
 ComputeShader* ConsumeComputeShaderDef(
@@ -2172,7 +2176,7 @@ ComputeShader* ConsumeComputeShaderDef(
 	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		t, cs, def, "ComputeShader");
+		t, ps, cs, def, "ComputeShader");
 	return cs;
 }
 
@@ -2210,7 +2214,7 @@ VertexShader* ConsumeVertexShaderDef(
 	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		t, vs, def, "VertexShader");
+		t, ps, vs, def, "VertexShader");
 	return vs;
 }
 
@@ -2247,7 +2251,7 @@ PixelShader* ConsumePixelShaderDef(
 	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		t, ps, def, "PixelShader");
+		t, state, ps, def, "PixelShader");
 	return ps;
 }
 
@@ -2643,7 +2647,7 @@ Texture* ConsumeTextureDef(
 	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		t, tex, def, "Texture");
+		t, ps, tex, def, "Texture");
 
 	ParserAssert(tex->FromFile || tex->SizeExpr.IsValid(), 
 		"Texture size must be provided if not populated from DDS");
@@ -2680,7 +2684,7 @@ Sampler* ConsumeSamplerDef(
 	constexpr TokenType Delim = TokenType::Semicolon;
 	constexpr bool TrailingRequired = true;
 	ConsumeStruct<Delim, TrailingRequired>(
-		t, s, def, "Sampler");
+		t, ps, s, def, "Sampler");
 	return s;
 }
 

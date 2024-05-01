@@ -344,7 +344,7 @@ ID3DBlob* CommonCompileShader(CommonShader* common, const char* dirPath, const c
 void CreateInputLayout(ID3D11Device* device, VertexShader* shader, ID3DBlob* blob)
 {
 	std::vector<D3D11_INPUT_ELEMENT_DESC> inputLayoutDesc;
-	if (shader->InputLayout.empty())
+	if (shader->InputLayout.Count == 0)
 	{
 		// Read input layout description from shader info
 		ID3D11ShaderReflection* reflector = shader->Common.Reflector;
@@ -414,8 +414,8 @@ void CreateInputLayout(ID3D11Device* device, VertexShader* shader, ID3DBlob* blo
 	}
 	else
 	{
-		inputLayoutDesc.resize(shader->InputLayout.size());
-		for (u32 i = 0 ; i < shader->InputLayout.size() ; ++i)
+		inputLayoutDesc.resize(shader->InputLayout.Count);
+		for (u32 i = 0 ; i < shader->InputLayout.Count ; ++i)
 		{
 			D3D11_INPUT_ELEMENT_DESC& out = inputLayoutDesc[i];
 			InputElementDesc& in = shader->InputLayout[i];

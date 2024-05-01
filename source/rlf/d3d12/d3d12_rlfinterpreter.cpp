@@ -549,7 +549,7 @@ void CreateRootSignature(ID3D12Device* device, Draw* d)
 
 void CreateInputLayout(VertexShader* shader, std::vector<D3D12_INPUT_ELEMENT_DESC>& descs)
 {
-	if (shader->InputLayout.empty())
+	if (shader->InputLayout.Count == 0)
 	{
 		ID3D12ShaderReflection* reflector = shader->Common.Reflector;
 		// Get shader info
@@ -616,8 +616,8 @@ void CreateInputLayout(VertexShader* shader, std::vector<D3D12_INPUT_ELEMENT_DES
 	}
 	else
 	{
-		descs.resize(shader->InputLayout.size());
-		for (u32 i = 0 ; i < shader->InputLayout.size() ; ++i)
+		descs.resize(shader->InputLayout.Count);
+		for (u32 i = 0 ; i < shader->InputLayout.Count ; ++i)
 		{
 			D3D12_INPUT_ELEMENT_DESC& out = descs[i];
 			InputElementDesc& in = shader->InputLayout[i];

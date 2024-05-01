@@ -230,7 +230,7 @@ namespace rlf
 	struct VertexShader
 	{
 		CommonShader Common;
-		std::vector<InputElementDesc> InputLayout;
+		Array<InputElementDesc> InputLayout;
 		gfx::VertexShader GfxState;
 		gfx::InputLayout LayoutGfxState; 
 	};
