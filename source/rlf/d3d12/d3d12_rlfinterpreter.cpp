@@ -1975,14 +1975,12 @@ void HandleTextureParametersChanged(
 				
 				CreateTexture(device, tex);
 
-				// Find any views that use this texture and recreate them. 
+				// Recreate all views for this texture
 				for (View* view : tex->Views)
 				{
-					if (view->ResourceType == ResourceType::Texture && 
-						view->Texture == tex)
-					{
-						CreateView(ctx, view, /*allocate_descriptor*/false);
-					}
+					Assert(view->ResourceType == ResourceType::Texture && 
+						view->Texture == tex, "Mismatched view");
+					CreateView(ctx, view, /*allocate_descriptor*/false);
 				}
 			}
 		}
@@ -2012,14 +2010,12 @@ void HandleTextureParametersChanged(
 				
 				CreateBuffer(ctx, buf);
 
-				// Find any views that use this buffer and recreate them. 
+				// Recreate all views for this buffer 
 				for (View* view : buf->Views)
 				{
-					if (view->ResourceType == ResourceType::Buffer && 
-						view->Buffer == buf)
-					{
-						CreateView(ctx, view, /*allocate_descriptor:*/false);
-					}
+					Assert(view->ResourceType == ResourceType::Buffer && 
+						view->Buffer == buf, "Mismatched view");
+					CreateView(ctx, view, /*allocate_descriptor:*/false);
 				}
 			}
 		}

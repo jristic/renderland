@@ -1073,7 +1073,7 @@ AddressModeUVW ConsumeAddressModeUVW(TokenIter& t)
 
 View* ConsumeViewDef(TokenIter& t, ParseState& ps, ViewType vt)
 {
-	View* v = new View();
+	View* v = alloc::Allocate<View>(ps.alloc);
 	ps.rd->Views.push_back(v);
 	v->Type = vt;
 	ConsumeToken(TokenType::LBrace, t);
@@ -1095,13 +1095,13 @@ View* ConsumeViewDef(TokenIter& t, ParseState& ps, ViewType vt)
 			{
 				v->ResourceType = ResourceType::Buffer;
 				v->Buffer = (Buffer*)res.m;
-				v->Buffer->Views.insert(v);
+				v->Buffer->Views.push_back(v);
 			}
 			else if (res.type == ParseState::ResType::Texture)
 			{
 				v->ResourceType = ResourceType::Texture;
 				v->Texture = (Texture*)res.m;
-				v->Texture->Views.insert(v);
+				v->Texture->Views.push_back(v);
 			}
 			else
 			{
@@ -1164,22 +1164,22 @@ View* ConsumeViewRefOrDef(TokenIter& t, ParseState& ps, const char* id)
 		}
 		else if (res.type == ParseState::ResType::Buffer)
 		{
-			v = new View();
+			v = alloc::Allocate<View>(ps.alloc);
 			ps.rd->Views.push_back(v);
 			v->Type = ViewType::Auto;
 			v->ResourceType = ResourceType::Buffer;
 			v->Buffer = (Buffer*)res.m;
-			v->Buffer->Views.insert(v);
+			v->Buffer->Views.push_back(v);
 			v->Format = TextureFormat::Invalid;
 		}
 		else if (res.type == ParseState::ResType::Texture)
 		{
-			v = new View();
+			v = alloc::Allocate<View>(ps.alloc);
 			ps.rd->Views.push_back(v);
 			v->Type = ViewType::Auto;
 			v->ResourceType = ResourceType::Texture;
 			v->Texture = (Texture*)res.m;
-			v->Texture->Views.insert(v);
+			v->Texture->Views.push_back(v);
 			v->Format = TextureFormat::Invalid;
 		}
 		else if (res.type == ParseState::ResType::Sampler)
@@ -1612,7 +1612,7 @@ VariableType LookupVariableType(const char* id)
 
 Tuneable* ConsumeTuneable(TokenIter& t, ParseState& ps)
 {
-	Tuneable* tune = new Tuneable();
+	Tuneable* tune = alloc::Allocate<Tuneable>(ps.alloc);
 	ps.rd->Tuneables.push_back(tune);
 
 	const char* typeId = ConsumeIdentifier(t);
@@ -1682,7 +1682,7 @@ Tuneable* ConsumeTuneable(TokenIter& t, ParseState& ps)
 
 Constant* ConsumeConstant(TokenIter& t, ParseState& ps)
 {
-	Constant* cnst = new Constant();
+	Constant* cnst = alloc::Allocate<Constant>(ps.alloc);
 	ps.rd->Constants.push_back(cnst);
 
 	const char* typeId = ConsumeIdentifier(t);
@@ -1903,7 +1903,7 @@ RasterizerState* ConsumeRasterizerStateDef(
 {
 	RenderDescription* rd = ps.rd;
 
-	RasterizerState* rs = new RasterizerState();
+	RasterizerState* rs = alloc::Allocate<RasterizerState>(ps.alloc);
 	rd->RasterizerStates.push_back(rs);
 
 	// non-zero defaults
@@ -1974,7 +1974,7 @@ DepthStencilState* ConsumeDepthStencilStateDef(
 {
 	RenderDescription* rd = ps.rd;
 
-	DepthStencilState* dss = new DepthStencilState();
+	DepthStencilState* dss = alloc::Allocate<DepthStencilState>(ps.alloc);
 	rd->DepthStencilStates.push_back(dss);
 
 	// non-zero defaults
@@ -2027,10 +2027,7 @@ Viewport* ConsumeViewportDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	RenderDescription* rd = ps.rd;
-
-	Viewport* vp = new Viewport();
-	rd->Viewports.push_back(vp);
+	Viewport* vp = alloc::Allocate<Viewport>(ps.alloc);
 
 	static StructEntry def[] = {
 		StructEntryDef(Viewport, Ast, TopLeft),
@@ -2065,10 +2062,7 @@ BlendState* ConsumeBlendStateDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	RenderDescription* rd = ps.rd;
-
-	BlendState* bs = new BlendState();
-	rd->BlendStates.push_back(bs);
+	BlendState* bs = alloc::Allocate<BlendState>(ps.alloc);
 
 	// non-zero defaults
 	bs->Src = Blend::One;
@@ -2663,7 +2657,7 @@ Sampler* ConsumeSamplerDef(
 {
 	RenderDescription* rd = ps.rd;
 
-	Sampler* s = new Sampler();
+	Sampler* s = alloc::Allocate<Sampler>(ps.alloc);
 	rd->Samplers.push_back(s);
 
 	// non-zero defaults
@@ -3072,12 +3066,9 @@ ClearColor* ConsumeClearColorDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	RenderDescription* rd = ps.rd;
-
 	ConsumeToken(TokenType::LBrace, t);
 
-	ClearColor* clear = new ClearColor();
-	rd->ClearColors.push_back(clear);
+	ClearColor* clear = alloc::Allocate<ClearColor>(ps.alloc);
 
 	while (true)
 	{
@@ -3125,12 +3116,9 @@ ClearDepth* ConsumeClearDepthDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	RenderDescription* rd = ps.rd;
-
 	ConsumeToken(TokenType::LBrace, t);
 
-	ClearDepth* clear = new ClearDepth();
-	rd->ClearDepths.push_back(clear);
+	ClearDepth* clear = alloc::Allocate<ClearDepth>(ps.alloc);
 
 	while (true)
 	{
@@ -3170,12 +3158,9 @@ ClearStencil* ConsumeClearStencilDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	RenderDescription* rd = ps.rd;
-
 	ConsumeToken(TokenType::LBrace, t);
 
-	ClearStencil* clear = new ClearStencil();
-	rd->ClearStencils.push_back(clear);
+	ClearStencil* clear = alloc::Allocate<ClearStencil>(ps.alloc);
 
 	while (true)
 	{
@@ -3215,12 +3200,9 @@ Resolve* ConsumeResolveDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	RenderDescription* rd = ps.rd;
-
 	ConsumeToken(TokenType::LBrace, t);
 
-	Resolve* resolve = new Resolve();
-	rd->Resolves.push_back(resolve);
+	Resolve* resolve = alloc::Allocate<Resolve>(ps.alloc);
 
 	while (true)
 	{
@@ -3463,14 +3445,14 @@ ObjDraw* ConsumeObjDrawDef(
 			alb_tex->FromFile = AddStringToDescriptionData(
 				material.ambient_texname.c_str(), ps);
 
-			View* alb_view = new View();
+			View* alb_view = alloc::Allocate<View>(ps.alloc);
 			rd->Views.push_back(alb_view);
 			alb_view->Type = ViewType::SRV;
 			alb_view->ResourceType = ResourceType::Texture;
 			alb_view->Texture = alb_tex;
 			alb_view->Format = TextureFormat::Invalid;
 
-			alb_tex->Views.insert(alb_view);
+			alb_tex->Views.push_back(alb_view);
 
 			Bind bind;
 			bind.BindTarget = AddStringToDescriptionData("map_Ka", ps);
@@ -3891,14 +3873,6 @@ void ReleaseData(RenderDescription* data)
 		delete dc;
 	for (Draw* draw : data->Draws)
 		delete draw;
-	for (ClearColor* clear : data->ClearColors)
-		delete clear;
-	for (ClearDepth* clear : data->ClearDepths)
-		delete clear;
-	for (ClearStencil* clear : data->ClearStencils)
-		delete clear;
-	for (Resolve* resolve : data->Resolves)
-		delete resolve;
 	for (ObjDraw* objDraw : data->ObjDraws)
 		delete objDraw;
 	for (ComputeShader* cs : data->CShaders)
@@ -3911,24 +3885,8 @@ void ReleaseData(RenderDescription* data)
 		delete buf;
 	for (Texture* tex : data->Textures)
 		delete tex;
-	for (Sampler* s : data->Samplers)
-		delete s;
-	for (View* v : data->Views)
-		delete v;
-	for (RasterizerState* rs : data->RasterizerStates)
-		delete rs;
-	for (DepthStencilState* dss : data->DepthStencilStates)
-		delete dss;
-	for (Viewport* vp : data->Viewports)
-		delete vp;
-	for (BlendState* bs : data->BlendStates)
-		delete bs;
 	for (ObjImport* obj : data->Objs)
 		delete obj;
-	for (Constant* c : data->Constants)
-		delete c;
-	for (Tuneable* t : data->Tuneables)
-		delete t;
 	for (void* mem : data->Mems)
 		free(mem);
 

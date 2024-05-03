@@ -258,7 +258,7 @@ namespace rlf
 		void* InitData;
 		u32 InitDataSize;
 		BufferFlag Flags;
-		std::set<View*> Views;
+		std::vector<View*> Views;
 		gfx::Buffer GfxState;
 	};
 	struct Texture
@@ -269,7 +269,7 @@ namespace rlf
 		const char* FromFile;
 		TextureFlag Flags;
 		u32 SampleCount;
-		std::set<View*> Views;
+		std::vector<View*> Views;
 		gfx::Texture GfxState;
 	};
 	struct Sampler
@@ -449,10 +449,6 @@ namespace rlf
 		std::vector<Pass> Passes;
 		std::vector<Dispatch*> Dispatches;
 		std::vector<Draw*> Draws;
-		std::vector<ClearColor*> ClearColors;
-		std::vector<ClearDepth*> ClearDepths;
-		std::vector<ClearStencil*> ClearStencils;
-		std::vector<Resolve*> Resolves;
 		std::vector<ObjDraw*> ObjDraws;
 		std::vector<ComputeShader*> CShaders;
 		std::vector<VertexShader*> VShaders;
@@ -463,8 +459,6 @@ namespace rlf
 		std::vector<View*> Views;
 		std::vector<RasterizerState*> RasterizerStates;
 		std::vector<DepthStencilState*> DepthStencilStates;
-		std::vector<Viewport*> Viewports;
-		std::vector<BlendState*> BlendStates;
 		std::vector<ObjImport*> Objs;
 		std::vector<Constant*> Constants;
 		std::vector<Tuneable*> Tuneables;
