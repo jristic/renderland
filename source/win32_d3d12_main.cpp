@@ -304,11 +304,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		hr = D3D12GetDebugInterface(IID_PPV_ARGS(&Gfx.Debug));
 		CheckHresult(hr, "debug interface");
 		Gfx.Debug->EnableDebugLayer();
-		ID3D12Debug1* d1;
-		hr = Gfx.Debug->QueryInterface(IID_PPV_ARGS(&d1));
-		CheckHresult(hr, "debug1");
-		d1->SetEnableGPUBasedValidation(true);
-		d1->Release();
+		// ID3D12Debug1* d1;
+		// hr = Gfx.Debug->QueryInterface(IID_PPV_ARGS(&d1));
+		// CheckHresult(hr, "debug1");
+		// d1->SetEnableGPUBasedValidation(true);
+		// d1->Release();
 
 		D3D_FEATURE_LEVEL featureLevel = D3D_FEATURE_LEVEL_12_0;
 		hr = D3D12CreateDevice(nullptr, featureLevel, IID_PPV_ARGS(&Gfx.Device));
