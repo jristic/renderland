@@ -258,7 +258,6 @@ namespace rlf
 		void* InitData;
 		u32 InitDataSize;
 		BufferFlag Flags;
-		std::vector<View*> Views;
 		gfx::Buffer GfxState;
 	};
 	struct Texture
@@ -269,7 +268,6 @@ namespace rlf
 		const char* FromFile;
 		TextureFlag Flags;
 		u32 SampleCount;
-		std::vector<View*> Views;
 		gfx::Texture GfxState;
 	};
 	struct Sampler

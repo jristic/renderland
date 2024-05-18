@@ -1095,13 +1095,11 @@ View* ConsumeViewDef(TokenIter& t, ParseState& ps, ViewType vt)
 			{
 				v->ResourceType = ResourceType::Buffer;
 				v->Buffer = (Buffer*)res.m;
-				v->Buffer->Views.push_back(v);
 			}
 			else if (res.type == ParseState::ResType::Texture)
 			{
 				v->ResourceType = ResourceType::Texture;
 				v->Texture = (Texture*)res.m;
-				v->Texture->Views.push_back(v);
 			}
 			else
 			{
@@ -1169,7 +1167,6 @@ View* ConsumeViewRefOrDef(TokenIter& t, ParseState& ps, const char* id)
 			v->Type = ViewType::Auto;
 			v->ResourceType = ResourceType::Buffer;
 			v->Buffer = (Buffer*)res.m;
-			v->Buffer->Views.push_back(v);
 			v->Format = TextureFormat::Invalid;
 		}
 		else if (res.type == ParseState::ResType::Texture)
@@ -1179,7 +1176,6 @@ View* ConsumeViewRefOrDef(TokenIter& t, ParseState& ps, const char* id)
 			v->Type = ViewType::Auto;
 			v->ResourceType = ResourceType::Texture;
 			v->Texture = (Texture*)res.m;
-			v->Texture->Views.push_back(v);
 			v->Format = TextureFormat::Invalid;
 		}
 		else if (res.type == ParseState::ResType::Sampler)
@@ -3451,8 +3447,6 @@ ObjDraw* ConsumeObjDrawDef(
 			alb_view->ResourceType = ResourceType::Texture;
 			alb_view->Texture = alb_tex;
 			alb_view->Format = TextureFormat::Invalid;
-
-			alb_tex->Views.push_back(alb_view);
 
 			Bind bind;
 			bind.BindTarget = AddStringToDescriptionData("map_Ka", ps);

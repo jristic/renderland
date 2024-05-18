@@ -1171,15 +1171,6 @@ void HandleTextureParametersChanged(
 				SafeRelease(tex->GfxState);
 				
 				CreateTexture(device, tex);
-
-				// Recreate all views for this texture
-				for (View* view : tex->Views)
-				{
-					Assert(view->ResourceType == ResourceType::Texture && 
-						view->Texture == tex, "Mismatched view");
-					ReleaseView(view);
-					CreateView(device, view);
-				}
 			}
 		}
 
@@ -1207,17 +1198,38 @@ void HandleTextureParametersChanged(
 				SafeRelease(buf->GfxState);
 				
 				CreateBuffer(device, buf);
-
-				// Recreate all views for this buffer 
-				for (View* view : buf->Views)
-				{
-					Assert(view->ResourceType == ResourceType::Buffer && 
-						view->Buffer == buf, "Mismatched view");
-					ReleaseView(view);
-					CreateView(device, view);
-				}
 			}
 		}
+
+		// Recreate all views for buffers/textures that could have changed.
+		for (View* view : rd->Views)
+		{
+			if (view->ResourceType == ResourceType::Texture)
+			{
+				Texture* tex = view->Texture;
+				// DDS textures are always sized based on the file. 
+				if (tex->FromFile)
+					continue;
+				if ((tex->SizeExpr.Dep.VariesByFlags & ec->EvCtx.ChangedThisFrameFlags) == 0)
+					continue;
+			}
+			else if (view->ResourceType == ResourceType::Buffer)
+			{
+				Buffer* buf = view->Buffer;
+				// Obj initialized buffers don't have expressions.
+				if (!buf->ElementSizeExpr.IsValid() && !buf->ElementCountExpr.IsValid())
+					continue;
+
+				if ((buf->ElementSizeExpr.Dep.VariesByFlags & ec->EvCtx.ChangedThisFrameFlags) == 0 &&
+					(buf->ElementCountExpr.Dep.VariesByFlags & ec->EvCtx.ChangedThisFrameFlags) == 0)
+					continue;
+			}
+			else
+				Unimplemented();
+			ReleaseView(view);
+			CreateView(device, view);
+		}
+
 	}
 	catch (ErrorInfo ie)
 	{
