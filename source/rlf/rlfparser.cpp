@@ -758,11 +758,6 @@ const char* AddStringToDescriptionData(const char* str, ParseState& ps)
 	return dest;
 }
 
-void AddMemToDescriptionData(void* mem, RenderDescription* rd)
-{
-	rd->Mems.push_back(mem);
-}
-
 template <typename AstType>
 AstType* AllocateAst(ParseState& ps)
 {
@@ -2262,7 +2257,7 @@ PixelShader* ConsumePixelShaderRefOrDef(
 	}
 }
 
-void ParseOBJ(ObjImport* import, RenderDescription* rd, ParseState& ps)
+void ParseOBJ(ObjImport* import, ParseState& ps)
 {
 	tinyobj::attrib_t attrib;
 	std::vector<tinyobj::shape_t> shapes;
@@ -2368,13 +2363,11 @@ void ParseOBJ(ObjImport* import, RenderDescription* rd, ParseState& ps)
 	import->IndexCount = (u32)indices.size();
 
 	size_t vertsSize = sizeof(Vertex) * verts.size();
-	import->Vertices = malloc(vertsSize);
-	AddMemToDescriptionData(import->Vertices, rd);
+	import->Vertices = alloc::Allocate(ps.alloc, vertsSize);
 	memcpy(import->Vertices, verts.data(), vertsSize);
 
 	size_t indicesSize = (isU16 ? 2 : 4) * indices.size();
-	import->Indices = malloc(indicesSize);
-	AddMemToDescriptionData(import->Indices, rd);
+	import->Indices = alloc::Allocate(ps.alloc, indicesSize);
 	if (isU16)
 	{
 		u16* shorts = (u16*)import->Indices;
@@ -2413,7 +2406,7 @@ ObjImport* ConsumeObjImportDef(
 	ConsumeToken(TokenType::Semicolon, t);
 	ConsumeToken(TokenType::RBrace, t);
 
-	ParseOBJ(obj, rd, ps);
+	ParseOBJ(obj, ps);
 
 	return obj;
 }
@@ -2597,8 +2590,7 @@ Buffer* ConsumeBufferDef(
 		{
 			ParserAssert(buf->ElementSizeExpr.Constant() && buf->ElementCountExpr.Constant(),
 				"Buffer having InitData is not compatible with non-constant buffer size/count");
-			void* data = malloc(bufSize);
-			AddMemToDescriptionData(data, rd);
+			void* data = alloc::Allocate(ps.alloc, bufSize);
 			buf->InitData = data;
 			buf->InitDataSize = (u32)bufSize;
 		}
@@ -3391,13 +3383,11 @@ ObjDraw* ConsumeObjDrawDef(
 		u32 indexCount = (u32)idxs.size();
 
 		size_t vertsSize = sizeof(Vertex) * vertexCount;
-		void* vertices = malloc(vertsSize);
-		AddMemToDescriptionData(vertices, rd);
+		void* vertices = alloc::Allocate(ps.alloc, vertsSize);
 		memcpy(vertices, verts.data(), vertsSize);
 
 		size_t indicesSize = (isU16 ? 2 : 4) * indexCount;
-		void* indices = malloc(indicesSize);
-		AddMemToDescriptionData(indices, rd);
+		void* indices = alloc::Allocate(ps.alloc, indicesSize);
 		if (isU16)
 		{
 			u16* shorts = (u16*)indices;
@@ -3881,8 +3871,6 @@ void ReleaseData(RenderDescription* data)
 		delete tex;
 	for (ObjImport* obj : data->Objs)
 		delete obj;
-	for (void* mem : data->Mems)
-		free(mem);
 
 	alloc::FreeAll(&data->Alloc);
 	
