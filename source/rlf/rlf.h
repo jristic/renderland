@@ -348,8 +348,8 @@ namespace rlf
 		ast::Expression Groups;
 		Buffer* IndirectArgs;
 		u32 IndirectArgsOffset;
-		std::vector<Bind> Binds;
-		std::vector<SetConstant> Constants;
+		Array<Bind> Binds;
+		Array<SetConstant> Constants;
 		std::vector<ConstantBuffer> CBs;
 		gfx::DispatchData GfxState;
 	};
@@ -368,7 +368,7 @@ namespace rlf
 		DepthStencilState* DSState;
 		VertexShader* VShader;
 		PixelShader* PShader;
-		std::vector<Buffer*> VertexBuffers;
+		Array<Buffer*> VertexBuffers;
 		Buffer* IndexBuffer;
 		Buffer* InstancedIndirectArgs;
 		Buffer* IndexedInstancedIndirectArgs;
@@ -376,14 +376,14 @@ namespace rlf
 		u32 VertexCount;
 		u32 InstanceCount;
 		u8 StencilRef;
-		std::vector<TextureTarget> RenderTargets;
-		std::vector<TextureTarget> DepthStencil;
-		std::vector<Viewport*> Viewports;
-		std::vector<BlendState*> BlendStates;
-		std::vector<Bind> VSBinds;
-		std::vector<Bind> PSBinds;
-		std::vector<SetConstant> VSConstants;
-		std::vector<SetConstant> PSConstants;
+		Array<TextureTarget> RenderTargets;
+		TextureTarget* DepthStencil;
+		Array<Viewport*> Viewports;
+		Array<BlendState*> BlendStates;
+		Array<Bind> VSBinds;
+		Array<Bind> PSBinds;
+		Array<SetConstant> VSConstants;
+		Array<SetConstant> PSConstants;
 		std::vector<ConstantBuffer> VSCBs;
 		std::vector<ConstantBuffer> PSCBs;
 		gfx::BlendState BlendGfxState;
@@ -457,7 +457,6 @@ namespace rlf
 		std::vector<View*> Views;
 		std::vector<RasterizerState*> RasterizerStates;
 		std::vector<DepthStencilState*> DepthStencilStates;
-		std::vector<ObjImport*> Objs;
 		std::vector<Constant*> Constants;
 		std::vector<Tuneable*> Tuneables;
 

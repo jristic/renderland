@@ -644,7 +644,7 @@ void CreatePipelineState(ID3D12Device* device, Draw* d)
 		desc.PS.BytecodeLength = d->PShader->GfxState.Blob->GetBufferSize();
 	}
 
-	u32 blendCount = (u32)d->BlendStates.size();
+	u32 blendCount = d->BlendStates.Count;
 	desc.BlendState.AlphaToCoverageEnable = false;
 	desc.BlendState.IndependentBlendEnable = blendCount > 1;
 	if (blendCount > 0)
@@ -719,7 +719,7 @@ void CreatePipelineState(ID3D12Device* device, Draw* d)
 	DepthStencilState* dss = d->DSState;
 	if (dss)
 	{
-		desc.DepthStencilState.DepthEnable = dss->DepthEnable && d->DepthStencil.size() > 0;
+		desc.DepthStencilState.DepthEnable = dss->DepthEnable && d->DepthStencil;
 		desc.DepthStencilState.DepthWriteMask = dss->DepthWrite ? D3D12_DEPTH_WRITE_MASK_ALL :
 			D3D12_DEPTH_WRITE_MASK_ZERO;
 		desc.DepthStencilState.DepthFunc = RlfToD3d(dss->DepthFunc);
@@ -731,7 +731,7 @@ void CreatePipelineState(ID3D12Device* device, Draw* d)
 	}
 	else
 	{
-		desc.DepthStencilState.DepthEnable = d->DepthStencil.size() > 0;
+		desc.DepthStencilState.DepthEnable = d->DepthStencil != nullptr;
 		desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
 		desc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
 		desc.DepthStencilState.StencilEnable = FALSE;
@@ -753,8 +753,8 @@ void CreatePipelineState(ID3D12Device* device, Draw* d)
 
 	u32 sample_count = 1;
 
-	desc.NumRenderTargets = (u32)d->RenderTargets.size();
-	for (u32 i = 0 ; i < d->RenderTargets.size() ; ++i)
+	desc.NumRenderTargets = d->RenderTargets.Count;
+	for (u32 i = 0 ; i < d->RenderTargets.Count ; ++i)
 	{
 		const TextureTarget& t = d->RenderTargets[i];
 		if (t.IsSystem)
@@ -774,10 +774,9 @@ void CreatePipelineState(ID3D12Device* device, Draw* d)
 		}
 	}
 
-	if (d->DepthStencil.size() > 0)
+	if (d->DepthStencil)
 	{
-		Assert(d->DepthStencil.size() == 1, "only one supported");
-		TextureTarget t = d->DepthStencil[0];
+		TextureTarget t = *d->DepthStencil;
 		if (t.IsSystem)
 		{
 			if (t.System == SystemValue::DefaultDepth)
@@ -1195,7 +1194,7 @@ void ApplyNullDescriptors(gfx::Context* ctx, const gfx::BindInfo* bi,
 
 void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
 	const gfx::BindInfo* bi, const gfx::DescriptorTable* table, 
-	const std::vector<Bind>& binds)
+	Array<Bind> binds)
 {
 	for (const Bind& bind : binds)
 	{
@@ -1292,7 +1291,7 @@ u32 AlignU32(u32 val, u32 align)
 
 void PrepareConstants(
 	gfx::Context* ctx, ID3D12ShaderReflection* reflector, 
-	std::vector<ConstantBuffer>& buffers, std::vector<SetConstant>& sets, 
+	std::vector<ConstantBuffer>& buffers, Array<SetConstant> sets, 
 	const char* path)
 {
 	D3D12_SHADER_DESC sd;
@@ -2080,7 +2079,7 @@ do {											\
 	}											\
 } while (0);									\
 
-void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets, 
+void ExecuteSetConstants(ExecuteContext* ec, Array<SetConstant> sets, 
 	std::vector<ConstantBuffer>& buffers)
 {
 	gfx::Context* ctx = ec->GfxCtx;
@@ -2106,7 +2105,7 @@ void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets,
 	}
 }
 
-void TransitionBinds(gfx::Context* ctx, ExecuteResources* resources, std::vector<Bind>& binds)
+void TransitionBinds(gfx::Context* ctx, ExecuteResources* resources, Array<Bind> binds)
 {
 	for (const Bind& bind : binds)
 	{
@@ -2304,8 +2303,9 @@ void ExecuteDraw(
 		TransitionResource(ec->GfxCtx, resource, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	}
 	D3D12_CPU_DESCRIPTOR_HANDLE dsView = {};
-	for (TextureTarget target : draw->DepthStencil)
+	if (draw->DepthStencil)
 	{
+		TextureTarget target = *draw->DepthStencil;
 		gfx::Texture* resource = nullptr;
 		if (target.IsSystem)
 		{
@@ -2334,7 +2334,7 @@ void ExecuteDraw(
 		// TODO: read-only state should be set based on usage
 		TransitionResource(ec->GfxCtx, resource, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 	}
-	for (int i = 0 ; i < draw->Viewports.size() ; ++i)
+	for (u32 i = 0 ; i < draw->Viewports.Count ; ++i)
 	{
 		Viewport* v = draw->Viewports[i];
 		ast::Result res;
@@ -2354,7 +2354,7 @@ void ExecuteDraw(
 			vp[i].MaxDepth = res.Value.Float2Val.y;
 		}
 	}
-	u32 vpCount = draw->DepthStencil.size() > 0 ? 1 : 0;
+	u32 vpCount = draw->DepthStencil ? 1 : 0;
 	vpCount = max(vpCount, rtCount);
 	D3D12_RECT sr[8] = {};
 	for (u32 i = 0 ; i < vpCount ; ++i)
@@ -2365,15 +2365,15 @@ void ExecuteDraw(
 		sr[i].bottom = (u32)(vp[i].TopLeftY + vp[i].Height);
 	}
 	cl->OMSetRenderTargets(rtCount, rtViews, false, 
-		draw->DepthStencil.size() > 0 ? &dsView : nullptr);
+		draw->DepthStencil ? &dsView : nullptr);
 	cl->RSSetViewports(vpCount, vp);
 	cl->RSSetScissorRects(vpCount, sr);
 	cl->IASetPrimitiveTopology(RlfToD3d_Topo(draw->Topology));
 	cl->OMSetStencilRef(draw->StencilRef);
-	if (!draw->VertexBuffers.empty())
+	if (draw->VertexBuffers.Count)
 	{
 		D3D12_VERTEX_BUFFER_VIEW vbv[D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT] = {};
-		for (u32 i = 0 ; i < draw->VertexBuffers.size() ; ++i)
+		for (u32 i = 0 ; i < draw->VertexBuffers.Count ; ++i)
 		{
 			Buffer* vb = draw->VertexBuffers[i];
 			TransitionResource(ec->GfxCtx, &vb->GfxState, 
@@ -2384,7 +2384,7 @@ void ExecuteDraw(
 			vbv[i].StrideInBytes = vb->ElementSize;
 		}
 
-		cl->IASetVertexBuffers(0, (u32)draw->VertexBuffers.size(), &vbv[0]);
+		cl->IASetVertexBuffers(0, draw->VertexBuffers.Count, &vbv[0]);
 	}
 	Buffer* ib = draw->IndexBuffer;
 	if (ib)

@@ -2388,12 +2388,9 @@ ObjImport* ConsumeObjImportDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	RenderDescription* rd = ps.rd;
-
 	ConsumeToken(TokenType::LBrace, t);
 
-	ObjImport* obj = new ObjImport();
-	rd->Objs.push_back(obj);
+	ObjImport* obj = alloc::Allocate<ObjImport>(ps.alloc);
 
 	const char* fieldId = ConsumeIdentifier(t);
 	if (LookupKeyword(fieldId) == Keyword::ObjPath)
@@ -2681,6 +2678,9 @@ Dispatch* ConsumeDispatchDef(
 	Dispatch* dc = new Dispatch();
 	rd->Dispatches.push_back(dc);
 
+	std::vector<Bind> binds;
+	std::vector<SetConstant> constants;
+
 	while (true)
 	{
 		const char* fieldId = ConsumeIdentifier(t);
@@ -2726,13 +2726,13 @@ Dispatch* ConsumeDispatchDef(
 		case Keyword::Bind:
 		{
 			Bind bind = ConsumeBind(t, ps);
-			dc->Binds.push_back(bind);
+			binds.push_back(bind);
 			break;
 		}
 		case Keyword::SetConstant:
 		{
 			SetConstant sc = ConsumeSetConstant(t,ps);
-			dc->Constants.push_back(sc);
+			constants.push_back(sc);
 			break;
 		}
 		default:
@@ -2745,6 +2745,9 @@ Dispatch* ConsumeDispatchDef(
 		if (TryConsumeToken(TokenType::RBrace, t))
 			break;
 	}
+
+	dc->Binds = alloc::MakeCopy(ps.alloc, binds);
+	dc->Constants = alloc::MakeCopy(ps.alloc, constants);
 
 	return dc;
 }
@@ -2762,6 +2765,15 @@ Draw* ConsumeDrawDef(
 
 	// non-zero defaults
 	draw->Topology = Topology::TriList;
+
+	std::vector<Buffer*> vertexBuffers;
+	std::vector<TextureTarget> renderTargets;
+	std::vector<Viewport*> viewports;
+	std::vector<BlendState*> blendStates;
+	std::vector<Bind> vsBinds;
+	std::vector<Bind> psBinds;
+	std::vector<SetConstant> vsConstants;
+	std::vector<SetConstant> psConstants;
 
 	while (true)
 	{
@@ -2801,19 +2813,19 @@ Draw* ConsumeDrawDef(
 		}
 		case Keyword::VertexBuffer:
 		{
-			draw->VertexBuffers.clear();
+			vertexBuffers.clear();
 			ConsumeToken(TokenType::Equals, t);
 			const char* id = ConsumeIdentifier(t);
 			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %s", id);
 			ParseState::Resource& res = ps.resMap[id];
 			ParserAssert(res.type == ParseState::ResType::Buffer, 
 				"Resource (%s) must be a buffer", id);
-			draw->VertexBuffers.push_back(reinterpret_cast<Buffer*>(res.m));
+			vertexBuffers.push_back(reinterpret_cast<Buffer*>(res.m));
 			break;
 		}
 		case Keyword::VertexBuffers:
 		{
-			draw->VertexBuffers.clear();
+			vertexBuffers.clear();
 			ConsumeToken(TokenType::Equals, t);
 			ConsumeToken(TokenType::LBrace, t);
 			while (true)
@@ -2823,7 +2835,7 @@ Draw* ConsumeDrawDef(
 				ParseState::Resource& res = ps.resMap[id];
 				ParserAssert(res.type == ParseState::ResType::Buffer, 
 					"Resource (%s) must be a buffer", id);
-				draw->VertexBuffers.push_back(reinterpret_cast<Buffer*>(res.m));
+				vertexBuffers.push_back(reinterpret_cast<Buffer*>(res.m));
 				if (!TryConsumeToken(TokenType::Comma, t))
 				{
 					ConsumeToken(TokenType::RBrace, t);
@@ -2892,7 +2904,7 @@ Draw* ConsumeDrawDef(
 		}
 		case Keyword::RenderTarget:
 		{
-			draw->RenderTargets.clear();
+			renderTargets.clear();
 			ConsumeToken(TokenType::Equals, t);
 			TextureTarget target;
 			if (TryConsumeToken(TokenType::At, t))
@@ -2911,12 +2923,12 @@ Draw* ConsumeDrawDef(
 				ParserAssert(v->Type == ViewType::RTV, "RenderTarget must be a RTV.");
 				target.View = v;
 			}
-			draw->RenderTargets.push_back(target);
+			renderTargets.push_back(target);
 			break;
 		}
 		case Keyword::RenderTargets:
 		{
-			draw->RenderTargets.clear();
+			renderTargets.clear();
 			ConsumeToken(TokenType::Equals, t);
 			ConsumeToken(TokenType::LBrace, t);
 			while (true)
@@ -2940,7 +2952,7 @@ Draw* ConsumeDrawDef(
 					ParserAssert(v->Type == ViewType::RTV, "RenderTarget must be a RTV.");
 					target.View = v;
 				}
-				draw->RenderTargets.push_back(target);
+				renderTargets.push_back(target);
 				if (!TryConsumeToken(TokenType::Comma, t))
 				{
 					ConsumeToken(TokenType::RBrace, t);
@@ -2951,7 +2963,7 @@ Draw* ConsumeDrawDef(
 		}
 		case Keyword::Viewports:
 		{
-			draw->Viewports.clear();
+			viewports.clear();
 			ConsumeToken(TokenType::Equals, t);
 			ConsumeToken(TokenType::LBrace, t);
 			while (true)
@@ -2959,7 +2971,7 @@ Draw* ConsumeDrawDef(
 				if (TryConsumeToken(TokenType::RBrace, t))
 					break;
 				Viewport* vp = ConsumeViewportRefOrDef(t, ps);
-				draw->Viewports.push_back(vp);
+				viewports.push_back(vp);
 				if (!TryConsumeToken(TokenType::Comma, t))
 				{
 					ConsumeToken(TokenType::RBrace, t);
@@ -2970,7 +2982,7 @@ Draw* ConsumeDrawDef(
 		}
 		case Keyword::BlendStates:
 		{
-			draw->BlendStates.clear();
+			blendStates.clear();
 			ConsumeToken(TokenType::Equals, t);
 			ConsumeToken(TokenType::LBrace, t);
 			while (true)
@@ -2978,7 +2990,7 @@ Draw* ConsumeDrawDef(
 				if (TryConsumeToken(TokenType::RBrace, t))
 					break;
 				BlendState* bs = ConsumeBlendStateRefOrDef(t, ps);
-				draw->BlendStates.push_back(bs);
+				blendStates.push_back(bs);
 				if (!TryConsumeToken(TokenType::Comma, t))
 				{
 					ConsumeToken(TokenType::RBrace, t);
@@ -2990,7 +3002,8 @@ Draw* ConsumeDrawDef(
 		case Keyword::DepthStencil:
 		{
 			ConsumeToken(TokenType::Equals, t);
-			TextureTarget target;
+			draw->DepthStencil = alloc::Allocate<TextureTarget>(ps.alloc);
+			TextureTarget& target = *draw->DepthStencil;
 			if (TryConsumeToken(TokenType::At, t))
 			{
 				target.IsSystem = true;
@@ -3007,31 +3020,30 @@ Draw* ConsumeDrawDef(
 				ParserAssert(v->Type == ViewType::DSV, "DepthStencil must be a DSV.");
 				target.View = v;
 			}
-			draw->DepthStencil.push_back(target);
 			break;
 		}
 		case Keyword::BindVS:
 		{
 			Bind bind = ConsumeBind(t, ps);
-			draw->VSBinds.push_back(bind);
+			vsBinds.push_back(bind);
 			break;
 		}
 		case Keyword::BindPS:
 		{
 			Bind bind = ConsumeBind(t, ps);
-			draw->PSBinds.push_back(bind);
+			psBinds.push_back(bind);
 			break;
 		}
 		case Keyword::SetConstantVS:
 		{
 			SetConstant sc = ConsumeSetConstant(t,ps);
-			draw->VSConstants.push_back(sc);
+			vsConstants.push_back(sc);
 			break;
 		}
 		case Keyword::SetConstantPS:
 		{
 			SetConstant sc = ConsumeSetConstant(t,ps);
-			draw->PSConstants.push_back(sc);
+			psConstants.push_back(sc);
 			break;
 		}
 		default:
@@ -3045,7 +3057,14 @@ Draw* ConsumeDrawDef(
 			break;
 	}
 
-
+	draw->VertexBuffers = alloc::MakeCopy(ps.alloc, vertexBuffers);
+	draw->RenderTargets = alloc::MakeCopy(ps.alloc, renderTargets);
+	draw->Viewports = alloc::MakeCopy(ps.alloc, viewports);
+	draw->BlendStates = alloc::MakeCopy(ps.alloc, blendStates);
+	draw->VSBinds = alloc::MakeCopy(ps.alloc, vsBinds);
+	draw->PSBinds = alloc::MakeCopy(ps.alloc, psBinds);
+	draw->VSConstants = alloc::MakeCopy(ps.alloc, vsConstants);
+	draw->PSConstants = alloc::MakeCopy(ps.alloc, psConstants);
 
 	return draw;
 }
@@ -3228,6 +3247,24 @@ Resolve* ConsumeResolveDef(
 
 Pass ConsumePassRefOrDef(TokenIter& t, ParseState& ps);
 
+template <typename T>
+Array<T> DuplicateArray(Array<T> source, ParseState& ps)
+{
+	u32 size = source.Count * sizeof(T);
+	Array<T> dest;
+	dest.Count = source.Count;
+	if (size)
+	{
+		dest.Data = (T*)alloc::Allocate(ps.alloc, size);
+		memcpy(dest.Data, source.Data, size);
+	}
+	else
+	{
+		dest.Data = nullptr;
+	}
+	return dest;
+}
+
 ObjDraw* ConsumeObjDrawDef(
 	TokenIter& t,
 	ParseState& ps)
@@ -3317,6 +3354,12 @@ ObjDraw* ConsumeObjDrawDef(
 		objDraw->PerMeshDraws.push_back(sub_draw);
 		// copy state to the sub draw
 		*sub_draw = *templ;
+		// The arrays which will be updated by the D3D init phase need to be cloned 
+		//	otherwise draws will stomp eachother
+		sub_draw->VSBinds = DuplicateArray(templ->VSBinds, ps);
+		sub_draw->PSBinds = {}; // intentionally not copied here, see below
+		sub_draw->VSConstants = DuplicateArray(templ->VSConstants, ps);
+		sub_draw->PSConstants = DuplicateArray(templ->PSConstants, ps);
 
 		std::unordered_map<tinyobj::index_t, size_t, IndexHash, IndexEqual> map;
 
@@ -3419,8 +3462,8 @@ ObjDraw* ConsumeObjDrawDef(
 		ibuf->InitDataSize = ibuf->ElementSize * ibuf->ElementCount;
 		ibuf->Flags = BufferFlag_Index;
 
-		sub_draw->VertexBuffers.clear();
-		sub_draw->VertexBuffers.push_back(vbuf);
+		std::vector<Buffer*> vertexBuffers(1, vbuf);
+		sub_draw->VertexBuffers = alloc::MakeCopy(ps.alloc, vertexBuffers);
 		sub_draw->IndexBuffer = ibuf;
 
 		tinyobj::material_t& material = materials[material_id];
@@ -3442,8 +3485,9 @@ ObjDraw* ConsumeObjDrawDef(
 			bind.BindTarget = AddStringToDescriptionData("map_Ka", ps);
 			bind.Type = BindType::View;
 			bind.ViewBind = alb_view;
-
-			sub_draw->PSBinds.push_back(bind);
+			std::vector<Bind> binds(templ->PSBinds.Data, templ->PSBinds.Data+templ->PSBinds.Count);
+			binds.push_back(bind);
+			sub_draw->PSBinds = alloc::MakeCopy(ps.alloc, binds);
 		}
 	}
 
@@ -3869,8 +3913,6 @@ void ReleaseData(RenderDescription* data)
 		delete buf;
 	for (Texture* tex : data->Textures)
 		delete tex;
-	for (ObjImport* obj : data->Objs)
-		delete obj;
 
 	alloc::FreeAll(&data->Alloc);
 	

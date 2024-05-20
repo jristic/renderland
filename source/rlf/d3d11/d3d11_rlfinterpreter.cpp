@@ -658,7 +658,7 @@ void ResolveBind(Bind& bind, ID3D11ShaderReflection* reflector, const char* path
 
 void PrepareConstants(
 	ID3D11Device* device, ID3D11ShaderReflection* reflector, 
-	std::vector<ConstantBuffer>& buffers, std::vector<SetConstant>& sets, 
+	std::vector<ConstantBuffer>& buffers, Array<SetConstant>& sets, 
 	const char* path)
 {
 	(void)path;
@@ -905,14 +905,14 @@ void InitMain(
 				draw->PShader->Common.ShaderPath);
 		}
 
-		size_t blendCount = draw->BlendStates.size();
+		u32 blendCount = draw->BlendStates.Count;
 		if (blendCount > 0)
 		{
 			InitAssert(blendCount <= 8, "Too blend states on draw, max is 8.");
 			D3D11_BLEND_DESC desc = {};
 			desc.AlphaToCoverageEnable = false;
 			desc.IndependentBlendEnable = blendCount > 1;
-			for (int i = 0 ; i < blendCount ; ++i)
+			for (u32 i = 0 ; i < blendCount ; ++i)
 			{
 				BlendState* blend = draw->BlendStates[i];
 				desc.RenderTarget[i].BlendEnable = blend->Enable;
@@ -1264,7 +1264,7 @@ do {											\
 	}											\
 } while (0);									\
 
-void ExecuteSetConstants(ExecuteContext* ec, std::vector<SetConstant>& sets, 
+void ExecuteSetConstants(ExecuteContext* ec, Array<SetConstant> sets, 
 	std::vector<ConstantBuffer>& buffers)
 {
 	ID3D11DeviceContext* ctx = ec->GfxCtx->DeviceContext;
@@ -1473,8 +1473,9 @@ void ExecuteDraw(
 		++rtCount;
 	}
 	ID3D11DepthStencilView* dsView = nullptr;
-	for (TextureTarget target : draw->DepthStencil)
+	if (draw->DepthStencil)
 	{
+		TextureTarget target = *draw->DepthStencil;
 		if (target.IsSystem)
 		{
 			if (target.System == SystemValue::DefaultDepth)
@@ -1497,7 +1498,7 @@ void ExecuteDraw(
 		vp[0].MinDepth = 0.0f;
 		vp[0].MaxDepth = 1.0f;
 	}
-	for (int i = 0 ; i < draw->Viewports.size() ; ++i)
+	for (u32 i = 0 ; i < draw->Viewports.Count ; ++i)
 	{
 		Viewport* v = draw->Viewports[i];
 		ast::Result res;
@@ -1531,19 +1532,19 @@ void ExecuteDraw(
 	ctx->OMSetDepthStencilState(draw->DSState ? draw->DSState->GfxState : nullptr,
 		draw->StencilRef);
 	ctx->OMSetBlendState(draw->BlendGfxState, nullptr, 0xffffffff);
-	if (!draw->VertexBuffers.empty())
+	if (draw->VertexBuffers.Count)
 	{
 		ID3D11Buffer* bufs[D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT] = {};
 		u32 elementSizes[D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT] = {};
 		u32 offsets[D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT] = {};
-		for (u32 i = 0 ; i < draw->VertexBuffers.size() ; ++i)
+		for (u32 i = 0 ; i < draw->VertexBuffers.Count ; ++i)
 		{
 			Buffer* vb = draw->VertexBuffers[i];
 			bufs[i] = vb->GfxState;
 			elementSizes[i] = vb->ElementSize;
 			offsets[i] = 0;
 		}
-		ctx->IASetVertexBuffers(0, (u32)draw->VertexBuffers.size(), bufs, elementSizes, 
+		ctx->IASetVertexBuffers(0, (u32)draw->VertexBuffers.Count, bufs, elementSizes, 
 			offsets);
 	}
 	Buffer* ib = draw->IndexBuffer;
