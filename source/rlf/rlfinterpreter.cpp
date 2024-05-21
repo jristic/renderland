@@ -51,7 +51,7 @@ void EvaluateExpression(ast::EvaluationContext& ec, ast::Expression& expr, ast::
 	Convert(res, expect.Fmt);
 }
 
-void EvaluateConstants(ast::EvaluationContext& ec, std::vector<Constant*>& cnsts)
+void EvaluateConstants(ast::EvaluationContext& ec, Array<Constant*> cnsts)
 {
 	for (Constant* cnst : cnsts)
 	{

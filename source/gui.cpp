@@ -71,11 +71,10 @@ void DisplayShaderConstants(std::vector<rlf::ConstantBuffer>& CBs, gfx::ShaderRe
 
 void DisplayShaderPasses(rlf::RenderDescription* rd)
 {
-	std::vector<rlf::Pass> passes = rd->Passes;
-	for (int i = 0 ; i < passes.size() ; ++i)
+	for (u32 i = 0 ; i < rd->Passes.Count ; ++i)
 	{
-		rlf::Pass& p = passes[i];
-		static int selected_index = -1;
+		const rlf::Pass& p = rd->Passes[i];
+		static u32 selected_index = U32_MAX;
 		if (ImGui::Selectable(p.Name ? p.Name : "anon", selected_index == i))
 			selected_index = i;
 		ImGui::Indent();

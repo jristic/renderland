@@ -411,7 +411,7 @@ namespace rlf
 	};
 	struct ObjDraw
 	{
-		std::vector<Draw*> PerMeshDraws;
+		Array<Draw*> PerMeshDraws;
 	};
 	struct Pass
 	{
@@ -444,21 +444,21 @@ namespace rlf
 	};
 	struct RenderDescription
 	{
-		std::vector<Pass> Passes;
-		std::vector<Dispatch*> Dispatches;
-		std::vector<Draw*> Draws;
-		std::vector<ObjDraw*> ObjDraws;
-		std::vector<ComputeShader*> CShaders;
-		std::vector<VertexShader*> VShaders;
-		std::vector<PixelShader*> PShaders;
-		std::vector<Buffer*> Buffers;
-		std::vector<Texture*> Textures;
-		std::vector<Sampler*> Samplers;
-		std::vector<View*> Views;
-		std::vector<RasterizerState*> RasterizerStates;
-		std::vector<DepthStencilState*> DepthStencilStates;
-		std::vector<Constant*> Constants;
-		std::vector<Tuneable*> Tuneables;
+		Array<Pass> Passes;
+		Array<Dispatch*> Dispatches;
+		Array<Draw*> Draws;
+		Array<ObjDraw*> ObjDraws;
+		Array<ComputeShader*> CShaders;
+		Array<VertexShader*> VShaders;
+		Array<PixelShader*> PShaders;
+		Array<Buffer*> Buffers;
+		Array<Texture*> Textures;
+		Array<Sampler*> Samplers;
+		Array<View*> Views;
+		Array<RasterizerState*> RasterizerStates;
+		Array<DepthStencilState*> DepthStencilStates;
+		Array<Constant*> Constants;
+		Array<Tuneable*> Tuneables;
 
 		alloc::LinAlloc Alloc;
 	};

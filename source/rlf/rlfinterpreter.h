@@ -33,7 +33,7 @@ namespace rlf
 	void EvaluateExpression(ast::EvaluationContext& ec, ast::Expression& expr, ast::Result& res);
 	void EvaluateExpression(ast::EvaluationContext& ec, ast::Expression& expr, ast::Result& res, 
 		VariableType expect, const char* name);
-	void EvaluateConstants(ast::EvaluationContext& ec, std::vector<Constant*>& cnsts);
+	void EvaluateConstants(ast::EvaluationContext& ec, Array<Constant*> cnsts);
 
 
 	void HandleTextureParametersChanged(

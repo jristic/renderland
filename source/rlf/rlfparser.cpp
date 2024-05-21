@@ -567,6 +567,21 @@ struct ParseState
 
 	const char* workingDirectory;
 
+	std::vector<Dispatch*> Dispatches;
+	std::vector<Draw*> Draws;
+	std::vector<ObjDraw*> ObjDraws;
+	std::vector<ComputeShader*> CShaders;
+	std::vector<VertexShader*> VShaders;
+	std::vector<PixelShader*> PShaders;
+	std::vector<Buffer*> Buffers;
+	std::vector<Texture*> Textures;
+	std::vector<Sampler*> Samplers;
+	std::vector<View*> Views;
+	std::vector<RasterizerState*> RasterizerStates;
+	std::vector<DepthStencilState*> DepthStencilStates;
+	std::vector<Constant*> Constants;
+	std::vector<Tuneable*> Tuneables;
+
 	alloc::LinAlloc* alloc;
 } *GPS;
 
@@ -1069,7 +1084,7 @@ AddressModeUVW ConsumeAddressModeUVW(TokenIter& t)
 View* ConsumeViewDef(TokenIter& t, ParseState& ps, ViewType vt)
 {
 	View* v = alloc::Allocate<View>(ps.alloc);
-	ps.rd->Views.push_back(v);
+	ps.Views.push_back(v);
 	v->Type = vt;
 	ConsumeToken(TokenType::LBrace, t);
 	while (true)
@@ -1158,7 +1173,7 @@ View* ConsumeViewRefOrDef(TokenIter& t, ParseState& ps, const char* id)
 		else if (res.type == ParseState::ResType::Buffer)
 		{
 			v = alloc::Allocate<View>(ps.alloc);
-			ps.rd->Views.push_back(v);
+			ps.Views.push_back(v);
 			v->Type = ViewType::Auto;
 			v->ResourceType = ResourceType::Buffer;
 			v->Buffer = (Buffer*)res.m;
@@ -1167,7 +1182,7 @@ View* ConsumeViewRefOrDef(TokenIter& t, ParseState& ps, const char* id)
 		else if (res.type == ParseState::ResType::Texture)
 		{
 			v = alloc::Allocate<View>(ps.alloc);
-			ps.rd->Views.push_back(v);
+			ps.Views.push_back(v);
 			v->Type = ViewType::Auto;
 			v->ResourceType = ResourceType::Texture;
 			v->Texture = (Texture*)res.m;
@@ -1604,7 +1619,7 @@ VariableType LookupVariableType(const char* id)
 Tuneable* ConsumeTuneable(TokenIter& t, ParseState& ps)
 {
 	Tuneable* tune = alloc::Allocate<Tuneable>(ps.alloc);
-	ps.rd->Tuneables.push_back(tune);
+	ps.Tuneables.push_back(tune);
 
 	const char* typeId = ConsumeIdentifier(t);
 	tune->Type = LookupVariableType(typeId);
@@ -1674,7 +1689,7 @@ Tuneable* ConsumeTuneable(TokenIter& t, ParseState& ps)
 Constant* ConsumeConstant(TokenIter& t, ParseState& ps)
 {
 	Constant* cnst = alloc::Allocate<Constant>(ps.alloc);
-	ps.rd->Constants.push_back(cnst);
+	ps.Constants.push_back(cnst);
 
 	const char* typeId = ConsumeIdentifier(t);
 	cnst->Type = LookupVariableType(typeId);
@@ -1892,10 +1907,8 @@ RasterizerState* ConsumeRasterizerStateDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	RenderDescription* rd = ps.rd;
-
 	RasterizerState* rs = alloc::Allocate<RasterizerState>(ps.alloc);
-	rd->RasterizerStates.push_back(rs);
+	ps.RasterizerStates.push_back(rs);
 
 	// non-zero defaults
 	rs->Fill = true;
@@ -1963,10 +1976,8 @@ DepthStencilState* ConsumeDepthStencilStateDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	RenderDescription* rd = ps.rd;
-
 	DepthStencilState* dss = alloc::Allocate<DepthStencilState>(ps.alloc);
-	rd->DepthStencilStates.push_back(dss);
+	ps.DepthStencilStates.push_back(dss);
 
 	// non-zero defaults
 	dss->DepthEnable = true;
@@ -2149,10 +2160,8 @@ ComputeShader* ConsumeComputeShaderDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	RenderDescription* rd = ps.rd;
-
 	ComputeShader* cs = new ComputeShader();
-	rd->CShaders.push_back(cs);
+	ps.CShaders.push_back(cs);
 
 	static StructEntry def[] = {
 		StructEntryDefEx(ComputeShader, String, ShaderPath, Common.ShaderPath),
@@ -2186,10 +2195,8 @@ VertexShader* ConsumeVertexShaderDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	RenderDescription* rd = ps.rd;
-
 	VertexShader* vs = new VertexShader();
-	rd->VShaders.push_back(vs);
+	ps.VShaders.push_back(vs);
 
 	static StructEntry def[] = {
 		StructEntryDefEx(VertexShader, String, ShaderPath, Common.ShaderPath),
@@ -2224,10 +2231,8 @@ PixelShader* ConsumePixelShaderDef(
 	TokenIter& t,
 	ParseState& state)
 {
-	RenderDescription* rd = state.rd;
-
 	PixelShader* ps = new PixelShader();
-	rd->PShaders.push_back(ps);
+	state.PShaders.push_back(ps);
 
 	static StructEntry def[] = {
 		StructEntryDefEx(PixelShader, String, ShaderPath, Common.ShaderPath),
@@ -2413,12 +2418,10 @@ Buffer* ConsumeBufferDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	RenderDescription* rd = ps.rd;
-
 	ConsumeToken(TokenType::LBrace, t);
 
-	Buffer* buf = new Buffer();
-	rd->Buffers.push_back(buf);
+	Buffer* buf = alloc::Allocate<Buffer>(ps.alloc);
+	ps.Buffers.push_back(buf);
 
 	std::vector<u16> initDataU16;
 	std::vector<u32> initDataU32;
@@ -2607,10 +2610,8 @@ Texture* ConsumeTextureDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	RenderDescription* rd = ps.rd;
-
-	Texture* tex = new Texture();
-	rd->Textures.push_back(tex);
+	Texture* tex = alloc::Allocate<Texture>(ps.alloc);
+	ps.Textures.push_back(tex);
 
 	// non-zero defaults
 	tex->Format = TextureFormat::R8G8B8A8_UNORM;
@@ -2640,10 +2641,8 @@ Sampler* ConsumeSamplerDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	RenderDescription* rd = ps.rd;
-
 	Sampler* s = alloc::Allocate<Sampler>(ps.alloc);
-	rd->Samplers.push_back(s);
+	ps.Samplers.push_back(s);
 
 	// non-zero defaults
 	s->MinLOD = -FLT_MAX;
@@ -2671,12 +2670,10 @@ Dispatch* ConsumeDispatchDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	RenderDescription* rd = ps.rd;
-
 	ConsumeToken(TokenType::LBrace, t);
 
 	Dispatch* dc = new Dispatch();
-	rd->Dispatches.push_back(dc);
+	ps.Dispatches.push_back(dc);
 
 	std::vector<Bind> binds;
 	std::vector<SetConstant> constants;
@@ -2756,12 +2753,10 @@ Draw* ConsumeDrawDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	RenderDescription* rd = ps.rd;
-
 	ConsumeToken(TokenType::LBrace, t);
 
 	Draw* draw = new Draw();
-	rd->Draws.push_back(draw);
+	ps.Draws.push_back(draw);
 
 	// non-zero defaults
 	draw->Topology = Topology::TriList;
@@ -3269,12 +3264,10 @@ ObjDraw* ConsumeObjDrawDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	RenderDescription* rd = ps.rd;
-
 	ConsumeToken(TokenType::LBrace, t);
 
-	ObjDraw* objDraw = new ObjDraw();
-	rd->ObjDraws.push_back(objDraw);
+	ObjDraw* objDraw = alloc::Allocate<ObjDraw>(ps.alloc);
+	ps.ObjDraws.push_back(objDraw);
 
 	Draw* templ = nullptr;
 	const char* objPath = nullptr;
@@ -3345,13 +3338,15 @@ ObjDraw* ConsumeObjDrawDef(
 		}
 	};
 
+	std::vector<Draw*> perMeshDraws;
+
 	for (size_t shape_idx = 0 ; shape_idx < shapes.size() ; ++shape_idx)
 	{
 		tinyobj::shape_t& shape = shapes[shape_idx];
 
 		Draw* sub_draw = new Draw();
-		rd->Draws.push_back(sub_draw);
-		objDraw->PerMeshDraws.push_back(sub_draw);
+		ps.Draws.push_back(sub_draw);
+		perMeshDraws.push_back(sub_draw);
 		// copy state to the sub draw
 		*sub_draw = *templ;
 		// The arrays which will be updated by the D3D init phase need to be cloned 
@@ -3446,16 +3441,16 @@ ObjDraw* ConsumeObjDrawDef(
 			memcpy(indices, idxs.data(), indicesSize);
 		}
 
-		Buffer* vbuf = new Buffer();
-		rd->Buffers.push_back(vbuf);
+		Buffer* vbuf = alloc::Allocate<Buffer>(ps.alloc);
+		ps.Buffers.push_back(vbuf);
 		vbuf->InitData = vertices;
 		vbuf->ElementSize = sizeof(Vertex);
 		vbuf->ElementCount = vertexCount;
 		vbuf->InitDataSize = vbuf->ElementSize * vbuf->ElementCount;
 		vbuf->Flags = BufferFlag_Vertex;
 
-		Buffer* ibuf = new Buffer();
-		rd->Buffers.push_back(ibuf);
+		Buffer* ibuf = alloc::Allocate<Buffer>(ps.alloc);
+		ps.Buffers.push_back(ibuf);
 		ibuf->InitData = indices;
 		ibuf->ElementSize = isU16 ? 2 : 4;
 		ibuf->ElementCount = indexCount;
@@ -3469,13 +3464,13 @@ ObjDraw* ConsumeObjDrawDef(
 		tinyobj::material_t& material = materials[material_id];
 		if (!material.ambient_texname.empty())
 		{
-			Texture* alb_tex = new Texture();
-			rd->Textures.push_back(alb_tex);
+			Texture* alb_tex = alloc::Allocate<Texture>(ps.alloc);
+			ps.Textures.push_back(alb_tex);
 			alb_tex->FromFile = AddStringToDescriptionData(
 				material.ambient_texname.c_str(), ps);
 
 			View* alb_view = alloc::Allocate<View>(ps.alloc);
-			rd->Views.push_back(alb_view);
+			ps.Views.push_back(alb_view);
 			alb_view->Type = ViewType::SRV;
 			alb_view->ResourceType = ResourceType::Texture;
 			alb_view->Texture = alb_tex;
@@ -3490,6 +3485,8 @@ ObjDraw* ConsumeObjDrawDef(
 			sub_draw->PSBinds = alloc::MakeCopy(ps.alloc, binds);
 		}
 	}
+
+	objDraw->PerMeshDraws = alloc::MakeCopy(ps.alloc, perMeshDraws);
 
 	return objDraw;
 }
@@ -3809,16 +3806,18 @@ void ParseMain()
 		{
 			ConsumeToken(TokenType::LBrace, t);
 
+			std::vector<Pass> passes;
 			while (true)
 			{
 				Pass pass = ConsumePassRefOrDef(t, ps);
-				rd->Passes.push_back(pass);
+				passes.push_back(pass);
 
 				if (TryConsumeToken(TokenType::RBrace, t))
 					break;
 				else 
 					ConsumeToken(TokenType::Comma, t);
 			}
+			rd->Passes = alloc::MakeCopy(ps.alloc, passes);
 			break;
 		}
 		case Keyword::Tuneable:
@@ -3835,6 +3834,21 @@ void ParseMain()
 			ParserError("Unexpected structure: %s", id);
 		}
 	}
+
+	rd->Dispatches = alloc::MakeCopy(ps.alloc, ps.Dispatches);
+	rd->Draws = alloc::MakeCopy(ps.alloc, ps.Draws);
+	rd->ObjDraws = alloc::MakeCopy(ps.alloc, ps.ObjDraws);
+	rd->CShaders = alloc::MakeCopy(ps.alloc, ps.CShaders);
+	rd->VShaders = alloc::MakeCopy(ps.alloc, ps.VShaders);
+	rd->PShaders = alloc::MakeCopy(ps.alloc, ps.PShaders);
+	rd->Buffers = alloc::MakeCopy(ps.alloc, ps.Buffers);
+	rd->Textures = alloc::MakeCopy(ps.alloc, ps.Textures);
+	rd->Samplers = alloc::MakeCopy(ps.alloc, ps.Samplers);
+	rd->Views = alloc::MakeCopy(ps.alloc, ps.Views);
+	rd->RasterizerStates = alloc::MakeCopy(ps.alloc, ps.RasterizerStates);
+	rd->DepthStencilStates = alloc::MakeCopy(ps.alloc, ps.DepthStencilStates);
+	rd->Constants = alloc::MakeCopy(ps.alloc, ps.Constants);
+	rd->Tuneables = alloc::MakeCopy(ps.alloc, ps.Tuneables);
 }
 
 
@@ -3901,18 +3915,12 @@ void ReleaseData(RenderDescription* data)
 		delete dc;
 	for (Draw* draw : data->Draws)
 		delete draw;
-	for (ObjDraw* objDraw : data->ObjDraws)
-		delete objDraw;
 	for (ComputeShader* cs : data->CShaders)
 		delete cs;
 	for (VertexShader* vs : data->VShaders)
 		delete vs;
 	for (PixelShader* ps : data->PShaders)
 		delete ps;
-	for (Buffer* buf : data->Buffers)
-		delete buf;
-	for (Texture* tex : data->Textures)
-		delete tex;
 
 	alloc::FreeAll(&data->Alloc);
 	
