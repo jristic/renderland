@@ -2672,7 +2672,7 @@ Dispatch* ConsumeDispatchDef(
 {
 	ConsumeToken(TokenType::LBrace, t);
 
-	Dispatch* dc = new Dispatch();
+	Dispatch* dc = alloc::Allocate<Dispatch>(ps.alloc);
 	ps.Dispatches.push_back(dc);
 
 	std::vector<Bind> binds;
@@ -2755,7 +2755,7 @@ Draw* ConsumeDrawDef(
 {
 	ConsumeToken(TokenType::LBrace, t);
 
-	Draw* draw = new Draw();
+	Draw* draw = alloc::Allocate<Draw>(ps.alloc);
 	ps.Draws.push_back(draw);
 
 	// non-zero defaults
@@ -3344,7 +3344,7 @@ ObjDraw* ConsumeObjDrawDef(
 	{
 		tinyobj::shape_t& shape = shapes[shape_idx];
 
-		Draw* sub_draw = new Draw();
+		Draw* sub_draw = alloc::Allocate<Draw>(ps.alloc);
 		ps.Draws.push_back(sub_draw);
 		perMeshDraws.push_back(sub_draw);
 		// copy state to the sub draw
@@ -3911,10 +3911,6 @@ void ReleaseData(RenderDescription* data)
 {
 	Assert(data, "Invalid pointer.");
 
-	for (Dispatch* dc : data->Dispatches)
-		delete dc;
-	for (Draw* draw : data->Draws)
-		delete draw;
 	for (ComputeShader* cs : data->CShaders)
 		delete cs;
 	for (VertexShader* vs : data->VShaders)

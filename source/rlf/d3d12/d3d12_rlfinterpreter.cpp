@@ -1265,7 +1265,7 @@ void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
 }
 
 void CopyConstantBufferDescriptors(gfx::Context* ctx, const gfx::DescriptorTable* table,
-	const gfx::BindInfo* bi, const std::vector<ConstantBuffer>& CBs)
+	const gfx::BindInfo* bi, Array<ConstantBuffer> CBs)
 {
 	for (const ConstantBuffer& buf : CBs)
 	{
@@ -1291,12 +1291,13 @@ u32 AlignU32(u32 val, u32 align)
 
 void PrepareConstants(
 	gfx::Context* ctx, ID3D12ShaderReflection* reflector, 
-	std::vector<ConstantBuffer>& buffers, Array<SetConstant> sets, 
-	const char* path)
+	Array<ConstantBuffer>& buffers, Array<SetConstant> sets, 
+	RenderDescription* rd, const char* path)
 {
 	D3D12_SHADER_DESC sd;
 	reflector->GetDesc(&sd);
 	HRESULT hr;
+	std::vector<ConstantBuffer> tempBuffers;
 	for (u32 i = 0 ; i < sd.ConstantBuffers ; ++i)
 	{
 		ConstantBuffer cb = {};
@@ -1308,7 +1309,11 @@ void PrepareConstants(
 		if (bd.Type != D3D_CT_CBUFFER)
 			continue;
 
-		cb.Name = bd.Name;
+		size_t len = strlen(bd.Name);
+		Assert(len < ConstantBuffer::MAX_NAME_LENGTH, "String too long.");
+		strcpy(cb.Name, bd.Name);
+		cb.Name[len] = '\0';
+
 		cb.Size = bd.Size;
 		cb.BackingMemory = (u8*)malloc(bd.Size);
 
@@ -1380,8 +1385,10 @@ void PrepareConstants(
 			}
 		}
 
-		buffers.push_back(cb);
+		tempBuffers.push_back(cb);
 	}
+
+	buffers = alloc::MakeCopy(&rd->Alloc, tempBuffers);
 
 	for (SetConstant& set : sets)
 	{
@@ -1416,7 +1423,7 @@ void PrepareConstants(
 		bool found = false;
 		for (ConstantBuffer& con : buffers)
 		{
-			if (con.Name == cbufname)
+			if (strcmp(con.Name, cbufname) == 0)
 			{
 				set.CB = &con;
 				found = true;
@@ -1554,7 +1561,7 @@ void InitMain(
 		{
 			ResolveBind(bind, reflector, cs->Common.ShaderPath);
 		}
-		PrepareConstants(ctx, reflector, dc->CBs, dc->Constants, cs->Common.ShaderPath);
+		PrepareConstants(ctx, reflector, dc->CBs, dc->Constants, rd, cs->Common.ShaderPath);
 	}
 
 	for (Draw* draw : rd->Draws)
@@ -1566,7 +1573,7 @@ void InitMain(
 			ResolveBind(bind, reflector, draw->VShader->Common.ShaderPath);
 		}
 		PrepareConstants(ctx, reflector, draw->VSCBs, draw->VSConstants,
-			draw->VShader->Common.ShaderPath);
+			rd, draw->VShader->Common.ShaderPath);
 		if (draw->PShader)
 		{
 			reflector = draw->PShader->Common.Reflector;
@@ -1575,7 +1582,7 @@ void InitMain(
 				ResolveBind(bind, reflector, draw->PShader->Common.ShaderPath);
 			}
 			PrepareConstants(ctx, reflector, draw->PSCBs, draw->PSConstants,
-				draw->PShader->Common.ShaderPath);
+				rd, draw->PShader->Common.ShaderPath);
 		}
 
 		CreateRootSignature(device, draw);
@@ -2080,7 +2087,7 @@ do {											\
 } while (0);									\
 
 void ExecuteSetConstants(ExecuteContext* ec, Array<SetConstant> sets, 
-	std::vector<ConstantBuffer>& buffers)
+	Array<ConstantBuffer> buffers)
 {
 	gfx::Context* ctx = ec->GfxCtx;
 	for (SetConstant& set : sets)

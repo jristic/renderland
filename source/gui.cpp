@@ -2,7 +2,7 @@
 namespace gui {
 
 
-void DisplayShaderConstants(std::vector<rlf::ConstantBuffer>& CBs, gfx::ShaderReflection reflector)
+void DisplayShaderConstants(rlf::Array<rlf::ConstantBuffer> CBs, gfx::ShaderReflection reflector)
 {
 #if D3D11
 	D3D11_SHADER_DESC sd;

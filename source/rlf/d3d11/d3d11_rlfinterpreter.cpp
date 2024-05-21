@@ -662,12 +662,13 @@ void ResolveBind(Bind& bind, ID3D11ShaderReflection* reflector, const char* path
 
 void PrepareConstants(
 	ID3D11Device* device, ID3D11ShaderReflection* reflector, 
-	std::vector<ConstantBuffer>& buffers, Array<SetConstant>& sets, 
-	const char* path)
+	Array<ConstantBuffer>& buffers, Array<SetConstant>& sets, 
+	RenderDescription* rd, const char* path)
 {
 	(void)path;
 	D3D11_SHADER_DESC sd;
 	reflector->GetDesc(&sd);
+	std::vector<ConstantBuffer> tempBuffers;
 	for (u32 i = 0 ; i < sd.ConstantBuffers ; ++i)
 	{
 		ConstantBuffer cb = {};
@@ -679,7 +680,11 @@ void PrepareConstants(
 		if (bd.Type != D3D11_CT_CBUFFER)
 			continue;
 
-		cb.Name = bd.Name;
+		size_t len = strlen(bd.Name);
+		Assert(len < ConstantBuffer::MAX_NAME_LENGTH, "String too long.");
+		strcpy(cb.Name, bd.Name);
+		cb.Name[len] = '\0';
+
 		cb.Size = bd.Size;
 		cb.BackingMemory = (u8*)malloc(bd.Size);
 
@@ -718,8 +723,10 @@ void PrepareConstants(
 			}
 		}
 
-		buffers.push_back(cb);
+		tempBuffers.push_back(cb);
 	}
+
+	buffers = alloc::MakeCopy(&rd->Alloc, tempBuffers);
 
 	for (SetConstant& set : sets)
 	{
@@ -754,7 +761,7 @@ void PrepareConstants(
 		bool found = false;
 		for (ConstantBuffer& con : buffers)
 		{
-			if (con.Name == cbufname)
+			if (strcmp(con.Name, cbufname) == 0)
 			{
 				set.CB = &con;
 				found = true;
@@ -885,7 +892,7 @@ void InitMain(
 			ResolveBind(bind, reflector, dc->Shader->Common.ShaderPath);
 		}
 		PrepareConstants(device, reflector, dc->CBs, dc->Constants,
-			dc->Shader->Common.ShaderPath);
+			rd, dc->Shader->Common.ShaderPath);
 	}
 
 	for (Draw* draw : rd->Draws)
@@ -897,7 +904,7 @@ void InitMain(
 			ResolveBind(bind, reflector, draw->VShader->Common.ShaderPath);
 		}
 		PrepareConstants(device, reflector, draw->VSCBs, draw->VSConstants,
-			draw->VShader->Common.ShaderPath);
+			rd, draw->VShader->Common.ShaderPath);
 		if (draw->PShader)
 		{
 			reflector = draw->PShader->Common.Reflector;
@@ -906,7 +913,7 @@ void InitMain(
 				ResolveBind(bind, reflector, draw->PShader->Common.ShaderPath);
 			}
 			PrepareConstants(device, reflector, draw->PSCBs, draw->PSConstants,
-				draw->PShader->Common.ShaderPath);
+				rd, draw->PShader->Common.ShaderPath);
 		}
 
 		u32 blendCount = draw->BlendStates.Count;
@@ -1269,7 +1276,7 @@ do {											\
 } while (0);									\
 
 void ExecuteSetConstants(ExecuteContext* ec, Array<SetConstant> sets, 
-	std::vector<ConstantBuffer>& buffers)
+	Array<ConstantBuffer> buffers)
 {
 	ID3D11DeviceContext* ctx = ec->GfxCtx->DeviceContext;
 	for (SetConstant& set : sets)

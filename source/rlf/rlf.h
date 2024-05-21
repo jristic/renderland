@@ -326,9 +326,10 @@ namespace rlf
 	};
 	struct ConstantBuffer
 	{
+		constexpr static u32 MAX_NAME_LENGTH = 64;
 		u8* BackingMemory;
 		gfx::ConstantBuffer GfxState;
-		std::string Name;
+		char Name[MAX_NAME_LENGTH];
 		u32 Slot;
 		u32 Size;
 	};
@@ -350,7 +351,7 @@ namespace rlf
 		u32 IndirectArgsOffset;
 		Array<Bind> Binds;
 		Array<SetConstant> Constants;
-		std::vector<ConstantBuffer> CBs;
+		Array<ConstantBuffer> CBs;
 		gfx::DispatchData GfxState;
 	};
 	struct TextureTarget
@@ -384,8 +385,8 @@ namespace rlf
 		Array<Bind> PSBinds;
 		Array<SetConstant> VSConstants;
 		Array<SetConstant> PSConstants;
-		std::vector<ConstantBuffer> VSCBs;
-		std::vector<ConstantBuffer> PSCBs;
+		Array<ConstantBuffer> VSCBs;
+		Array<ConstantBuffer> PSCBs;
 		gfx::BlendState BlendGfxState;
 		gfx::DrawData GfxState;
 	};
