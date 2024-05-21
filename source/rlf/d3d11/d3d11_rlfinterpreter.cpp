@@ -463,13 +463,16 @@ void CreateTexture(ID3D11Device* device, Texture* tex)
 void CreateBuffer(ID3D11Device* device, Buffer* buf)
 {
 	u32 bufSize = buf->ElementSize * buf->ElementCount;
-	void* initData = malloc(bufSize);
+	void* initData = nullptr;
 	if (buf->InitToZero)
+	{
+		initData = malloc(bufSize);
 		ZeroMemory(initData, bufSize);
+	}
 	else if (buf->InitDataSize > 0)
 	{
 		Assert(buf->InitData, "No data but size is set");
-		memcpy(initData, buf->InitData, buf->InitDataSize);
+		initData = buf->InitData;
 	}
 
 	D3D11_SUBRESOURCE_DATA subRes = {};
@@ -485,7 +488,8 @@ void CreateBuffer(ID3D11Device* device, Buffer* buf)
 
 	HRESULT hr = device->CreateBuffer(&desc, subRes.pSysMem ? &subRes : nullptr,
 		&buf->GfxState);
-	free(initData);
+	if (buf->InitToZero)
+		free(initData);
 	CheckHresult(hr, "Buffer");
 }
 
