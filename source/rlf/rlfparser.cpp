@@ -573,6 +573,7 @@ struct ParseState
 	std::vector<ComputeShader*> CShaders;
 	std::vector<VertexShader*> VShaders;
 	std::vector<PixelShader*> PShaders;
+	std::vector<SizeOfRequest> SizeOfRequests;
 	std::vector<Buffer*> Buffers;
 	std::vector<Texture*> Textures;
 	std::vector<Sampler*> Samplers;
@@ -1286,7 +1287,10 @@ ast::Node* ConsumeAstLeaf(TokenIter& t, ParseState& ps)
 				ast::SizeOf* sizeOf = AllocateAst<ast::SizeOf>(ps);
 				sizeOf->StructName = AddStringToDescriptionData(structName, ps);
 				sizeOf->Size = 0;
-				shader->SizeRequests.push_back(sizeOf);
+				SizeOfRequest req;
+				req.Shader = shader;
+				req.Dest = sizeOf;
+				ps.SizeOfRequests.push_back(req);
 				ConsumeToken(TokenType::RParen, t);
 				ast = &sizeOf->Common;
 			}
@@ -2160,7 +2164,7 @@ ComputeShader* ConsumeComputeShaderDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	ComputeShader* cs = new ComputeShader();
+	ComputeShader* cs = alloc::Allocate<ComputeShader>(ps.alloc);
 	ps.CShaders.push_back(cs);
 
 	static StructEntry def[] = {
@@ -2195,7 +2199,7 @@ VertexShader* ConsumeVertexShaderDef(
 	TokenIter& t,
 	ParseState& ps)
 {
-	VertexShader* vs = new VertexShader();
+	VertexShader* vs = alloc::Allocate<VertexShader>(ps.alloc);
 	ps.VShaders.push_back(vs);
 
 	static StructEntry def[] = {
@@ -2231,7 +2235,7 @@ PixelShader* ConsumePixelShaderDef(
 	TokenIter& t,
 	ParseState& state)
 {
-	PixelShader* ps = new PixelShader();
+	PixelShader* ps = alloc::Allocate<PixelShader>(state.alloc);
 	state.PShaders.push_back(ps);
 
 	static StructEntry def[] = {
@@ -3841,6 +3845,7 @@ void ParseMain()
 	rd->CShaders = alloc::MakeCopy(ps.alloc, ps.CShaders);
 	rd->VShaders = alloc::MakeCopy(ps.alloc, ps.VShaders);
 	rd->PShaders = alloc::MakeCopy(ps.alloc, ps.PShaders);
+	rd->SizeOfRequests = alloc::MakeCopy(ps.alloc, ps.SizeOfRequests);
 	rd->Buffers = alloc::MakeCopy(ps.alloc, ps.Buffers);
 	rd->Textures = alloc::MakeCopy(ps.alloc, ps.Textures);
 	rd->Samplers = alloc::MakeCopy(ps.alloc, ps.Samplers);
@@ -3910,14 +3915,6 @@ RenderDescription* ParseBuffer(
 void ReleaseData(RenderDescription* data)
 {
 	Assert(data, "Invalid pointer.");
-
-	for (ComputeShader* cs : data->CShaders)
-		delete cs;
-	for (VertexShader* vs : data->VShaders)
-		delete vs;
-	for (PixelShader* ps : data->PShaders)
-		delete ps;
-
 	alloc::FreeAll(&data->Alloc);
 	
 	delete data;

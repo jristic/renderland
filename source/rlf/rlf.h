@@ -219,7 +219,6 @@ namespace rlf
 		const char* ShaderPath;
 		const char* EntryPoint;
 		gfx::ShaderReflection Reflector;
-		std::vector<ast::SizeOf*> SizeRequests;
 	};
 	struct ComputeShader
 	{
@@ -238,6 +237,11 @@ namespace rlf
 	{
 		CommonShader Common;
 		gfx::PixelShader GfxState;
+	};
+	struct SizeOfRequest
+	{
+		CommonShader* Shader;
+		ast::SizeOf* Dest;
 	};
 	struct ObjImport 
 	{
@@ -452,6 +456,7 @@ namespace rlf
 		Array<ComputeShader*> CShaders;
 		Array<VertexShader*> VShaders;
 		Array<PixelShader*> PShaders;
+		Array<SizeOfRequest> SizeOfRequests;
 		Array<Buffer*> Buffers;
 		Array<Texture*> Textures;
 		Array<Sampler*> Samplers;

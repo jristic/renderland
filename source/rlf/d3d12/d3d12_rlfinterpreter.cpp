@@ -259,7 +259,8 @@ D3D12_INPUT_CLASSIFICATION RlfToD3d(InputClassification ic)
 }
 
 ID3DBlob* CommonCompileShader(CommonShader* common, const char* dirPath, const char* profile, 
-	ErrorState* errorState)
+	ErrorState* errorState,
+	std::unordered_map< CommonShader*, std::vector<ast::SizeOf*> >& sizeRequests)
 {
 	std::string shaderPath = std::string(dirPath) + common->ShaderPath;
 	const char* path = shaderPath.c_str();
@@ -306,7 +307,8 @@ ID3DBlob* CommonCompileShader(CommonShader* common, const char* dirPath, const c
 	}
 	SafeRelease(errorBlob);
 	
-	if (common->SizeRequests.size() > 0)
+	auto it = sizeRequests.find(common);
+	if (it != sizeRequests.end())
 	{
 		std::unordered_map<std::string, u32> structSizes;
 		ErrorState es;
@@ -316,7 +318,7 @@ ID3DBlob* CommonCompileShader(CommonShader* common, const char* dirPath, const c
 			free(shaderBuffer);
 			InitError("Failed to parse shader:\n%s", es.Info.Message.c_str());
 		}
-		for (ast::SizeOf* request : common->SizeRequests)
+		for (ast::SizeOf* request : it->second)
 		{
 			auto search = structSizes.find(request->StructName);
 			InitAssert(search != structSizes.end(), 
@@ -1496,10 +1498,21 @@ void InitMain(
 
 	std::string dirPath = workingDirectory;
 
+	std::unordered_map< CommonShader*, std::vector<ast::SizeOf*> > sizeRequests;
+
+	for (SizeOfRequest req : rd->SizeOfRequests)
+	{
+		auto it = sizeRequests.find(req.Shader);
+		if (it != sizeRequests.end())
+			it->second.push_back(req.Dest);
+		else
+			sizeRequests[req.Shader] = std::vector<ast::SizeOf*>(1, req.Dest);
+	}
+
 	for (ComputeShader* cs : rd->CShaders)
 	{
 		ID3DBlob* shaderBlob = CommonCompileShader(&cs->Common, workingDirectory,
-			"cs_5_0", errorState);
+			"cs_5_0", errorState, sizeRequests);
 
 		HRESULT hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
 			IID_ID3D12ShaderReflection, (void**) &cs->Common.Reflector);
@@ -1528,7 +1541,7 @@ void InitMain(
 	for (VertexShader* vs : rd->VShaders)
 	{
 		ID3DBlob* shaderBlob = CommonCompileShader(&vs->Common, workingDirectory,
-			"vs_5_0", errorState);
+			"vs_5_0", errorState, sizeRequests);
 
 		HRESULT hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
 			IID_ID3D12ShaderReflection, (void**) &vs->Common.Reflector);
@@ -1542,7 +1555,7 @@ void InitMain(
 	for (PixelShader* ps : rd->PShaders)
 	{
 		ID3DBlob* shaderBlob = CommonCompileShader(&ps->Common, workingDirectory,
-			"ps_5_0", errorState);
+			"ps_5_0", errorState, sizeRequests);
 
 		HRESULT hr = D3DReflect( shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), 
 			IID_ID3D12ShaderReflection, (void**) &ps->Common.Reflector);
