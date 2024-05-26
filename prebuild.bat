@@ -15,7 +15,7 @@ if /i "%1"=="release" (
 	set ConfigLinkerOptions=/opt:noref /debug /libpath:external/directxtex/debug
 )
 
-set CommonCompilerDefines=/D_CRT_SECURE_NO_WARNINGS %ProjectPlatformDefines%
+set CommonCompilerDefines=/D_CRT_SECURE_NO_WARNINGS /D%GfxApi%
 
 set CommonCompilerFlags=%ConfigCompilerOptions% /nologo /fp:fast /Gm- /GR- /EHsc /WX /W4 /FC /Z7 %CommonCompilerDefines% /I%ExternalPath% /I%ExternalPath%/imgui
 
