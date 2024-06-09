@@ -2,6 +2,14 @@
 namespace rlf {
 namespace ast {
 
+
+#define NODE_TYPE_ENTRY(type, eval_func, dep_func) \
+	static_assert(offsetof(type, Common) == 0, \
+		"Common must be first member of AST nodes for pointer casting to work.");
+NODE_TYPE_TUPLE
+#undef NODE_TYPE_ENTRY
+
+
 void Evaluate(const Node* node, const EvaluationContext& ec, Result& res);
 
 void Evaluate(const EvaluationContext& ec, Expression& expr, Result& res, 
