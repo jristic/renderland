@@ -55,8 +55,6 @@ ImTextureID RetrieveDisplayTextureID(main::State* s)
 		SafeRelease(s->RlfDisplaySrv);
 		SafeRelease(s->RlfDisplayRtv);
 		SafeRelease(s->RlfDisplayTex);
-		SafeRelease(s->RlfDepthStencilView);
-		SafeRelease(s->RlfDepthStencilTex);
 
 		D3D11_TEXTURE2D_DESC desc = {};
 		desc.Width = s->DisplaySize.x;
@@ -77,27 +75,14 @@ ImTextureID RetrieveDisplayTextureID(main::State* s)
 		ctx->Device->CreateRenderTargetView(s->RlfDisplayTex, nullptr, &s->RlfDisplayRtv);
 		ctx->Device->CreateUnorderedAccessView(s->RlfDisplayTex, nullptr, &s->RlfDisplayUav);
 		ctx->Device->CreateShaderResourceView(s->RlfDisplayTex, nullptr, &s->RlfDisplaySrv);
-
-		desc = {};
-		desc.Width = s->DisplaySize.x;
-		desc.Height = s->DisplaySize.y;
-		desc.MipLevels = 1;
-		desc.ArraySize = 1;
-		desc.Format = DXGI_FORMAT_D32_FLOAT;
-		desc.SampleDesc.Count = 1;
-		desc.SampleDesc.Quality = 0;
-		desc.Usage = D3D11_USAGE_DEFAULT;
-		desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
-		desc.CPUAccessFlags = 0;
-		desc.MiscFlags = 0;
-
-		hr = ctx->Device->CreateTexture2D(&desc, nullptr, &s->RlfDepthStencilTex);
-		Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
-		hr = ctx->Device->CreateDepthStencilView(s->RlfDepthStencilTex, nullptr, 
-			&s->RlfDepthStencilView);
-		Assert(hr == S_OK, "failed to create depthstencil view, hr=%x", hr);
 	}
-	return s->RlfDisplaySrv;
+	if (s->RlfCompileSuccess)
+	{
+		Assert(s->CurrentRenderDesc->OutputViews.Count > 0, "No texture to display.");
+		return s->CurrentRenderDesc->OutputViews[0];
+	}
+	else
+		return s->RlfDisplaySrv;
 }
 
 bool CheckD3DValidation(gfx::Context* ctx, std::string& outMessage)
@@ -287,8 +272,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		};
 		Gfx.DeviceContext->ClearRenderTargetView(State.RlfDisplayRtv, 
 			clear_color_with_alpha);
-		Gfx.DeviceContext->ClearDepthStencilView(State.RlfDepthStencilView, 
-			D3D11_CLEAR_DEPTH, 1.f, 0);
 
 		// Dispatch our shader
 		main::DoRender(&State);
@@ -322,8 +305,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	SafeRelease(State.RlfDisplaySrv);
 	SafeRelease(State.RlfDisplayRtv);
 	SafeRelease(State.RlfDisplayTex);
-	SafeRelease(State.RlfDepthStencilView);
-	SafeRelease(State.RlfDepthStencilTex);
 
 	SafeRelease(Gfx.BackBufferRtv);
 	SafeRelease(Gfx.SwapChain);

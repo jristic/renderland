@@ -4,6 +4,11 @@ Tuneable int Speed [-20,20] = 10;
 Tuneable float Wavelength [0,100] = 30;
 Tuneable uint CheckerSize [1,10] = 4;
 
+Texture {
+	Size = DisplaySize();
+	Flags = {SRV,UAV};
+} RT
+
 ComputeShader {
 	ShaderPath = "shader.hlsl";
 	EntryPoint = "CSMain";
@@ -12,7 +17,7 @@ ComputeShader {
 Dispatch {
 	Shader = testShader;
 	ThreadPerPixel = true;
-	Bind OutTexture = @BackBuffer;
+	Bind OutTexture = RT;
 	SetConstant TextureSize = DisplaySize();
 	SetConstant Time = Time();
 	SetConstant Clockwise = Clockwise;
@@ -24,3 +29,5 @@ Dispatch {
 Passes {
 	perPixelDispatch
 }
+
+output RT

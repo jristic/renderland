@@ -88,6 +88,10 @@ SRV {
 	Format = X24_TYPELESS_G8_UINT;
 } stencilSrv
 
+Texture {
+	Size = DisplaySize();
+	Flags = {SRV, UAV};
+} Out
 
 Dispatch {
 	Shader = ComputeShader {
@@ -208,7 +212,7 @@ Dispatch {
 	ThreadPerPixel = true; 
 	bind Depth = depthSrv;
 	bind Stencil = stencilSrv;
-	Bind OutTexture = @BackBuffer;
+	Bind OutTexture = Out;
 	setconstant TextureSize = DisplaySize();
 } resolvePass
 
@@ -223,3 +227,5 @@ Passes {
 	drawFloorColor,
 	resolvePass
 }
+
+Output Out

@@ -104,7 +104,6 @@ ImTextureID RetrieveDisplayTextureID(main::State* s)
 		WaitForLastSubmittedFrame(ctx);
 		
 		SafeRelease(s->RlfDisplayTex.Resource);
-		SafeRelease(s->RlfDepthStencilTex.Resource);
 
 		// create display texture
 		{
@@ -164,46 +163,21 @@ ImTextureID RetrieveDisplayTextureID(main::State* s)
 			ctx->Device->CreateRenderTargetView(s->RlfDisplayTex.Resource, nullptr, 
 				s->RlfDisplayRtv);
 		}
-
-		// create depth stencil
-		{
-			D3D12_RESOURCE_DESC desc = {};
-			desc.Format = DXGI_FORMAT_D32_FLOAT;
-			desc.Width = s->DisplaySize.x;
-			desc.Height = s->DisplaySize.y;
-			desc.DepthOrArraySize = 1;
-			desc.MipLevels = 0;
-			desc.SampleDesc.Count = 1;
-			desc.SampleDesc.Quality = 0;
-			desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-			desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-			desc.Alignment = 0;
-			desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-
-			D3D12_HEAP_PROPERTIES defaultProperties;
-			defaultProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
-			defaultProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-			defaultProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-			defaultProperties.CreationNodeMask = 0;
-			defaultProperties.VisibleNodeMask = 0;
-
-			HRESULT hr = ctx->Device->CreateCommittedResource(&defaultProperties,
-				D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_DEPTH_WRITE, nullptr, 
-				IID_PPV_ARGS(&s->RlfDepthStencilTex.Resource));
-			s->RlfDepthStencilTex.State = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-			s->RlfDepthStencilTex.Resource->SetName(L"RlfDepthStencilTex");
-			Assert(hr == S_OK, "failed to create texture, hr=%x", hr);
-		}
-		// depth stencil view
-		{
-			s->RlfDepthStencilView = GetCPUDescriptor(&ctx->DsvHeap, 
-				gfx::Context::RLF_RESERVED_DSV_SLOT_INDEX);
-			ctx->Device->CreateDepthStencilView(s->RlfDepthStencilTex.Resource, nullptr,
-				s->RlfDepthStencilView);
-		}
 	}
 
-	return (ImTextureID)DisplaySrvGpuHnd.ptr;
+	if (s->RlfCompileSuccess)
+	{
+		Assert(s->CurrentRenderDesc->OutputViews.Count > 0, "No texture to display.");
+		u64 heap_start = 
+			(u64)s->GfxCtx->CbvSrvUavHeap.Object->GetCPUDescriptorHandleForHeapStart().ptr;
+		u64 heap_loc = s->CurrentRenderDesc->OutputViews[0].ptr;
+		u64 offset =  heap_loc - heap_start;
+		u64 slot = offset / s->GfxCtx->CbvSrvUavHeap.DescriptorSize;
+
+		return (ImTextureID)GetGPUDescriptor(&s->GfxCtx->CbvSrvUavHeap, slot).ptr;
+	}
+	else
+		return (ImTextureID)DisplaySrvGpuHnd.ptr;
 }
 
 void OnBeforeUnload(main::State* s)
@@ -546,8 +520,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 		};
 		Gfx.CommandList->ClearRenderTargetView(State.RlfDisplayRtv, 
 			clear_color_with_alpha, 0, nullptr);
-		Gfx.CommandList->ClearDepthStencilView(State.RlfDepthStencilView,
-			D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, nullptr);
 
 
 		// Dispatch our shader
@@ -612,7 +584,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 	main::Shutdown(&State);
 
 	SafeRelease(State.RlfDisplayTex.Resource);
-	SafeRelease(State.RlfDepthStencilTex.Resource);
 
 	CleanupBackBuffer(&Gfx);
 

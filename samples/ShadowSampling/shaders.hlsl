@@ -70,18 +70,3 @@ float4 PSMain(VSOutput input) : SV_Target0
 
 	return col;
 }
-
-Texture2D<float4> InTexture : register(t0);
-RWTexture2D<float4> OutTexture : register(u0);
-SamplerState Sampler : register(s0);
-
-[numthreads(8,8,1)]
-void CSMain(uint3 DTid : SV_DispatchThreadID)
-{
-	if (any(DTid.xy > (uint2)TextureSize))
-		return;
-
-	float4 val = InTexture.SampleLevel(Sampler, DTid.xy/TextureSize, 0);
-
-	OutTexture[DTid.xy] = val;
-}

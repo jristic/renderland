@@ -30,7 +30,6 @@ namespace rlf
 	RLF_TOKEN_ENTRY(Plus) \
 	RLF_TOKEN_ENTRY(Minus) \
 	RLF_TOKEN_ENTRY(Semicolon) \
-	RLF_TOKEN_ENTRY(At) \
 	RLF_TOKEN_ENTRY(Period) \
 	RLF_TOKEN_ENTRY(ForwardSlash) \
 	RLF_TOKEN_ENTRY(Asterisk) \
@@ -111,7 +110,6 @@ void TokenizerStateInit(TokenizerState& ts)
 	fcLUT['+'] = TokenType::Plus;
 	fcLUT['-'] = TokenType::Minus;
 	fcLUT[';'] = TokenType::Semicolon;
-	fcLUT['@'] = TokenType::At;
 	fcLUT['.'] = TokenType::Period;
 	fcLUT['/'] = TokenType::ForwardSlash;
 	fcLUT['*'] = TokenType::Asterisk;
@@ -190,7 +188,6 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 		case TokenType::Plus:
 		case TokenType::Minus:
 		case TokenType::Semicolon:
-		case TokenType::At:
 		case TokenType::Period:
 		case TokenType::ForwardSlash:
 		case TokenType::Asterisk:
@@ -469,6 +466,7 @@ void Tokenize(const char* start, const char* end, TokenizerState& ts)
 	RLF_KEYWORD_ENTRY(InputLayout) \
 	RLF_KEYWORD_ENTRY(ObjDraw) \
 	RLF_KEYWORD_ENTRY(Template) \
+	RLF_KEYWORD_ENTRY(Output) \
 
 
 #define RLF_KEYWORD_ENTRY(name) name,
@@ -808,15 +806,6 @@ T ConsumeEnum(TokenIter& ti, EnumEntry<T> (&def)[DefSize], const char* name)
 	}
 	ParserAssert(t != T::Invalid, "Invalid %s enum value: %s", name, id);
 	return t;
-}
-
-SystemValue ConsumeSystemValue(TokenIter& t)
-{
-	static EnumEntry<SystemValue> def[] = {
-		Keyword::BackBuffer,	SystemValue::BackBuffer,
-		Keyword::DefaultDepth,	SystemValue::DefaultDepth,
-	};
-	return ConsumeEnum(t, def, "SystemValue");
 }
 
 Filter ConsumeFilter(TokenIter& t)
@@ -1208,37 +1197,29 @@ Bind ConsumeBind(TokenIter& t, ParseState& ps)
 	ConsumeToken(TokenType::Equals, t);
 	Bind bind;
 	bind.BindTarget = AddStringToDescriptionData(bindName, ps);
-	if (TryConsumeToken(TokenType::At, t))
+	const char* id = ConsumeIdentifier(t);
+	View* v = ConsumeViewRefOrDef(t, ps, id);
+	if (v)
 	{
-		bind.Type = BindType::SystemValue;
-		bind.SystemBind = ConsumeSystemValue(t);
+		ParserAssert(v->Type == ViewType::SRV || v->Type == ViewType::UAV ||
+			v->Type == ViewType::Auto, "Referenced view (%s) must be SRV/UAV/Auto.",
+			id);
+		bind.Type = BindType::View;
+		bind.ViewBind = v;
 	}
 	else
 	{
-		const char* id = ConsumeIdentifier(t);
-		View* v = ConsumeViewRefOrDef(t, ps, id);
-		if (v)
+		ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %s", id);
+		ParseState::Resource& res = ps.resMap[id];
+		if (res.type == ParseState::ResType::Sampler)
 		{
-			ParserAssert(v->Type == ViewType::SRV || v->Type == ViewType::UAV ||
-				v->Type == ViewType::Auto, "Referenced view (%s) must be SRV/UAV/Auto.",
-				id);
-			bind.Type = BindType::View;
-			bind.ViewBind = v;
+			bind.Type = BindType::Sampler;
+			bind.SamplerBind = (Sampler*)res.m;
 		}
 		else
 		{
-			ParserAssert(ps.resMap.count(id) != 0, "Couldn't find resource %s", id);
-			ParseState::Resource& res = ps.resMap[id];
-			if (res.type == ParseState::ResType::Sampler)
-			{
-				bind.Type = BindType::Sampler;
-				bind.SamplerBind = (Sampler*)res.m;
-			}
-			else
-			{
-				ParserError("Referenced resource (%s) must be SRV/UAV/Auto, or sampler.", 
-					id);
-			}
+			ParserError("Referenced resource (%s) must be SRV/UAV/Auto, or sampler.", 
+				id);
 		}
 	}
 	return bind;
@@ -2766,7 +2747,7 @@ Draw* ConsumeDrawDef(
 	draw->Topology = Topology::TriList;
 
 	std::vector<Buffer*> vertexBuffers;
-	std::vector<TextureTarget> renderTargets;
+	std::vector<View*> renderTargets;
 	std::vector<Viewport*> viewports;
 	std::vector<BlendState*> blendStates;
 	std::vector<Bind> vsBinds;
@@ -2905,24 +2886,13 @@ Draw* ConsumeDrawDef(
 		{
 			renderTargets.clear();
 			ConsumeToken(TokenType::Equals, t);
-			TextureTarget target;
-			if (TryConsumeToken(TokenType::At, t))
-			{
-				target.IsSystem = true;
-				target.System = ConsumeSystemValue(t);
-			}
-			else
-			{
-				target.IsSystem = false;
-				const char* id = ConsumeIdentifier(t);
-				View* v = ConsumeViewRefOrDef(t, ps, id);
-				ParserAssert(v, "RenderTarget must be a RTV.");
-				if (v->Type == ViewType::Auto)
-					v->Type = ViewType::RTV;
-				ParserAssert(v->Type == ViewType::RTV, "RenderTarget must be a RTV.");
-				target.View = v;
-			}
-			renderTargets.push_back(target);
+			const char* id = ConsumeIdentifier(t);
+			View* v = ConsumeViewRefOrDef(t, ps, id);
+			ParserAssert(v, "RenderTarget must be a RTV.");
+			if (v->Type == ViewType::Auto)
+				v->Type = ViewType::RTV;
+			ParserAssert(v->Type == ViewType::RTV, "RenderTarget must be a RTV.");
+			renderTargets.push_back(v);
 			break;
 		}
 		case Keyword::RenderTargets:
@@ -2934,24 +2904,13 @@ Draw* ConsumeDrawDef(
 			{
 				if (TryConsumeToken(TokenType::RBrace, t))
 					break;
-				TextureTarget target;
-				if (TryConsumeToken(TokenType::At, t))
-				{
-					target.IsSystem = true;
-					target.System = ConsumeSystemValue(t);
-				}
-				else
-				{
-					target.IsSystem = false;
-					const char* id = ConsumeIdentifier(t);
-					View* v = ConsumeViewRefOrDef(t, ps, id);
-					ParserAssert(v, "RenderTarget must be a RTV.");
-					if (v->Type == ViewType::Auto)
-						v->Type = ViewType::RTV;
-					ParserAssert(v->Type == ViewType::RTV, "RenderTarget must be a RTV.");
-					target.View = v;
-				}
-				renderTargets.push_back(target);
+				const char* id = ConsumeIdentifier(t);
+				View* v = ConsumeViewRefOrDef(t, ps, id);
+				ParserAssert(v, "RenderTarget must be a RTV.");
+				if (v->Type == ViewType::Auto)
+					v->Type = ViewType::RTV;
+				ParserAssert(v->Type == ViewType::RTV, "RenderTarget must be a RTV.");
+				renderTargets.push_back(v);
 				if (!TryConsumeToken(TokenType::Comma, t))
 				{
 					ConsumeToken(TokenType::RBrace, t);
@@ -3001,24 +2960,13 @@ Draw* ConsumeDrawDef(
 		case Keyword::DepthStencil:
 		{
 			ConsumeToken(TokenType::Equals, t);
-			draw->DepthStencil = alloc::Allocate<TextureTarget>(ps.alloc);
-			TextureTarget& target = *draw->DepthStencil;
-			if (TryConsumeToken(TokenType::At, t))
-			{
-				target.IsSystem = true;
-				target.System = ConsumeSystemValue(t);
-			}
-			else
-			{
-				target.IsSystem = false;
-				const char* id = ConsumeIdentifier(t);
-				View* v = ConsumeViewRefOrDef(t, ps, id);
-				ParserAssert(v, "DepthStencil must be a DSV.");
-				if (v->Type == ViewType::Auto)
-					v->Type = ViewType::DSV;
-				ParserAssert(v->Type == ViewType::DSV, "DepthStencil must be a DSV.");
-				target.View = v;
-			}
+			const char* id = ConsumeIdentifier(t);
+			View* v = ConsumeViewRefOrDef(t, ps, id);
+			ParserAssert(v, "DepthStencil must be a DSV.");
+			if (v->Type == ViewType::Auto)
+				v->Type = ViewType::DSV;
+			ParserAssert(v->Type == ViewType::DSV, "DepthStencil must be a DSV.");
+			draw->DepthStencil = v;
 			break;
 		}
 		case Keyword::BindVS:
@@ -3570,6 +3518,8 @@ void ParseMain()
 	RenderDescription* rd = ps.rd;
 	TokenIter& t = ps.t;
 
+	std::vector<Texture*> outputs;
+
 	while (t.next != t.end)
 	{
 		const char* id = ConsumeIdentifier(t);
@@ -3834,9 +3784,26 @@ void ParseMain()
 			ConsumeConstant(t,ps);
 			break;
 		}
+		case Keyword::Output:
+		{
+			const char* tex_name = ConsumeIdentifier(t);
+			ParserAssert(ps.resMap.count(tex_name) != 0, "Couldn't find resource %s", 
+				tex_name);
+			ParseState::Resource& res = ps.resMap[tex_name];
+			ParserAssert(res.type == ParseState::ResType::Texture, 
+				"Referenced resource (%s) for output must be Texture.", tex_name);
+			outputs.push_back((Texture*)res.m);
+			break;
+		}
 		default:
 			ParserError("Unexpected structure: %s", id);
 		}
+	}
+
+	ParserAssert(outputs.size() > 0, "RLF must have at least one output.");
+	for (Texture* tex : outputs)
+	{
+		ParserAssert(tex->Flags & TextureFlag_SRV, "Outputs must be SRV-flagged");
 	}
 
 	rd->Dispatches = alloc::MakeCopy(ps.alloc, ps.Dispatches);
@@ -3854,6 +3821,7 @@ void ParseMain()
 	rd->DepthStencilStates = alloc::MakeCopy(ps.alloc, ps.DepthStencilStates);
 	rd->Constants = alloc::MakeCopy(ps.alloc, ps.Constants);
 	rd->Tuneables = alloc::MakeCopy(ps.alloc, ps.Tuneables);
+	rd->Outputs = alloc::MakeCopy(ps.alloc, outputs);
 }
 
 
@@ -3874,6 +3842,7 @@ RenderDescription* ParseBuffer(
 	{
 		es->Success = false;
 		es->Info = pe;
+		return nullptr;
 	}
 
 	ParseState ps;

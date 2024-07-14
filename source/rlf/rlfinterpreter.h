@@ -6,13 +6,10 @@ namespace rlf
 		gfx::Texture*				MainRtTex;
 		gfx::RenderTargetView		MainRtv;
 		gfx::UnorderedAccessView	MainRtUav;
-		gfx::Texture*				DefaultDepthTex;
-		gfx::DepthStencilView		DefaultDepthView;
 	};
 
 	void InitD3D(
 		gfx::Context* ctx,
-		ExecuteResources* res,
 		RenderDescription* rd,
 		uint2 displaySize,
 		const char* workingDirectory,

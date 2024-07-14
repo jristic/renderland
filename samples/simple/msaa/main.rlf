@@ -57,21 +57,11 @@ Draw {
 		lookAt(float3(2,0,0), float3(0,0,0));
 } obj_draw
 
-Dispatch {
-	Shader = ComputeShader {
-		ShaderPath = "CopyTexture.hlsl";
-		EntryPoint = "CSMain";
-	};
-	ThreadPerPixel = true; 
-	Bind OutTexture = @BackBuffer;
-	Bind InTexture = RT;
-	setconstant TextureSize = DisplaySize();
-} copy
-
 Passes {
 	ClearColor{ Target=RT_MS; Color={0,0,0,1}; },
 	ClearDepth{ Target=DS_MS; Depth=1; },
 	obj_draw,
-	Resolve{ Src=RT_MS; Dst=RT; },
-	copy
+	Resolve{ Src=RT_MS; Dst=RT; }
 }
+
+output RT

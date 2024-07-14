@@ -17,6 +17,12 @@ Texture {
 	Flags = {SRV,UAV};
 } Tex
 
+Texture {
+	Format = R8G8B8A8_UNORM;
+	Size = DisplaySize();
+	Flags = { UAV, SRV };
+} RT
+
 Dispatch {
 	Shader = ComputeShader {
 		ShaderPath = "producer.hlsl";
@@ -32,7 +38,7 @@ Dispatch {
 		EntryPoint = "CSMain";
 	};
 	ThreadPerPixel = true;
-	Bind OutTexture = @BackBuffer;
+	Bind OutTexture = RT;
 	Bind InTexture = Tex;
 	Bind PointSampler = PointSampler;
 	Bind LinearSampler = LinearSampler;
@@ -44,3 +50,5 @@ Passes {
 	producerDispatch,
 	consumerDispatch
 }
+
+output RT

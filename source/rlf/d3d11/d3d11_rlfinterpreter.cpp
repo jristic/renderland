@@ -628,7 +628,7 @@ void ResolveBind(Bind& bind, ID3D11ShaderReflection* reflector, const char* path
 	case D3D_SIT_TEXTURE:
 	case D3D_SIT_STRUCTURED:
 	case D3D_SIT_BYTEADDRESS:
-		InitAssert(bind.Type == BindType::SystemValue || bind.Type == BindType::View && 
+		InitAssert(bind.Type == BindType::View && 
 			(bind.ViewBind->Type == ViewType::Auto || bind.ViewBind->Type == ViewType::SRV),
 			"Mismatched bind to SRV slot.")
 		bind.IsOutput = false;
@@ -640,7 +640,7 @@ void ResolveBind(Bind& bind, ID3D11ShaderReflection* reflector, const char* path
 	case D3D_SIT_UAV_RWTYPED:
 	case D3D_SIT_UAV_RWSTRUCTURED:
 	case D3D_SIT_UAV_RWBYTEADDRESS:
-		InitAssert(bind.Type == BindType::SystemValue || bind.Type == BindType::View && 
+		InitAssert(bind.Type == BindType::View && 
 			(bind.ViewBind->Type == ViewType::Auto || bind.ViewBind->Type == ViewType::UAV),
 			"Mismatched bind to UAV slot.")
 		bind.IsOutput = true;
@@ -812,7 +812,6 @@ void PrepareConstants(
 
 void InitMain(
 	gfx::Context* ctx,
-	ExecuteResources*, // param intentionally unused in this backend
 	RenderDescription* rd,
 	uint2 displaySize,
 	const char* workingDirectory,
@@ -1085,6 +1084,22 @@ void InitMain(
 		desc.BackFace = RlfToD3d(dss->BackFace);
 		device->CreateDepthStencilState(&desc, &dss->GfxState);
 	}
+
+	std::vector<ID3D11ShaderResourceView*> outViews;
+	for (Texture* out : rd->Outputs)
+	{
+		D3D11_SHADER_RESOURCE_VIEW_DESC vd;
+		vd.Format = DXGI_FORMAT_UNKNOWN;
+		InitAssert(out->SampleCount == 1, "Multi-sample outputs not supported.");
+		vd.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+		vd.Texture2D.MostDetailedMip = 0;
+		vd.Texture2D.MipLevels = (u32)-1;
+		ID3D11ShaderResourceView* outView = nullptr;
+		HRESULT hr = device->CreateShaderResourceView(out->GfxState, &vd, &outView);
+		CheckHresult(hr, "SRV");	
+		outViews.push_back(outView);
+	}
+	rd->OutputViews = alloc::MakeCopy(&rd->Alloc, outViews);
 }
 
 void ReleaseD3D(
@@ -1254,6 +1269,20 @@ void HandleTextureParametersChanged(
 			CreateView(device, view);
 		}
 
+		for (u32 i = 0 ; i < rd->Outputs.Count ; ++i)
+		{
+			Texture* out = rd->Outputs[i];
+			ID3D11ShaderResourceView*& outView = rd->OutputViews[i];
+			outView->Release();
+			D3D11_SHADER_RESOURCE_VIEW_DESC vd;
+			vd.Format = DXGI_FORMAT_UNKNOWN;
+			InitAssert(out->SampleCount == 1, "Multi-sample outputs not supported.");
+			vd.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+			vd.Texture2D.MostDetailedMip = 0;
+			vd.Texture2D.MipLevels = (u32)-1;
+			HRESULT hr = device->CreateShaderResourceView(out->GfxState, &vd, &outView);
+			CheckHresult(hr, "SRV");	
+		}
 	}
 	catch (ErrorInfo ie)
 	{
@@ -1334,14 +1363,6 @@ void ExecuteDispatch(
 	{
 		switch (bind.Type)
 		{
-		case BindType::SystemValue:
-			Assert(bind.IsOutput, "Invalid");
-			if (bind.SystemBind == SystemValue::BackBuffer)
-				ctx->CSSetUnorderedAccessViews(bind.BindIndex, 1, &ec->Res.MainRtUav, 
-					&initialCount);
-			else
-				Assert(false, "unhandled");
-			break;
 		case BindType::View:
 			if (bind.IsOutput)
 			{
@@ -1434,7 +1455,6 @@ void ExecuteDraw(
 		case BindType::Sampler:
 			ctx->VSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->GfxState);
 			break;
-		case BindType::SystemValue:
 		default:
 			Assert(false, "unhandled type %d", bind.Type);
 		}
@@ -1462,7 +1482,6 @@ void ExecuteDraw(
 		case BindType::Sampler:
 			ctx->PSSetSamplers(bind.BindIndex, 1, &bind.SamplerBind->GfxState);
 			break;
-		case BindType::SystemValue:
 		default:
 			Assert(false, "unhandled type %d", bind.Type);
 		}
@@ -1470,27 +1489,13 @@ void ExecuteDraw(
 	ID3D11RenderTargetView* rtViews[8] = {};
 	D3D11_VIEWPORT vp[8] = {};
 	u32 rtCount = 0;
-	for (TextureTarget target : draw->RenderTargets)
+	for (View* view : draw->RenderTargets)
 	{
-		if (target.IsSystem)
-		{
-			if (target.System == SystemValue::BackBuffer)
-			{
-				rtViews[rtCount] = ec->Res.MainRtv;
-				vp[rtCount].Width = (float)ec->EvCtx.DisplaySize.x;
-				vp[rtCount].Height = (float)ec->EvCtx.DisplaySize.y;
-			}
-			else 
-				Unimplemented();
-		}
-		else
-		{
-			Assert(target.View->Type == ViewType::RTV, "Invalid");
-			Assert(target.View->ResourceType == ResourceType::Texture, "Invalid");
-			rtViews[rtCount] = target.View->RTVGfxState;
-			vp[rtCount].Width = (float)target.View->Texture->Size.x;
-			vp[rtCount].Height = (float)target.View->Texture->Size.y;
-		}
+		Assert(view->Type == ViewType::RTV, "Invalid");
+		Assert(view->ResourceType == ResourceType::Texture, "Invalid");
+		rtViews[rtCount] = view->RTVGfxState;
+		vp[rtCount].Width = (float)view->Texture->Size.x;
+		vp[rtCount].Height = (float)view->Texture->Size.y;
 		vp[rtCount].MinDepth = 0.0f;
 		vp[rtCount].MaxDepth = 1.0f;
 		vp[rtCount].TopLeftX = vp[rtCount].TopLeftY = 0;
@@ -1499,26 +1504,12 @@ void ExecuteDraw(
 	ID3D11DepthStencilView* dsView = nullptr;
 	if (draw->DepthStencil)
 	{
-		TextureTarget target = *draw->DepthStencil;
-		if (target.IsSystem)
-		{
-			if (target.System == SystemValue::DefaultDepth)
-			{
-				dsView = ec->Res.DefaultDepthView;
-				vp[0].Width = (float)ec->EvCtx.DisplaySize.x;
-				vp[0].Height = (float)ec->EvCtx.DisplaySize.y;
-			}
-			else
-				Unimplemented();
-		}
-		else
-		{
-			Assert(target.View->Type == ViewType::DSV, "Invalid");
-			Assert(target.View->ResourceType == ResourceType::Texture, "Invalid");
-			dsView = target.View->DSVGfxState;
-			vp[0].Width = (float)target.View->Texture->Size.x;
-			vp[0].Height = (float)target.View->Texture->Size.y;
-		}
+		View* view = draw->DepthStencil;
+		Assert(view->Type == ViewType::DSV, "Invalid");
+		Assert(view->ResourceType == ResourceType::Texture, "Invalid");
+		dsView = view->DSVGfxState;
+		vp[0].Width = (float)view->Texture->Size.x;
+		vp[0].Height = (float)view->Texture->Size.y;
 		vp[0].MinDepth = 0.0f;
 		vp[0].MaxDepth = 1.0f;
 	}

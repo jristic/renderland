@@ -22,7 +22,6 @@ namespace rlf
 	enum class BindType
 	{
 		Invalid,
-		SystemValue,
 		Sampler,
 		View,
 	};
@@ -36,12 +35,6 @@ namespace rlf
 		ClearStencil,
 		Resolve,
 		ObjDraw,
-	};
-	enum class SystemValue
-	{
-		Invalid,
-		BackBuffer,
-		DefaultDepth,
 	};
 	enum class Filter
 	{
@@ -321,7 +314,6 @@ namespace rlf
 		const char* BindTarget;
 		BindType Type;
 		union {
-			SystemValue SystemBind;
 			Sampler* SamplerBind;
 			View* ViewBind;
 		};
@@ -358,14 +350,6 @@ namespace rlf
 		Array<ConstantBuffer> CBs;
 		gfx::DispatchData GfxState;
 	};
-	struct TextureTarget
-	{
-		bool IsSystem;
-		union {
-			SystemValue System;
-			View* View;
-		};
-	};
 	struct Draw
 	{
 		Topology Topology;
@@ -381,8 +365,8 @@ namespace rlf
 		u32 VertexCount;
 		u32 InstanceCount;
 		u8 StencilRef;
-		Array<TextureTarget> RenderTargets;
-		TextureTarget* DepthStencil;
+		Array<View*> RenderTargets;
+		View* DepthStencil;
 		Array<Viewport*> Viewports;
 		Array<BlendState*> BlendStates;
 		Array<Bind> VSBinds;
@@ -465,6 +449,10 @@ namespace rlf
 		Array<DepthStencilState*> DepthStencilStates;
 		Array<Constant*> Constants;
 		Array<Tuneable*> Tuneables;
+		Array<Texture*> Outputs;
+
+		// TODO: Move D3D data into separate struct
+		Array<gfx::ShaderResourceView> OutputViews;
 
 		alloc::LinAlloc Alloc;
 	};

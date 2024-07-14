@@ -1,9 +1,6 @@
 
 cbuffer ConstantBuffer : register(b0)
 {
-	float2 TextureSize;
-	float Time;
-	float Padding;
 	float4x4 Matrix;
 }
 

@@ -50,24 +50,13 @@ Draw {
 		lookAt(CamPos, LookPos);
 } drawTempl
 
-Dispatch {
-	Shader = ComputeShader {
-		ShaderPath = "CopyTexture.hlsl";
-		EntryPoint = "CSMain";
-	};
-	ThreadPerPixel = true; 
-	Bind OutTexture = @BackBuffer;
-	Bind InTexture = RT;
-	Bind Sampler= PointSampler;
-	setconstant TextureSize = DisplaySize();
-} copy
-
 Passes {
 	ClearColor{ Target=RT; Color={0,0,0,1}; },
 	ClearDepth{ Target=DS; Depth=1; },
 	ObjDraw {
 		ObjPath = "sponza.obj";
 		Template = drawTempl;
-	},
-	copy
+	}
 }
+
+output RT

@@ -5,6 +5,11 @@ Texture {
 	Flags = {SRV,UAV};
 } Tex
 
+Texture {
+	Size = DisplaySize();
+	Flags = {SRV,RTV};
+} RT
+
 Sampler {
 	Filter = { Min = Linear, Mag = Linear, Mip=Linear};
 	AddressMode = { UV=Border };
@@ -30,7 +35,7 @@ Draw {
 		EntryPoint = "PSMain";
 	};
 	VertexCount = 3;
-	RenderTarget = @BackBuffer;
+	RenderTarget = RT;
 	BindPS InTexture = Tex;
 	BindPS Sampler = LinearSampler;
 } simpleDraw
@@ -38,3 +43,5 @@ Draw {
 Passes {
 	producer, simpleDraw
 }
+
+output RT

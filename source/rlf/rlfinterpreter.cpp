@@ -66,7 +66,6 @@ void EvaluateConstants(ast::EvaluationContext& ec, Array<Constant*> cnsts)
 
 void InitD3D(
 	gfx::Context* ctx,
-	ExecuteResources* res,
 	RenderDescription* rd,
 	uint2 displaySize,
 	const char* workingDirectory,
@@ -75,7 +74,7 @@ void InitD3D(
 	errorState->Success = true;
 	errorState->Warning = false;
 	try {
-		InitMain(ctx, res, rd, displaySize, workingDirectory, errorState);
+		InitMain(ctx, rd, displaySize, workingDirectory, errorState);
 	}
 	catch (ErrorInfo ie)
 	{

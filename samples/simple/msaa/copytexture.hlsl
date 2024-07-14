@@ -9,17 +9,6 @@ cbuffer ConstantBuffer : register(b0)
 	float Padding;
 }
 
-[numthreads(8,8,1)]
-void CSMain(uint3 DTid : SV_DispatchThreadID)
-{
-	if (any(DTid.xy > (uint2)TextureSize))
-		return;
-
-	float4 val = InTexture.Load(int3(DTid.xy,0));
-
-	OutTexture[DTid.xy] = val;
-}
-
 uint NumSamples;
 Texture2DMS<float4> InTexture_MS;
 

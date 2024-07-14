@@ -151,25 +151,13 @@ Draw {
 	bindps ShadowSampler = PointSampler;
 } drawFloorPlane
 
-
-Dispatch {
-	Shader = ComputeShader {
-		ShaderPath = "shaders.hlsl";
-		EntryPoint = "CSMain";
-	};
-	ThreadPerPixel = true; 
-	Bind OutTexture = @BackBuffer;
-	Bind InTexture = RT;
-	Bind Sampler= PointSampler;
-	setconstant TextureSize = DisplaySize();
-} copy
-
 Passes {
 	ClearColor{ Target=RT; Color={0,0,0,1}; },
 	ClearDepth{ Target=MainDS; Depth=1; },
 	ClearDepth{ Target=ShadowDSView; Depth=1; },
 	renderShadowMap,
 	obj_draw,
-	drawFloorPlane,
-	copy
+	drawFloorPlane
 }
+
+output RT

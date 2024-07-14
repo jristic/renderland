@@ -1,4 +1,9 @@
 
+Texture {
+	Size = DisplaySize();
+	Flags = {SRV,UAV};
+} RT
+
 Sampler {
 	Filter = { All = Point };
 	AddressMode = { UVW=Clamp };
@@ -16,7 +21,7 @@ ComputeShader {
 Dispatch {
 	Shader = shader;
 	ThreadPerPixel = true;
-	Bind OutTexture = @BackBuffer;
+	Bind OutTexture = RT;
 	Bind InTexture=Tex;
 	Bind Sampler= PointSampler;
 	SetConstant TextureSize = DisplaySize();
@@ -25,3 +30,5 @@ Dispatch {
 Passes {
 	disp
 }
+
+output RT

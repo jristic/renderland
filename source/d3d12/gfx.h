@@ -37,8 +37,7 @@ namespace gfx {
 		static u32 const 				NUM_RESERVED_CBV_SRV_UAV_SLOTS = 2;
 
 		static u32 const				MAX_DSV_DESCS = 256;
-		static u32 const				RLF_RESERVED_DSV_SLOT_INDEX = 0;
-		static u32 const 				NUM_RESERVED_DSV_SLOTS = 1;
+		static u32 const 				NUM_RESERVED_DSV_SLOTS = 0;
 
 		static u32 const				MAX_SHADER_VIS_DESCS = 2048;
 		static u32 const 				IMGUI_FONT_RESERVED_SRV_SLOT_INDEX = 0;

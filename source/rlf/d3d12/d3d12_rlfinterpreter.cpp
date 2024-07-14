@@ -758,46 +758,26 @@ void CreatePipelineState(ID3D12Device* device, Draw* d)
 	desc.NumRenderTargets = d->RenderTargets.Count;
 	for (u32 i = 0 ; i < d->RenderTargets.Count ; ++i)
 	{
-		const TextureTarget& t = d->RenderTargets[i];
-		if (t.IsSystem)
-		{
-			Assert(t.System == SystemValue::BackBuffer, "unsupported");
-			desc.RTVFormats[i] = DXGI_FORMAT_R8G8B8A8_UNORM;
-		}
-		else
-		{
-			Assert(t.View->Type == ViewType::RTV, "Invalid");
-			Assert(t.View->ResourceType == ResourceType::Texture, "Invalid");
-			DXGI_FORMAT fmt = t.View->Format != TextureFormat::Invalid ?
-				D3DTextureFormat[(u32)t.View->Format] :
-				D3DTextureFormat[(u32)t.View->Texture->Format];
-			desc.RTVFormats[i] = fmt;
-			sample_count = t.View->Texture->SampleCount;
-		}
+		View* view = d->RenderTargets[i];
+		Assert(view->Type == ViewType::RTV, "Invalid");
+		Assert(view->ResourceType == ResourceType::Texture, "Invalid");
+		DXGI_FORMAT fmt = view->Format != TextureFormat::Invalid ?
+			D3DTextureFormat[(u32)view->Format] :
+			D3DTextureFormat[(u32)view->Texture->Format];
+		desc.RTVFormats[i] = fmt;
+		sample_count = view->Texture->SampleCount;
 	}
 
 	if (d->DepthStencil)
 	{
-		TextureTarget t = *d->DepthStencil;
-		if (t.IsSystem)
-		{
-			if (t.System == SystemValue::DefaultDepth)
-			{
-				desc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-			}
-			else
-				Unimplemented();
-		}
-		else
-		{
-			Assert(t.View->Type == ViewType::DSV, "Invalid");
-			Assert(t.View->ResourceType == ResourceType::Texture, "Invalid");
-			DXGI_FORMAT fmt = t.View->Format != rlf::TextureFormat::Invalid ?
-				D3DTextureFormat[(u32)t.View->Format] :
-				D3DTextureFormat[(u32)t.View->Texture->Format];
-			desc.DSVFormat = fmt;
-			sample_count = t.View->Texture->SampleCount;
-		}
+		View* view = d->DepthStencil;
+		Assert(view->Type == ViewType::DSV, "Invalid");
+		Assert(view->ResourceType == ResourceType::Texture, "Invalid");
+		DXGI_FORMAT fmt = view->Format != rlf::TextureFormat::Invalid ?
+			D3DTextureFormat[(u32)view->Format] :
+			D3DTextureFormat[(u32)view->Texture->Format];
+		desc.DSVFormat = fmt;
+		sample_count = view->Texture->SampleCount;
 	}
 	else
 	{
@@ -1060,7 +1040,7 @@ void ResolveBind(Bind& bind, ID3D12ShaderReflection* reflector, const char* path
 	case D3D_SIT_TEXTURE:
 	case D3D_SIT_STRUCTURED:
 	case D3D_SIT_BYTEADDRESS:
-		InitAssert(bind.Type == BindType::SystemValue || bind.Type == BindType::View && 
+		InitAssert(bind.Type == BindType::View && 
 			(bind.ViewBind->Type == ViewType::Auto || bind.ViewBind->Type == ViewType::SRV),
 			"Mismatched bind to SRV slot.")
 		bind.IsOutput = false;
@@ -1072,7 +1052,7 @@ void ResolveBind(Bind& bind, ID3D12ShaderReflection* reflector, const char* path
 	case D3D_SIT_UAV_RWTYPED:
 	case D3D_SIT_UAV_RWSTRUCTURED:
 	case D3D_SIT_UAV_RWBYTEADDRESS:
-		InitAssert(bind.Type == BindType::SystemValue || bind.Type == BindType::View && 
+		InitAssert(bind.Type == BindType::View && 
 			(bind.ViewBind->Type == ViewType::Auto || bind.ViewBind->Type == ViewType::UAV),
 			"Mismatched bind to UAV slot.")
 		bind.IsOutput = true;
@@ -1194,9 +1174,8 @@ void ApplyNullDescriptors(gfx::Context* ctx, const gfx::BindInfo* bi,
 	}
 }
 
-void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
-	const gfx::BindInfo* bi, const gfx::DescriptorTable* table, 
-	Array<Bind> binds)
+void CopyBindDescriptors(gfx::Context* ctx,	const gfx::BindInfo* bi, 
+	const gfx::DescriptorTable* table, Array<Bind> binds)
 {
 	for (const Bind& bind : binds)
 	{
@@ -1205,25 +1184,6 @@ void CopyBindDescriptors(gfx::Context* ctx, ExecuteResources* resources,
 		bool sampler = false;
 		switch(bind.Type)
 		{
-		case BindType::SystemValue:
-			switch (bind.SystemBind)
-			{
-			case SystemValue::BackBuffer:
-				if (bind.IsOutput)
-				{
-					DestSlot = bi->NumCbvs + bi->NumSrvs + (bind.BindIndex - bi->UavMin);
-					SrcDesc = resources->MainRtUav;
-				}
-				else
-					Unimplemented();
-				break;
-			case SystemValue::DefaultDepth:
-				Assert(false, "Can not bind DSV to shader");
-				break;
-			default:
-				Unimplemented();
-			}
-			break;
 		case BindType::View:
 			if (bind.IsOutput)
 			{
@@ -1487,7 +1447,6 @@ void AllocateDescriptorTables(gfx::Context* ctx, gfx::DescriptorTable* table,
 
 void InitMain(
 	gfx::Context* ctx,
-	ExecuteResources* resources,
 	RenderDescription* rd,
 	uint2 displaySize,
 	const char* workingDirectory,
@@ -1817,7 +1776,7 @@ void InitMain(
 		gfx::ComputeShader* cs = &dc->Shader->GfxState;
 		AllocateDescriptorTables(ctx, &dc->GfxState.Table, &cs->BI);
 		ApplyNullDescriptors(ctx, &cs->BI, &dc->GfxState.Table, dc->Shader->Common.Reflector);
-		CopyBindDescriptors(ctx, resources, &cs->BI, &dc->GfxState.Table, dc->Binds);
+		CopyBindDescriptors(ctx, &cs->BI, &dc->GfxState.Table, dc->Binds);
 
 		// Binding of constant buffers descriptors is separate from other views
 		CopyConstantBufferDescriptors(ctx, &dc->GfxState.Table, &cs->BI, dc->CBs);
@@ -1843,14 +1802,14 @@ void InitMain(
 		gfx::VertexShader* vs = &d->VShader->GfxState;
 		AllocateDescriptorTables(ctx, &d->GfxState.VSTable, &vs->BI);
 		ApplyNullDescriptors(ctx, &vs->BI, &d->GfxState.VSTable, d->VShader->Common.Reflector);
-		CopyBindDescriptors(ctx, resources, &vs->BI, &d->GfxState.VSTable, d->VSBinds);
+		CopyBindDescriptors(ctx, &vs->BI, &d->GfxState.VSTable, d->VSBinds);
 		CopyConstantBufferDescriptors(ctx, &d->GfxState.VSTable, &vs->BI, d->VSCBs);
 		if (d->PShader)
 		{
 			gfx::PixelShader* ps = &d->PShader->GfxState;
 			AllocateDescriptorTables(ctx, &d->GfxState.PSTable, &ps->BI);
 			ApplyNullDescriptors(ctx, &ps->BI, &d->GfxState.PSTable, d->PShader->Common.Reflector);
-			CopyBindDescriptors(ctx, resources, &ps->BI, &d->GfxState.PSTable, d->PSBinds);
+			CopyBindDescriptors(ctx, &ps->BI, &d->GfxState.PSTable, d->PSBinds);
 			CopyConstantBufferDescriptors(ctx, &d->GfxState.PSTable, &ps->BI, d->PSCBs);
 		}
 
@@ -1877,6 +1836,24 @@ void InitMain(
 		}
 	}
 
+	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> outViews;
+	for (Texture* out : rd->Outputs)
+	{
+		D3D12_SHADER_RESOURCE_VIEW_DESC vd;
+		vd.Format = DXGI_FORMAT_UNKNOWN;
+		vd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		InitAssert(out->SampleCount == 1, "Multi-sample outputs not supported.");
+		vd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+		vd.Texture2D.MostDetailedMip = 0;
+		vd.Texture2D.MipLevels = (u32)-1;
+		vd.Texture2D.PlaneSlice = 0;
+		vd.Texture2D.ResourceMinLODClamp = 0.f;
+		D3D12_CPU_DESCRIPTOR_HANDLE desc = AllocateDescriptor(&ctx->CbvSrvUavHeap);
+		device->CreateShaderResourceView(out->GfxState.Resource, &vd, desc);
+
+		outViews.push_back(desc);
+	}
+	rd->OutputViews = alloc::MakeCopy(&rd->Alloc, outViews);
 }
 
 void ReleaseD3D(
@@ -2050,6 +2027,22 @@ void HandleTextureParametersChanged(
 				Unimplemented();
 			CreateView(ctx, view, /*allocate_descriptor*/false);
 		}
+
+		for (u32 i = 0 ; i < rd->Outputs.Count ; ++i)
+		{
+			Texture* out = rd->Outputs[i];
+			D3D12_CPU_DESCRIPTOR_HANDLE desc = rd->OutputViews[i];
+			D3D12_SHADER_RESOURCE_VIEW_DESC vd;
+			vd.Format = DXGI_FORMAT_UNKNOWN;
+			vd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+			InitAssert(out->SampleCount == 1, "Multi-sample outputs not supported.");
+			vd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+			vd.Texture2D.MostDetailedMip = 0;
+			vd.Texture2D.MipLevels = (u32)-1;
+			vd.Texture2D.PlaneSlice = 0;
+			vd.Texture2D.ResourceMinLODClamp = 0.f;
+			device->CreateShaderResourceView(out->GfxState.Resource, &vd, desc);
+		}
 	}
 	catch (ErrorInfo ie)
 	{
@@ -2059,15 +2052,15 @@ void HandleTextureParametersChanged(
 
 	for (Dispatch* dc : rd->Dispatches)
 	{
-		CopyBindDescriptors(ctx, &ec->Res, &dc->Shader->GfxState.BI, 
+		CopyBindDescriptors(ctx, &dc->Shader->GfxState.BI, 
 			&dc->GfxState.Table, dc->Binds);
 	}
 	for (Draw* d : rd->Draws)
 	{
-		CopyBindDescriptors(ctx, &ec->Res, &d->VShader->GfxState.BI, 
+		CopyBindDescriptors(ctx, &d->VShader->GfxState.BI, 
 			&d->GfxState.VSTable, d->VSBinds);
 		if (d->PShader)
-			CopyBindDescriptors(ctx, &ec->Res, &d->PShader->GfxState.BI, 
+			CopyBindDescriptors(ctx, &d->PShader->GfxState.BI, 
 				&d->GfxState.PSTable, d->PSBinds);
 	}
 }
@@ -2125,31 +2118,12 @@ void ExecuteSetConstants(ExecuteContext* ec, Array<SetConstant> sets,
 	}
 }
 
-void TransitionBinds(gfx::Context* ctx, ExecuteResources* resources, Array<Bind> binds)
+void TransitionBinds(gfx::Context* ctx, Array<Bind> binds)
 {
 	for (const Bind& bind : binds)
 	{
 		switch(bind.Type)
 		{
-		case BindType::SystemValue:
-			switch (bind.SystemBind)
-			{
-			case SystemValue::BackBuffer:
-				if (bind.IsOutput)
-				{
-					TransitionResource(ctx, resources->MainRtTex, 
-						D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				}
-				else
-					Unimplemented();
-				break;
-			case SystemValue::DefaultDepth:
-				Assert(false, "Can not bind DSV to shader");
-				break;
-			default:
-				Unimplemented();
-			}
-			break;
 		case BindType::View:
 			if (bind.IsOutput)
 			{
@@ -2189,7 +2163,7 @@ void ExecuteDispatch(
 	gfx::ComputeShader* cs = &dc->Shader->GfxState;
 	ExecuteSetConstants(ec, dc->Constants, dc->CBs);
 
-	TransitionBinds(ec->GfxCtx, &ec->Res, dc->Binds);
+	TransitionBinds(ec->GfxCtx, dc->Binds);
 
 	u32 frame = ec->GfxCtx->FrameIndex % gfx::Context::NUM_FRAMES_IN_FLIGHT;
 
@@ -2248,8 +2222,8 @@ void ExecuteDraw(
 	ExecuteSetConstants(ec, draw->VSConstants, draw->VSCBs);
 	ExecuteSetConstants(ec, draw->PSConstants, draw->PSCBs);
 
-	TransitionBinds(ec->GfxCtx, &ec->Res, draw->VSBinds);
-	TransitionBinds(ec->GfxCtx, &ec->Res, draw->PSBinds);
+	TransitionBinds(ec->GfxCtx, draw->VSBinds);
+	TransitionBinds(ec->GfxCtx, draw->PSBinds);
 
 	u32 frame = ec->GfxCtx->FrameIndex % gfx::Context::NUM_FRAMES_IN_FLIGHT;
 
@@ -2291,67 +2265,35 @@ void ExecuteDraw(
 	D3D12_CPU_DESCRIPTOR_HANDLE rtViews[8] = {};
 	D3D12_VIEWPORT vp[8] = {};
 	u32 rtCount = 0;
-	for (TextureTarget target : draw->RenderTargets)
+	for (View* view : draw->RenderTargets)
 	{
-		gfx::Texture* resource = nullptr;
-		if (target.IsSystem)
-		{
-			if (target.System == SystemValue::BackBuffer)
-			{
-				resource = ec->Res.MainRtTex;
-				rtViews[rtCount] = ec->Res.MainRtv;
-				vp[rtCount].Width = (float)ec->EvCtx.DisplaySize.x;
-				vp[rtCount].Height = (float)ec->EvCtx.DisplaySize.y;
-			}
-			else 
-				Unimplemented();
-		}
-		else
-		{
-			Assert(target.View->Type == ViewType::RTV, "Invalid");
-			Assert(target.View->ResourceType == ResourceType::Texture, "Invalid");
-			resource = &target.View->Texture->GfxState;
-			rtViews[rtCount] = target.View->RTVGfxState;
-			vp[rtCount].Width = (float)target.View->Texture->Size.x;
-			vp[rtCount].Height = (float)target.View->Texture->Size.y;
-		}
+		Assert(view->Type == ViewType::RTV, "Invalid");
+		Assert(view->ResourceType == ResourceType::Texture, "Invalid");
+		rtViews[rtCount] = view->RTVGfxState;
+		vp[rtCount].Width = (float)view->Texture->Size.x;
+		vp[rtCount].Height = (float)view->Texture->Size.y;
 		vp[rtCount].MinDepth = 0.0f;
 		vp[rtCount].MaxDepth = 1.0f;
 		vp[rtCount].TopLeftX = vp[rtCount].TopLeftY = 0;
 		++rtCount;
 
+		gfx::Texture* resource = &view->Texture->GfxState;;
 		TransitionResource(ec->GfxCtx, resource, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	}
 	D3D12_CPU_DESCRIPTOR_HANDLE dsView = {};
 	if (draw->DepthStencil)
 	{
-		TextureTarget target = *draw->DepthStencil;
-		gfx::Texture* resource = nullptr;
-		if (target.IsSystem)
-		{
-			if (target.System == SystemValue::DefaultDepth)
-			{
-				resource = ec->Res.DefaultDepthTex;
-				dsView = ec->Res.DefaultDepthView;
-				vp[0].Width = (float)ec->EvCtx.DisplaySize.x;
-				vp[0].Height = (float)ec->EvCtx.DisplaySize.y;
-			}
-			else
-				Unimplemented();
-		}
-		else
-		{
-			Assert(target.View->Type == ViewType::DSV, "Invalid");
-			Assert(target.View->ResourceType == ResourceType::Texture, "Invalid");
-			resource = &target.View->Texture->GfxState;
-			dsView = target.View->DSVGfxState;
-			vp[0].Width = (float)target.View->Texture->Size.x;
-			vp[0].Height = (float)target.View->Texture->Size.y;
-		}
+		View* view = draw->DepthStencil;
+		Assert(view->Type == ViewType::DSV, "Invalid");
+		Assert(view->ResourceType == ResourceType::Texture, "Invalid");
+		dsView = view->DSVGfxState;
+		vp[0].Width = (float)view->Texture->Size.x;
+		vp[0].Height = (float)view->Texture->Size.y;
 		vp[0].MinDepth = 0.0f;
 		vp[0].MaxDepth = 1.0f;
 
 		// TODO: read-only state should be set based on usage
+		gfx::Texture* resource = &view->Texture->GfxState;
 		TransitionResource(ec->GfxCtx, resource, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 	}
 	for (u32 i = 0 ; i < draw->Viewports.Count ; ++i)

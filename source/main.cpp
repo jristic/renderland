@@ -97,14 +97,7 @@ void LoadRlf(State* s)
 	}
 
 	es = {};
-	rlf::ExecuteResources Res;
-	Res.MainRtTex = &s->RlfDisplayTex;
-	Res.MainRtv = s->RlfDisplayRtv;
-	Res.MainRtUav = s->RlfDisplayUav;
-	Res.DefaultDepthTex = &s->RlfDepthStencilTex;
-	Res.DefaultDepthView = s->RlfDepthStencilView;
-
-	rlf::InitD3D(s->GfxCtx, &Res, s->CurrentRenderDesc, s->DisplaySize, 
+	rlf::InitD3D(s->GfxCtx, s->CurrentRenderDesc, s->DisplaySize, 
 		dirPath.c_str(), &es);
 
 	if (es.Success == false)
@@ -256,10 +249,6 @@ bool DoUpdate(State* s)
 		ImVec2 vMax = ImGui::GetWindowContentRegionMax();
 		s->DisplaySize.x = (u32)max(1, vMax.x - vMin.x);
 		s->DisplaySize.y = (u32)max(1, vMax.y - vMin.y);
-
-		ImTextureID display_tex = s->RetrieveDisplayTextureID(s);
-		
-		ImGui::Image(display_tex, ImVec2(vMax.x-vMin.x, vMax.y-vMin.y));
 	}
 	ImGui::End();
 
@@ -391,8 +380,6 @@ bool DoUpdate(State* s)
 	ctx.Res.MainRtTex = &s->RlfDisplayTex;
 	ctx.Res.MainRtv = s->RlfDisplayRtv;
 	ctx.Res.MainRtUav = s->RlfDisplayUav;
-	ctx.Res.DefaultDepthTex = &s->RlfDepthStencilTex;
-	ctx.Res.DefaultDepthView = s->RlfDepthStencilView;
 	ctx.EvCtx.DisplaySize = s->DisplaySize;
 	ctx.EvCtx.Time = s->Time;
 	ctx.EvCtx.ChangedThisFrameFlags = changed;
@@ -421,6 +408,19 @@ bool DoUpdate(State* s)
 		LoadRlf(s);
 	}
 
+	ImGui::Begin("Display", nullptr, ImGuiWindowFlags_NoCollapse);
+	{
+		ImTextureID display_tex = s->RetrieveDisplayTextureID(s);
+		// Don't try to draw image if reloading, as the resource will be destroyed
+		//	mid-frame.
+		if (!Reload)
+		{
+			ImGui::Image(display_tex, ImVec2((float)s->DisplaySize.x, (float)s->DisplaySize.y));
+		}
+	}
+	ImGui::End();
+
+
 	return false;
 }
 
@@ -433,8 +433,6 @@ void DoRender(State* s)
 		exctx.Res.MainRtTex = &s->RlfDisplayTex;
 		exctx.Res.MainRtv = s->RlfDisplayRtv;
 		exctx.Res.MainRtUav = s->RlfDisplayUav;
-		exctx.Res.DefaultDepthTex = &s->RlfDepthStencilTex;
-		exctx.Res.DefaultDepthView = s->RlfDepthStencilView;
 		exctx.EvCtx.DisplaySize = s->DisplaySize;
 		exctx.EvCtx.Time = s->Time;
 		exctx.EvCtx.ChangedThisFrameFlags = s->ChangedThisFrameFlags;

@@ -39,12 +39,13 @@ namespace main {
 
 		gfx::Context* GfxCtx;
 
+		// TODO: I expect the display texture to be used to do custom display of 
+		//	outputs, but it is not yet. If that should not be the case, remove
+		//	these.
 		gfx::Texture				RlfDisplayTex;
 		gfx::RenderTargetView		RlfDisplayRtv;
 		gfx::ShaderResourceView		RlfDisplaySrv;
 		gfx::UnorderedAccessView	RlfDisplayUav;
-		gfx::Texture				RlfDepthStencilTex;
-		gfx::DepthStencilView		RlfDepthStencilView;
 	};
 
 	void Initialize(State* s, const char* config_path);

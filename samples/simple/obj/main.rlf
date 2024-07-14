@@ -13,6 +13,18 @@ Buffer {
 	InitData = monkeyObj.indices;
 } indices
 
+Texture {
+	Format = R8G8B8A8_UNORM;
+	Size = DisplaySize();
+	Flags = { RTV, SRV };
+} RT
+
+Texture {
+	Format = D16_UNORM;
+	Size = DisplaySize();
+	Flags = { DSV };
+} DS
+
 Draw {
 	Topology = TriList;
 	VShader = VertexShader {
@@ -25,10 +37,14 @@ Draw {
 	};
 	VertexBuffer = verts;
 	IndexBuffer = indices;
-	RenderTarget = @BackBuffer;
-	DepthStencil = @DefaultDepth;
+	RenderTarget = RT;
+	DepthStencil = DS;
 } obj_draw
 
 Passes {
+	ClearColor{ Target=RT; Color={0.45,0.55,0.60,1}; },
+	ClearDepth{ Target=DS; Depth=1; },
 	obj_draw
 }
+
+output RT
