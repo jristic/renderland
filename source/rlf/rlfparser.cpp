@@ -3291,6 +3291,7 @@ ObjDraw* ConsumeObjDrawDef(
 	};
 
 	std::vector<Draw*> perMeshDraws;
+	std::unordered_map<std::string, View*> materialViews;
 
 	for (size_t shape_idx = 0 ; shape_idx < shapes.size() ; ++shape_idx)
 	{
@@ -3416,17 +3417,28 @@ ObjDraw* ConsumeObjDrawDef(
 		tinyobj::material_t& material = materials[material_id];
 		if (!material.ambient_texname.empty())
 		{
-			Texture* alb_tex = alloc::Allocate<Texture>(ps.alloc);
-			ps.Textures.push_back(alb_tex);
-			alb_tex->FromFile = AddStringToDescriptionData(
-				material.ambient_texname.c_str(), ps);
+			View* alb_view;
+			auto search = materialViews.find(material.ambient_texname);
+			if (search != materialViews.end())
+			{
+				alb_view = search->second;
+			}
+			else
+			{
+				Texture* alb_tex = alloc::Allocate<Texture>(ps.alloc);
+				ps.Textures.push_back(alb_tex);
+				alb_tex->FromFile = AddStringToDescriptionData(
+					material.ambient_texname.c_str(), ps);
 
-			View* alb_view = alloc::Allocate<View>(ps.alloc);
-			ps.Views.push_back(alb_view);
-			alb_view->Type = ViewType::SRV;
-			alb_view->ResourceType = ResourceType::Texture;
-			alb_view->Texture = alb_tex;
-			alb_view->Format = TextureFormat::Invalid;
+				alb_view = alloc::Allocate<View>(ps.alloc);
+				ps.Views.push_back(alb_view);
+				alb_view->Type = ViewType::SRV;
+				alb_view->ResourceType = ResourceType::Texture;
+				alb_view->Texture = alb_tex;
+				alb_view->Format = TextureFormat::Invalid;
+
+				materialViews[material.ambient_texname] = alb_view;
+			}
 
 			Bind bind;
 			bind.BindTarget = AddStringToDescriptionData("map_Ka", ps);

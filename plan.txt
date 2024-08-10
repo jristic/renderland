@@ -6,7 +6,6 @@
 * Warning instead of error for missing constant.
 	* Warnings as error setting.
 
-* Use linear memory allocator for RenderDescription allocations. 
 * Defines that are usable within the RLF and shader. 
 * Integrate RenderDoc capture?
 * Investigate automatically reloading any time a file is updated.
@@ -26,8 +25,15 @@
 		* Buffer flags too, especially where in D3D12 the flags don't mean anything but in d3d11 they do
 	* Make obj parsing handle not having normals or UVs. 
 
+*** STL removal
+	* STL makes using code surprisingly slow with allocations and locks.
+	* have linear allocators on a per-lifetime basis, such as for each intermediate phase like parsing .
+	* will need to recreate some amount of containers and string utilities to do so.
+
 *** Input/output refactor
 	* Add inputs
+		* Perhaps tuneables would need to be integrated? What would a tuneable within a sub-rlf mean?
+		* should include all types usable in tuneables, as well as resources
 	* Then we can have an rlf invoke a sub-rlf to allow logic reuse. 
 		* Probably implement as a separate RenderDescription for the sub-rlf?
 		* Will need to remove use of statics in parse and interpreter. 
@@ -44,6 +50,7 @@
 *** D3D12
 	* Handle when user errors cause a device removal
 		* Can we recreate the device and continue?
+	* It seems the intent of root signatures is that you use a shared one between all shaders, does it make sense to rewrite that to match?
 
 *** AST expressions to
 	* Add clamp, saturate
