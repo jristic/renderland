@@ -1611,16 +1611,12 @@ void InitMain(
 
 			CloseHandle(file);
 
-			DirectX::TexMetadata meta = {};
-			DirectX::ScratchImage scratch;
-			if (ext == "dds")
-				DirectX::LoadFromDDSMemory(ddsBuffer, ddsSize, DirectX::DDS_FLAGS_NONE, 
-					&meta, scratch);
-			else if (ext == "tga")
-				DirectX::LoadFromTGAMemory(ddsBuffer, ddsSize, DirectX::TGA_FLAGS_NONE, 
-					&meta, scratch);
-			else
-				InitError("Unsupported Texture::FromFile extension (%s)", ext.c_str());
+			DirectX::ScratchImage image;
+			GenerateTextureResource(ddsBuffer, ddsSize, ext.c_str(), &image);
+
+			free(ddsBuffer); ddsBuffer = nullptr;
+
+			DirectX::TexMetadata meta = image.GetMetadata();
 
 			DXGI_FORMAT format = meta.format;
 			tex->Size.x = (u32)meta.width;
@@ -1685,7 +1681,7 @@ void InitMain(
 			 
 					for (u64 sliceIndex = 0; sliceIndex < subResourceDepth; sliceIndex++)
 					{
-						const DirectX::Image* subImage = scratch.GetImage(mipIndex, 
+						const DirectX::Image* subImage = image.GetImage(mipIndex, 
 							arrayIndex, sliceIndex);
 						u8* sourceSubResourceMemory = subImage->pixels;
 			 
@@ -1699,8 +1695,6 @@ void InitMain(
 					}
 				}
 			}
-
-			free(ddsBuffer); ddsBuffer = nullptr;
 
 			gfx::Context::Frame* frameCtx = 
 				&ctx->FrameContexts[ctx->FrameIndex % gfx::Context::NUM_FRAMES_IN_FLIGHT];
@@ -1717,7 +1711,6 @@ void InitMain(
 				source.pResource = ctx->UploadBufferResource;
 				source.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
 				source.PlacedFootprint = layouts[sri];
-				source.PlacedFootprint.Offset = 0;
 			 
 				ctx->UploadCommandList->CopyTextureRegion(&destination, 0, 0, 0,
 					&source, nullptr);

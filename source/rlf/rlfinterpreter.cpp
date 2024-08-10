@@ -61,6 +61,78 @@ void EvaluateConstants(ast::EvaluationContext& ec, Array<Constant*> cnsts)
 	}
 }
 
+bool IsCompressedFormat(DXGI_FORMAT fmt)
+{
+	switch (fmt)
+	{
+	case DXGI_FORMAT_BC1_TYPELESS:
+	case DXGI_FORMAT_BC1_UNORM:
+	case DXGI_FORMAT_BC1_UNORM_SRGB:
+	case DXGI_FORMAT_BC2_TYPELESS:
+	case DXGI_FORMAT_BC2_UNORM:
+	case DXGI_FORMAT_BC2_UNORM_SRGB:
+	case DXGI_FORMAT_BC3_TYPELESS:
+	case DXGI_FORMAT_BC3_UNORM:
+	case DXGI_FORMAT_BC3_UNORM_SRGB:
+	case DXGI_FORMAT_BC4_TYPELESS:
+	case DXGI_FORMAT_BC4_UNORM:
+	case DXGI_FORMAT_BC4_SNORM:
+	case DXGI_FORMAT_BC5_TYPELESS:
+	case DXGI_FORMAT_BC5_UNORM:
+	case DXGI_FORMAT_BC5_SNORM:
+	case DXGI_FORMAT_BC6H_TYPELESS:
+	case DXGI_FORMAT_BC6H_UF16:
+	case DXGI_FORMAT_BC6H_SF16:
+	case DXGI_FORMAT_BC7_TYPELESS:
+	case DXGI_FORMAT_BC7_UNORM:
+	case DXGI_FORMAT_BC7_UNORM_SRGB:
+		return true;
+	default:
+		return false;
+	}
+}
+
+void GenerateTextureResource(const char* texMem, u32 memSize, const char* ext, 
+	DirectX::ScratchImage* out)
+{
+	DirectX::TexMetadata origMeta = {};
+	DirectX::ScratchImage orig;
+	if (strcmp(ext, "dds") == 0)
+		DirectX::LoadFromDDSMemory(texMem, memSize, DirectX::DDS_FLAGS_NONE, 
+			&origMeta, orig);
+	else if (strcmp(ext, "tga") == 0)
+		DirectX::LoadFromTGAMemory(texMem, memSize, DirectX::TGA_FLAGS_NONE, 
+			&origMeta, orig);
+	else
+		InitError("Unsupported Texture::FromFile extension (%s)", ext);
+
+	bool is_compressed = IsCompressedFormat(origMeta.format);
+
+	DirectX::ScratchImage decompressed;
+	if (is_compressed)
+	{
+		HRESULT hr = DirectX::Decompress(orig.GetImages(), orig.GetImageCount(), 
+			origMeta, DXGI_FORMAT_UNKNOWN, decompressed);
+		Assert(hr == S_OK, "Failed to decompress, hr=%x", hr);
+	}
+
+	DirectX::ScratchImage* toMip = is_compressed ? &decompressed : &orig;
+	DirectX::ScratchImage mipped;
+	HRESULT hr = DirectX::GenerateMipMaps( toMip->GetImages(), toMip->GetImageCount(),
+		toMip->GetMetadata(), DirectX::TEX_FILTER_DEFAULT, 0, 
+		is_compressed ? mipped : *out );
+	Assert(hr == S_OK, "Failed to create mips, hr=%x", hr);
+
+	if (is_compressed)
+	{
+		hr = DirectX::Compress(mipped.GetImages(), mipped.GetImageCount(), 
+			mipped.GetMetadata(),origMeta.format, DirectX::TEX_COMPRESS_DEFAULT, 
+			DirectX::TEX_THRESHOLD_DEFAULT, *out);
+		Assert(hr == S_OK, "Failed to recompress, hr=%x", hr);
+	}
+}
+
+
 #undef EvaluateAstAssert
 
 

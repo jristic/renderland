@@ -998,22 +998,16 @@ void InitMain(
 
 			CloseHandle(file);
 
-			DirectX::TexMetadata meta;
-			DirectX::ScratchImage scratch;
-			if (ext == "dds")
-				DirectX::LoadFromDDSMemory(ddsBuffer, ddsSize, DirectX::DDS_FLAGS_NONE, 
-					&meta, scratch);
-			else if (ext == "tga")
-				DirectX::LoadFromTGAMemory(ddsBuffer, ddsSize, DirectX::TGA_FLAGS_NONE, 
-					&meta, scratch);
-			else
-				InitError("Unsupported Texture::FromFile extension (%s)", ext.c_str());
+			DirectX::ScratchImage image;
+			GenerateTextureResource(ddsBuffer, ddsSize, ext.c_str(), &image);
+
+			free(ddsBuffer); ddsBuffer = nullptr;
+
 			ID3D11Resource* res;
-			free(ddsBuffer);
-			HRESULT hr = DirectX::CreateTextureEx(device, scratch.GetImages(),
-				scratch.GetImageCount(), meta, D3D11_USAGE_IMMUTABLE, 
+			HRESULT hr = DirectX::CreateTextureEx(device, image.GetImages(),
+				image.GetImageCount(), image.GetMetadata(), D3D11_USAGE_IMMUTABLE, 
 				D3D11_BIND_SHADER_RESOURCE, 0, 0, false, &res);
-			Assert(hr == S_OK, "Failed to create texture from DDS, hr=%x", hr);
+			Assert(hr == S_OK, "Failed to create texture, hr=%x", hr);
 			hr = res->QueryInterface(IID_ID3D11Texture2D, (void**)&tex->GfxState);
 			SafeRelease(res);
 			Assert(hr == S_OK, "Failed to query texture object, hr=%x", hr);

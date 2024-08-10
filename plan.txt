@@ -27,7 +27,7 @@
 	* Make obj parsing handle not having normals or UVs. 
 
 *** Input/output refactor
-	* Remove system values and instead let RLF declare its inputs and outputs
+	* Add inputs
 	* Then we can have an rlf invoke a sub-rlf to allow logic reuse. 
 		* Probably implement as a separate RenderDescription for the sub-rlf?
 		* Will need to remove use of statics in parse and interpreter. 
@@ -50,7 +50,6 @@
 	* Rounded up divide
 
 *** Obj import expansion
-	* Generate mips on textures loaded from file. 
 	* Support material parameters from obj files.
 	* Support more of the textures provided in an obj.
 

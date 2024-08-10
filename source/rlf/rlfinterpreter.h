@@ -32,6 +32,8 @@ namespace rlf
 		VariableType expect, const char* name);
 	void EvaluateConstants(ast::EvaluationContext& ec, Array<Constant*> cnsts);
 
+	void GenerateTextureResource(const char* texMem, u32 memSize, const char* ext, 
+		DirectX::ScratchImage* out);
 
 	void HandleTextureParametersChanged(
 		RenderDescription* rd,
