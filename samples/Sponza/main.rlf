@@ -1,12 +1,8 @@
 
 Sampler {
-	Filter = { All = Point };
-	AddressMode = { UVW=Clamp };
-} PointSampler
-
-Sampler {
-	Filter = { All = Linear };
-	AddressMode = {UVW=Clamp};
+	Filter = { All = Aniso };
+	AddressMode = {UV=Wrap, W=Clamp};
+	MaxAnisotropy = 8;
 } LinearSampler
 
 Texture {
