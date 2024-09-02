@@ -18,10 +18,10 @@ Texture {
 } DS
 
 tuneable float height = 100;
-tuneable float ZOffset [-100,100] = 0;
+tuneable float ZOffset [-100,100] = -42;
 tuneable float RotationSpeed[0,1] = 0.2;
 
-constant float2 direction = {sin(RotationSpeed*time()),cos(RotationSpeed*time())};
+constant float2 direction = {sin(RotationSpeed*time()+3.14/2),cos(RotationSpeed*time()+3.14/2)};
 constant float3 CamPos = {0,height,ZOffset};
 constant float3 LookPos = CamPos + {direction.x, 0, direction.y};
 

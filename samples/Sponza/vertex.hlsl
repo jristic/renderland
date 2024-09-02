@@ -17,6 +17,7 @@ struct VSOutput {
 	float4 pos : SV_Position;
 	float3 n : NORMAL0;
 	float2 tex : TEXCOORD0;
+	float3 worldPos : TEXCOORD1;
 };
 
 VSOutput VSMain(uint id : SV_VertexID, VSInput input)
@@ -25,5 +26,6 @@ VSOutput VSMain(uint id : SV_VertexID, VSInput input)
 	output.pos = mul(Matrix, float4(input.pos, 1.0));
 	output.n = input.normal;
 	output.tex = input.tex;
+	output.worldPos = input.pos;
 	return output;
 }
