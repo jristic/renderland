@@ -1,9 +1,16 @@
 
+tuneable uint ShadowMapSize [32,2048] = 2048;
+
 Sampler {
 	Filter = { All = Aniso };
 	AddressMode = {UV=Wrap, W=Clamp};
 	MaxAnisotropy = 8;
 } LinearSampler
+
+Sampler {
+	Filter = { All = Point };
+	AddressMode = { UVW=Clamp };
+} PointSampler
 
 Texture {
 	Format = R8G8B8A8_UNORM;
@@ -17,6 +24,22 @@ Texture {
 	Flags = { DSV };
 } DS
 
+Texture {
+	Format = R24G8_TYPELESS;
+	Size = { ShadowMapSize.xx };
+	Flags = { SRV, DSV };
+} ShadowDS
+
+DSV {
+	Resource = ShadowDS;
+	Format = D24_UNORM_S8_UINT;
+} ShadowDSView
+
+SRV {
+	Resource = ShadowDS;
+	Format = R24_UNORM_X8_TYPELESS;
+} ShadowDSSrv
+
 tuneable float height = 100;
 tuneable float ZOffset [-100,100] = -42;
 tuneable float RotationSpeed[0,1] = 0.2;
@@ -25,30 +48,65 @@ constant float2 direction = {sin(RotationSpeed*time()+3.14/2),cos(RotationSpeed*
 constant float3 CamPos = {0,height,ZOffset};
 constant float3 LookPos = CamPos + {direction.x, 0, direction.y};
 
+constant float4x4 ProjectionView = 
+	projection(3.14/3, DisplaySize().x / float(DisplaySize().y), 0.1, 2000)
+	* 
+	lookAt(CamPos, LookPos);
+constant float4x4 InvProjView = inverse(ProjectionView);
+
+tuneable float LightOffset [-1000,1000] = -200;
+
+constant float3 LightPos = {-1000, 2000, LightOffset};
+constant float4x4 LightProjection = projection(3.14/3, 1, 100, 5000);
+constant float4x4 LightView = lookAt(LightPos, float3(0,0,0));
+constant float4x4 LightProjectionView = LightProjection * LightView;
+
 Draw {
 	Topology = TriList;
 	VShader = VertexShader {
-		ShaderPath = "vertex.hlsl";
+		ShaderPath = "shadow.hlsl";
 		EntryPoint = "VSMain";
 	};
 	PShader = PixelShader {
-		ShaderPath = "pixel.hlsl";
+		ShaderPath = "shadow.hlsl";
 		EntryPoint = "PSMain";
 	};
-	//VertexBuffer = verts;
-	//IndexBuffer = indices;
+	DepthStencil = ShadowDSView;
+	BindPS Sampler = LinearSampler;
+	SetConstantVs Matrix = LightProjectionView;
+} shadowDrawTempl
+
+Draw {
+	Topology = TriList;
+	VShader = VertexShader {
+		ShaderPath = "main.hlsl";
+		EntryPoint = "VSMain";
+	};
+	PShader = PixelShader {
+		ShaderPath = "main.hlsl";
+		EntryPoint = "PSMain";
+	};
 	RenderTarget = RT;
 	DepthStencil = DS;
 	BindPS Sampler = LinearSampler;
-	SetConstantVs Matrix = 
-		projection(3.14/3, DisplaySize().x / float(DisplaySize().y), 0.1, 2000)
-		* 
-		lookAt(CamPos, LookPos);
+	SetConstantVs Matrix = ProjectionView;
+	SetConstantPs Matrix = InvProjView;
+	SetConstantPs LightView = LightView;
+	SetConstantPs LightProjection = LightProjection;
+	SetConstantPs TextureSize = DisplaySize();
+	SetConstantPs LightPos = LightPos;
+	bindps ShadowDepth = ShadowDSSrv;
+	bindps ShadowSampler = PointSampler;
 } drawTempl
 
 Passes {
 	ClearColor{ Target=RT; Color={0,0,0,1}; },
 	ClearDepth{ Target=DS; Depth=1; },
+	ClearDepth{ Target=ShadowDSView; Depth=1; },
+	ObjDraw {
+		ObjPath = "sponza.obj";
+		Template = shadowDrawTempl;
+	},
 	ObjDraw {
 		ObjPath = "sponza.obj";
 		Template = drawTempl;
